@@ -26,7 +26,7 @@ struct FontDetailView: View {
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(Color.white.opacity(0.6), lineWidth: 3)
+                .stroke(Color.white, lineWidth: 0.5)
         )
         .onExitCommand { onClose() }
     }

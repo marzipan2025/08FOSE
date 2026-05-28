@@ -41,7 +41,13 @@ struct ContentView: View {
             gridArea
                 .navigationTitle("")
         } detail: {
-            FavoritesPanel(favoritesOnly: $favoritesOnly)
+            FavoritesPanel(favoritesOnly: $favoritesOnly) { name in
+                    if let family = library.families.first(where: { $0.name == name }) {
+                        withAnimation(.spring(response: 0.42, dampingFraction: 0.80)) {
+                            selectedFamily = family
+                        }
+                    }
+                }
                 .overlay(
                     Rectangle()
                         .fill(Color(nsColor: .windowBackgroundColor))
@@ -346,16 +352,12 @@ struct LeftSidebar: View {
 
 struct FavoritesPanel: View {
     @Binding var favoritesOnly: Bool
+    let onSelect: (String) -> Void
     @EnvironmentObject var favorites: FavoritesStore
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Favorites")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 16)
-                .padding(.top, 16)
-                .padding(.bottom, 8)
+            sectionHeader("Favorites")
 
             if favorites.sorted.isEmpty {
                 Text("아직 즐겨찾기가 없어요.\n폰트 카드에 마우스를 올려 별을 눌러보세요.")
@@ -367,7 +369,7 @@ struct FavoritesPanel: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 4) {
                         ForEach(favorites.sorted, id: \.self) { name in
-                            FavoriteRow(name: name)
+                            FavoriteRow(name: name, onSelect: onSelect)
                         }
                     }
                     .padding(.horizontal, 8)
@@ -375,44 +377,53 @@ struct FavoritesPanel: View {
                 }
             }
 
-            Divider().opacity(0.4)
+            Divider().opacity(0.5)
 
-            // Toggle button (replaces checkbox)
+            sectionHeader("Filter")
+
             Button {
                 favoritesOnly.toggle()
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: 5) {
                     Image(systemName: "star.fill")
                         .font(.system(size: 11))
-                    Text("View favorites only")
-                        .font(.system(size: 12, weight: .medium))
-                    Spacer()
+                    Text("Favorites only")
+                        .font(.system(size: 11, weight: favoritesOnly ? .medium : .regular))
                 }
                 .foregroundStyle(favoritesOnly ? Color.accentYellow : Color.secondary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 9)
                 .frame(maxWidth: .infinity)
+                .padding(.vertical, 5)
                 .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    RoundedRectangle(cornerRadius: 6)
                         .fill(favoritesOnly
                               ? Color.accentYellow.opacity(0.15)
-                              : Color.white.opacity(0.05))
+                              : Color.white.opacity(0.06))
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    RoundedRectangle(cornerRadius: 6)
                         .stroke(favoritesOnly
-                                ? Color.accentYellow.opacity(0.5)
+                                ? Color.accentYellow.opacity(0.6)
                                 : Color.white.opacity(0.10),
                                 lineWidth: 1)
                 )
             }
             .buttonStyle(.plain)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 16)
             .disabled(favorites.sorted.isEmpty)
             .opacity(favorites.sorted.isEmpty ? 0.4 : 1)
         }
         .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    @ViewBuilder
+    private func sectionHeader(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
+            .padding(.bottom, 8)
     }
 }
 
@@ -420,6 +431,7 @@ struct FavoritesPanel: View {
 
 struct FavoriteRow: View {
     let name: String
+    let onSelect: (String) -> Void
     @EnvironmentObject var favorites: FavoritesStore
     @AppStorage("previewText") private var previewText: String = "The quick brown fox jumps over lazy dog"
     @State private var hovering = false
@@ -459,6 +471,8 @@ struct FavoriteRow: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .background(hovering ? Color.white.opacity(0.05) : .clear)
+        .contentShape(Rectangle())
+        .onTapGesture { onSelect(name) }
         .onHover { hovering = $0 }
     }
 }

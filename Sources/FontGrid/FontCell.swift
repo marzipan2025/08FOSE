@@ -51,7 +51,7 @@ struct FontCell: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(borderColor, lineWidth: isFavorited ? 1.5 : 1)
+                .stroke(borderColor, lineWidth: 1)
         )
         .contentShape(Rectangle())
         .onTapGesture { onTap() }
@@ -86,7 +86,7 @@ struct FontCell: View {
     }
 
     private var borderColor: Color {
-        if isFavorited { return Color.accentYellow }
+        if isFavorited { return Color.accentYellow.opacity(0.45) }
         if hovering { return Color.white.opacity(0.35) }
         return Color.white.opacity(0.08)
     }
