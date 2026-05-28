@@ -3,6 +3,8 @@ import SwiftUI
 struct FontCell: View {
     let family: FontFamily
     let previewText: String
+    let fontSize: Double
+    let onTap: () -> Void
 
     @EnvironmentObject var favorites: FavoritesStore
     @State private var hovering = false
@@ -17,9 +19,12 @@ struct FontCell: View {
         return family.memberFontNames[i]
     }
 
+    // Cell height grows with font size: at fontSize=28 → 90pt, at fontSize=56 → 118pt
+    private var cellHeight: CGFloat { max(90, CGFloat(fontSize) + 62) }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
+            HStack(alignment: .top) {
                 Text(family.name)
                     .font(.system(size: 11, weight: .regular))
                     .foregroundStyle(Color.accentYellow)
@@ -30,7 +35,7 @@ struct FontCell: View {
             }
 
             Text(previewText.isEmpty ? "The Quick Gray Fox" : previewText)
-                .font(.custom(displayedFontName, size: 28))
+                .font(.custom(displayedFontName, size: fontSize))
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .foregroundStyle(.primary)
@@ -39,7 +44,7 @@ struct FontCell: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
-        .frame(height: 90)
+        .frame(height: cellHeight, alignment: .top)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(Color(nsColor: .controlBackgroundColor).opacity(0.4))
@@ -49,6 +54,7 @@ struct FontCell: View {
                 .stroke(borderColor, lineWidth: isFavorited ? 1.5 : 1)
         )
         .contentShape(Rectangle())
+        .onTapGesture { onTap() }
         .onHover { isHovering in
             hovering = isHovering
             if isHovering {
