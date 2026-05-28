@@ -4,6 +4,7 @@ struct FontCell: View {
     let family: FontFamily
     let previewText: String
     let fontSize: Double
+    var onHoverChange: (Bool) -> Void = { _ in }
     let onTap: () -> Void
 
     @EnvironmentObject var favorites: FavoritesStore
@@ -49,10 +50,16 @@ struct FontCell: View {
                 RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
                     .fill(Theme.cellSurface)
                     .shadow(
-                        color: .black.opacity(hovering ? 0.7 : 0),
-                        radius: hovering ? 30 : 0,
+                        color: .black.opacity(hovering ? 0.75 : 0),
+                        radius: hovering ? 14 : 0,
                         x: 0,
                         y: hovering ? 16 : 0
+                    )
+                    .shadow(
+                        color: .black.opacity(hovering ? 0.90 : 0),
+                        radius: hovering ? 80 : 0,
+                        x: 0,
+                        y: hovering ? 70 : 0
                     )
             )
             .overlay(
@@ -66,9 +73,9 @@ struct FontCell: View {
                     hovering = isHovering
                 }
                 if isHovering { startCycling() } else { stopCycling() }
+                onHoverChange(isHovering)
             }
             .onDisappear { stopCycling() }
-            .zIndex(hovering ? 1 : 0)
     }
 
     private var headerRow: some View {

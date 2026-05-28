@@ -34,7 +34,7 @@ enum Theme {
     static let memoAccent = Color(red: 82/255, green: 112/255, blue: 143/255)   // #52708F
     static let panelBackground = Color(nsColor: .windowBackgroundColor)
     static let sidebarBackground = Color(nsColor: .underPageBackgroundColor)
-    static let cellSurface = Color(nsColor: .controlBackgroundColor).opacity(0.4)
+    static let cellSurface = Color(white: 0.15)
     static let divider = Color.white.opacity(0.08)
     static let border = Color.white.opacity(0.10)
     static let borderHover = Color.white.opacity(0.35)

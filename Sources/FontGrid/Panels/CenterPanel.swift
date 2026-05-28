@@ -5,6 +5,7 @@ struct CenterPanel: View {
     @EnvironmentObject var favorites: FavoritesStore
     @AppStorage("previewText") private var previewText = "The quick brown fox jumps over lazy dog"
     @Namespace private var cellHero
+    @State private var hoveredFamilyID: FontFamily.ID? = nil
 
     private var displayed: [FontFamily] {
         vm.library.families
@@ -29,28 +30,25 @@ struct CenterPanel: View {
         GeometryReader { geo in
             let computed = computeMaxColumns(width: geo.size.width)
             let effective = min(max(1, vm.columnCount), computed)
-            let cols = Array(
-                repeating: GridItem(.flexible(), spacing: Theme.gridSpacing),
-                count: effective
-            )
+            let rows = displayed.chunked(into: effective)
 
             ZStack(alignment: .top) {
                 ScrollView {
-                    LazyVGrid(columns: cols, spacing: Theme.gridSpacing) {
-                        ForEach(displayed) { family in
-                            if vm.selectedFamily?.id == family.id {
-                                Color.clear
-                                    .frame(height: Theme.cellHeight(fontSize: vm.fontSize))
-                            } else {
-                                FontCell(family: family,
-                                         previewText: previewText,
-                                         fontSize: vm.fontSize) {
-                                    withAnimation(.spring(response: 0.42, dampingFraction: 0.80)) {
-                                        vm.selectedFamily = family
+                    VStack(spacing: Theme.gridSpacing) {
+                        ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                            HStack(spacing: Theme.gridSpacing) {
+                                ForEach(row) { family in
+                                    cellView(for: family)
+                                        .frame(maxWidth: .infinity)
+                                        .zIndex(hoveredFamilyID == family.id ? 1 : 0)
+                                }
+                                if row.count < effective {
+                                    ForEach(0..<(effective - row.count), id: \.self) { _ in
+                                        Color.clear.frame(maxWidth: .infinity)
                                     }
                                 }
-                                .matchedGeometryEffect(id: family.id, in: cellHero)
                             }
+                            .zIndex(row.contains(where: { $0.id == hoveredFamilyID }) ? 1 : 0)
                         }
                     }
                     .padding(Theme.gridPadding)
@@ -113,6 +111,42 @@ struct CenterPanel: View {
         let usable = max(0, width - Theme.gridPadding * 2)
         let n = Int(floor((usable + Theme.gridSpacing) / (Theme.minCellWidth + Theme.gridSpacing)))
         return max(1, n)
+    }
+
+    @ViewBuilder
+    private func cellView(for family: FontFamily) -> some View {
+        if vm.selectedFamily?.id == family.id {
+            Color.clear
+                .frame(height: Theme.cellHeight(fontSize: vm.fontSize))
+        } else {
+            FontCell(
+                family: family,
+                previewText: previewText,
+                fontSize: vm.fontSize,
+                onHoverChange: { isHovering in
+                    if isHovering {
+                        hoveredFamilyID = family.id
+                    } else if hoveredFamilyID == family.id {
+                        hoveredFamilyID = nil
+                    }
+                },
+                onTap: {
+                    withAnimation(.spring(response: 0.42, dampingFraction: 0.80)) {
+                        vm.selectedFamily = family
+                    }
+                }
+            )
+            .matchedGeometryEffect(id: family.id, in: cellHero)
+        }
+    }
+}
+
+private extension Array {
+    func chunked(into size: Int) -> [[Element]] {
+        guard size > 0 else { return [self] }
+        return stride(from: 0, to: count, by: size).map { start in
+            Array(self[start..<Swift.min(start + size, count)])
+        }
     }
 }
 
