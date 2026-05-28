@@ -23,7 +23,7 @@ struct FontCell: View {
     private var cellHeight: CGFloat { max(90, CGFloat(fontSize) + 62) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top) {
                 Text(family.name)
                     .font(.system(size: 11, weight: .regular))
@@ -33,6 +33,8 @@ struct FontCell: View {
                 Spacer(minLength: 6)
                 trailingBadge
             }
+
+            Spacer(minLength: 6)
 
             Text(previewText.isEmpty ? "The quick brown fox jumps over lazy dog." : previewText)
                 .font(.custom(displayedFontName, size: fontSize))

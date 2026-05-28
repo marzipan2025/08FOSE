@@ -35,7 +35,7 @@ struct ContentView: View {
                 minWeightCount: $minWeightCount,
                 searchQuery: $searchQuery
             )
-            .background(Color(nsColor: .windowBackgroundColor))
+            .background(Color(nsColor: .windowBackgroundColor).ignoresSafeArea())
             .navigationSplitViewColumnWidth(min: sidePanelMin, ideal: sidePanelIdeal, max: sidePanelMax)
         } content: {
             gridArea
@@ -59,6 +59,7 @@ struct ContentView: View {
         }
         .environmentObject(favorites)
         .preferredColorScheme(.dark)
+        .toolbarBackground(Color(nsColor: .windowBackgroundColor), for: .windowToolbar)
     }
 
     private var gridArea: some View {
@@ -110,11 +111,11 @@ struct ContentView: View {
                             .padding(.top, 40)
                         }
                     }
+                    .scrollContentBackground(.hidden)
 
-                    // 블러 배경
+                    // 카드 뒤 배경
                     if selectedFamily != nil {
-                        Rectangle()
-                            .fill(.ultraThinMaterial)
+                        Color(nsColor: .windowBackgroundColor)
                             .ignoresSafeArea(edges: .top)
                             .transition(.opacity)
                     }
@@ -143,6 +144,7 @@ struct ContentView: View {
                     .padding(.top, 8)
                     .padding(.bottom, 16)
             }
+            .background(Color(nsColor: .windowBackgroundColor).ignoresSafeArea())
             .onAppear {
                 maxColumns = computed
                 if columnCount > computed { columnCount = computed }
@@ -413,7 +415,7 @@ struct FavoritesPanel: View {
             .disabled(favorites.sorted.isEmpty)
             .opacity(favorites.sorted.isEmpty ? 0.4 : 1)
         }
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(Color(nsColor: .windowBackgroundColor).ignoresSafeArea())
     }
 
     @ViewBuilder
