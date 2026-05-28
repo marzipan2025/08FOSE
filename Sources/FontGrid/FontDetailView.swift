@@ -8,7 +8,9 @@ struct FontDetailView: View {
     let onClose: () -> Void
 
     @EnvironmentObject var favorites: FavoritesStore
+    @EnvironmentObject var memos: MemoStore
     @State private var copied = false
+    @State private var memoExpanded: Bool = false
 
     private var isFavorited: Bool { favorites.contains(family.name) }
 
@@ -16,19 +18,112 @@ struct FontDetailView: View {
         previewText.isEmpty ? "The quick brown fox jumps over lazy dog." : previewText
     }
 
+    private var memoBinding: Binding<String> {
+        Binding(
+            get: { memos.note(for: family.name) },
+            set: { memos.setNote($0, for: family.name) }
+        )
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             titleArea
             Divider().opacity(0.35)
-            weightList
+            if memoExpanded {
+                expandedMemoArea
+            } else {
+                weightList
+                    .frame(maxHeight: .infinity)
+                Divider().opacity(0.35)
+                collapsedMemoArea
+            }
         }
-        .background(Color(nsColor: .windowBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .background(Theme.panelBackground)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
+            RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
                 .stroke(Color.white, lineWidth: 1)
         )
-        .onExitCommand { onClose() }
+        .onExitCommand {
+            if memoExpanded {
+                withAnimation(.easeOut(duration: 0.2)) { memoExpanded = false }
+            } else {
+                onClose()
+            }
+        }
+    }
+
+    // MARK: - Memo (collapsed: single-line + expand toggle)
+
+    private var collapsedMemoArea: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            memoHeader(
+                icon: "arrow.up.left.and.arrow.down.right",
+                help: "Expand memo"
+            ) {
+                withAnimation(.easeOut(duration: 0.2)) { memoExpanded = true }
+            }
+            TextField("Add a note…", text: memoBinding)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.memoAccent)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: - Memo (expanded: fills body)
+
+    private var expandedMemoArea: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            memoHeader(
+                icon: "arrow.down.right.and.arrow.up.left",
+                help: "Collapse memo"
+            ) {
+                withAnimation(.easeOut(duration: 0.2)) { memoExpanded = false }
+            }
+            ZStack(alignment: .topLeading) {
+                if memos.note(for: family.name).isEmpty {
+                    Text("Add a note…")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.tertiary)
+                        .allowsHitTesting(false)
+                }
+                MemoEditor(
+                    text: memoBinding,
+                    fontSize: 13,
+                    lineSpacing: 13 * 0.5,
+                    textColor: NSColor(Theme.memoAccent)
+                )
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 20)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func memoHeader(icon: String, help: String, action: @escaping () -> Void) -> some View {
+        HStack(spacing: 8) {
+            Text("Memo")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+            Spacer()
+            Button(action: action) {
+                Image(systemName: icon)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 22, height: 22)
+                    .background(
+                        RoundedRectangle(cornerRadius: 5)
+                            .fill(Theme.surfaceFill)
+                    )
+            }
+            .buttonStyle(.plain)
+            .help(help)
+        }
     }
 
     // MARK: - Title Area
@@ -43,13 +138,12 @@ struct FontDetailView: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.4)
                     Text("\(family.weightCount) weight\(family.weightCount == 1 ? "" : "s")")
-                        .font(.system(size: 12))
+                        .font(.system(size: Theme.bodySize))
                         .foregroundStyle(.secondary)
                 }
 
                 Spacer(minLength: 16)
 
-                // X 버튼
                 Button { onClose() } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: 14, weight: .medium))
@@ -61,70 +155,53 @@ struct FontDetailView: View {
             }
 
             HStack(spacing: 8) {
-                // Favorite
-                Button {
-                    favorites.toggle(family.name)
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: isFavorited ? "star.fill" : "star")
-                            .font(.system(size: 12))
-                        Text(isFavorited ? "Favorited" : "Favorite")
-                            .font(.system(size: 12))
-                    }
-                    .foregroundStyle(isFavorited ? Color.accentYellow : Color.secondary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
-                    .background(RoundedRectangle(cornerRadius: 7)
-                        .fill(isFavorited ? Color.accentYellow.opacity(0.08) : Color.white.opacity(0.06)))
-                    .overlay(RoundedRectangle(cornerRadius: 7)
-                        .stroke(isFavorited ? Color.accentYellow.opacity(0.4) : Color.white.opacity(0.10), lineWidth: 1))
-                }
-                .buttonStyle(.plain)
+                actionButton(
+                    icon: isFavorited ? "star.fill" : "star",
+                    label: isFavorited ? "Favorited" : "Favorite",
+                    active: isFavorited
+                ) { favorites.toggle(family.name) }
 
-                // Copy name
-                Button {
+                actionButton(
+                    icon: copied ? "checkmark" : "doc.on.doc",
+                    label: copied ? "Copied" : "Copy name",
+                    active: copied
+                ) {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(family.name, forType: .string)
                     withAnimation(.easeInOut(duration: 0.15)) { copied = true }
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                         withAnimation { copied = false }
                     }
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                            .font(.system(size: 12))
-                        Text(copied ? "Copied" : "Copy name")
-                            .font(.system(size: 12))
-                    }
-                    .foregroundStyle(copied ? Color.accentYellow : Color.secondary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
-                    .background(RoundedRectangle(cornerRadius: 7).fill(Color.white.opacity(0.06)))
-                    .overlay(RoundedRectangle(cornerRadius: 7)
-                        .stroke(copied ? Color.accentYellow.opacity(0.4) : Color.white.opacity(0.10), lineWidth: 1))
                 }
-                .buttonStyle(.plain)
 
-                // Show in Finder
-                Button { openInFinder() } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "folder")
-                            .font(.system(size: 12))
-                        Text("Show in Finder")
-                            .font(.system(size: 12))
-                    }
-                    .foregroundStyle(Color.secondary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
-                    .background(RoundedRectangle(cornerRadius: 7).fill(Color.white.opacity(0.06)))
-                    .overlay(RoundedRectangle(cornerRadius: 7)
-                        .stroke(Color.white.opacity(0.10), lineWidth: 1))
+                actionButton(icon: "folder", label: "Show in Finder", active: false) {
+                    openInFinder()
                 }
-                .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 24)
+    }
+
+    private func actionButton(icon: String, label: String, active: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: icon).font(.system(size: Theme.bodySize))
+                Text(label).font(.system(size: Theme.bodySize))
+            }
+            .foregroundStyle(active ? Theme.accent : Color.secondary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(active ? Theme.accent.opacity(0.08) : Theme.surfaceFill)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 7)
+                    .stroke(active ? Theme.accent.opacity(0.4) : Theme.border, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Weight List
@@ -168,10 +245,10 @@ struct WeightRow: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(faceName)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: Theme.bodySize, weight: .medium))
                     .foregroundStyle(.primary)
                 Text(psName)
-                    .font(.system(size: 11).monospaced())
+                    .font(.system(size: Theme.smallSize).monospaced())
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
                     .truncationMode(.middle)
