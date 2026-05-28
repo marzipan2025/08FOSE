@@ -35,12 +35,19 @@ struct ContentView: View {
                 minWeightCount: $minWeightCount,
                 searchQuery: $searchQuery
             )
+            .background(Color(nsColor: .windowBackgroundColor))
             .navigationSplitViewColumnWidth(min: sidePanelMin, ideal: sidePanelIdeal, max: sidePanelMax)
         } content: {
             gridArea
                 .navigationTitle("")
         } detail: {
             FavoritesPanel(favoritesOnly: $favoritesOnly)
+                .overlay(
+                    Rectangle()
+                        .fill(Color(nsColor: .windowBackgroundColor))
+                        .frame(width: 2),
+                    alignment: .leading
+                )
                 .navigationSplitViewColumnWidth(min: sidePanelMin, ideal: sidePanelIdeal, max: sidePanelMax)
                 .navigationTitle("")
         }
@@ -120,6 +127,7 @@ struct ContentView: View {
                         .matchedGeometryEffect(id: family.id, in: cellHero)
                         .frame(maxHeight: .infinity, alignment: .top)
                         .padding(.horizontal, 16)
+                        .padding(.top, 16)
                     }
                 }
 
@@ -404,7 +412,7 @@ struct FavoritesPanel: View {
             .disabled(favorites.sorted.isEmpty)
             .opacity(favorites.sorted.isEmpty ? 0.4 : 1)
         }
-        .background(Color(nsColor: .windowBackgroundColor).opacity(0.4))
+        .background(Color(nsColor: .windowBackgroundColor))
     }
 }
 
@@ -413,30 +421,44 @@ struct FavoritesPanel: View {
 struct FavoriteRow: View {
     let name: String
     @EnvironmentObject var favorites: FavoritesStore
+    @AppStorage("previewText") private var previewText: String = "The quick brown fox jumps over lazy dog"
     @State private var hovering = false
 
+    private var sampleText: String {
+        previewText.isEmpty ? "The quick brown fox jumps over lazy dog." : previewText
+    }
+
     var body: some View {
-        HStack {
-            Text(name)
-                .font(.custom(name, size: 16))
-                .lineLimit(1)
-            Spacer()
+        HStack(alignment: .top, spacing: 8) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text(name)
+                    .font(.system(size: 11, weight: .regular))
+                    .foregroundStyle(Color.weightBadge)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                Text(sampleText)
+                    .font(.custom(name, size: 16))
+                    .foregroundStyle(Color(white: 0.8))  // #cccccc
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
             Button {
                 favorites.toggle(name)
             } label: {
                 Image(systemName: "star.fill")
                     .foregroundStyle(Color.accentYellow)
-                    .font(.system(size: 12))
+                    .font(.system(size: 11))
             }
             .buttonStyle(.plain)
-            .opacity(hovering ? 1 : 0.85)
+            .opacity(hovering ? 1 : 0.7)
+            .padding(.top, 1)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(hovering ? Color.white.opacity(0.05) : .clear)
-        )
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(hovering ? Color.white.opacity(0.05) : .clear)
         .onHover { hovering = $0 }
     }
 }
@@ -452,7 +474,7 @@ struct PreviewInputBar: View {
             Image(systemName: "textformat")
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
-            TextField("미리보기 텍스트를 입력하면 모든 셀에 적용됩니다", text: $text)
+            TextField("The quick brown fox jumps over lazy dog.", text: $text)
                 .textFieldStyle(.plain)
                 .font(.system(size: 14))
                 .focused($focused)

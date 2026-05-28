@@ -13,7 +13,7 @@ struct FontDetailView: View {
     private var isFavorited: Bool { favorites.contains(family.name) }
 
     private var sampleText: String {
-        previewText.isEmpty ? "The Quick Gray Fox" : previewText
+        previewText.isEmpty ? "The quick brown fox jumps over lazy dog." : previewText
     }
 
     var body: some View {
@@ -23,10 +23,10 @@ struct FontDetailView: View {
             weightList
         }
         .background(Color(nsColor: .windowBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(Color.accentYellow, lineWidth: 1.5)
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(Color.white.opacity(0.6), lineWidth: 3)
         )
         .onExitCommand { onClose() }
     }

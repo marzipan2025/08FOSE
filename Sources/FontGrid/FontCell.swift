@@ -34,7 +34,7 @@ struct FontCell: View {
                 trailingBadge
             }
 
-            Text(previewText.isEmpty ? "The Quick Gray Fox" : previewText)
+            Text(previewText.isEmpty ? "The quick brown fox jumps over lazy dog." : previewText)
                 .font(.custom(displayedFontName, size: fontSize))
                 .lineLimit(1)
                 .truncationMode(.tail)
