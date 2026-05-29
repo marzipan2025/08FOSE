@@ -8,7 +8,6 @@ struct CenterPanel: View {
     @EnvironmentObject var memos: MemoStore
     @AppStorage("previewText") private var previewText = "The quick brown fox jumps over lazy dog"
     @Namespace private var cellHero
-    @State private var hoveredFamilyID: FontFamily.ID? = nil
 
     private var displayed: [FontFamily] {
         vm.library.families
@@ -66,37 +65,14 @@ struct CenterPanel: View {
             let effective = min(max(1, vm.columnCount), computed)
             let rows = displayed.chunked(into: effective)
 
-            ZStack(alignment: .top) {
-                ScrollView {
-                    VStack(spacing: Theme.gridSpacing) {
-                        ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                            HStack(spacing: Theme.gridSpacing) {
-                                ForEach(row) { family in
-                                    cellView(for: family)
-                                        .frame(maxWidth: .infinity)
-                                        .zIndex(hoveredFamilyID == family.id ? 1 : 0)
-                                }
-                                if row.count < effective {
-                                    ForEach(0..<(effective - row.count), id: \.self) { _ in
-                                        Color.clear.frame(maxWidth: .infinity)
-                                    }
-                                }
-                            }
-                            .zIndex(row.contains(where: { $0.id == hoveredFamilyID }) ? 1 : 0)
-                        }
-                    }
-                    .padding(Theme.gridPadding)
-                    .padding(.bottom, 16)
-
-                    if displayed.isEmpty {
-                        Text(emptyMessage)
-                            .font(.system(size: Theme.bodySize))
-                            .foregroundStyle(.secondary)
-                            .padding(.top, 40)
-                    }
-                }
-                .scrollContentBackground(.hidden)
-            }
+            FontGridScroll(
+                rows: rows,
+                effective: effective,
+                previewText: previewText,
+                cellHero: cellHero,
+                isEmpty: displayed.isEmpty,
+                emptyMessage: emptyMessage
+            )
             .onAppear {
                 vm.maxColumns = computed
                 if vm.columnCount > computed { vm.columnCount = computed }
@@ -126,6 +102,57 @@ struct CenterPanel: View {
         let usable = max(0, width - Theme.gridPadding * 2)
         let n = Int(floor((usable + Theme.gridSpacing) / (Theme.minCellWidth + Theme.gridSpacing)))
         return max(1, n)
+    }
+}
+
+// MARK: - Scrollable Font Grid
+//
+// Holds the hover state locally so hovering a cell does NOT invalidate
+// CenterPanel's body (and thus does not re-run the family filter chain).
+// Uses LazyVStack so only on-screen rows are built — and only on-screen
+// fonts are loaded by Core Text — regardless of total font count.
+
+private struct FontGridScroll: View {
+    let rows: [[FontFamily]]
+    let effective: Int
+    let previewText: String
+    let cellHero: Namespace.ID
+    let isEmpty: Bool
+    let emptyMessage: String
+
+    @EnvironmentObject var vm: AppViewModel
+    @State private var hoveredFamilyID: FontFamily.ID? = nil
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(spacing: Theme.gridSpacing) {
+                ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                    HStack(spacing: Theme.gridSpacing) {
+                        ForEach(row) { family in
+                            cellView(for: family)
+                                .frame(maxWidth: .infinity)
+                                .zIndex(hoveredFamilyID == family.id ? 1 : 0)
+                        }
+                        if row.count < effective {
+                            ForEach(0..<(effective - row.count), id: \.self) { _ in
+                                Color.clear.frame(maxWidth: .infinity)
+                            }
+                        }
+                    }
+                    .zIndex(row.contains(where: { $0.id == hoveredFamilyID }) ? 1 : 0)
+                }
+            }
+            .padding(Theme.gridPadding)
+            .padding(.bottom, 16)
+
+            if isEmpty {
+                Text(emptyMessage)
+                    .font(.system(size: Theme.bodySize))
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 40)
+            }
+        }
+        .scrollContentBackground(.hidden)
     }
 
     @ViewBuilder
