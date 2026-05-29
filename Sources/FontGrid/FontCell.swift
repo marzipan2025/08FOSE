@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import CoreText
 
 struct FontCell: View {
     let family: FontFamily
@@ -150,37 +151,71 @@ struct FontCell: View {
     }
 }
 
-// MARK: - Preview Label (AppKit)
+// MARK: - Preview Label (Core Text)
 
-/// Single-line, tail-truncating preview rendered via NSTextField. Unlike
-/// SwiftUI `Text`, AppKit clips to the view bounds (not the font's line box),
-/// so glyphs taller than the primary font's ascent — e.g. Korean drawn through
-/// system fallback inside a Latin-only font — are not sheared off at the top.
+/// Single-line, tail-truncating font preview drawn with Core Text.
+///
+/// `NSTextField` and SwiftUI `Text` position the baseline from the PRIMARY
+/// font's ascent. So when a Latin-only font (e.g. dotty, Bandwidth BRK) draws
+/// Korean through system fallback, the taller fallback glyphs are sheared off
+/// at the top. `CTLineGetTypographicBounds` instead reports the line's REAL
+/// metrics — including the fallback runs — so the line can be centred by its
+/// true height and nothing is clipped, whatever the primary font's ascent is.
 struct FontPreviewLabel: NSViewRepresentable {
     let text: String
     let fontName: String
     let fontSize: Double
 
-    func makeNSView(context: Context) -> NSTextField {
-        let tf = NSTextField(labelWithString: text)
-        tf.isEditable = false
-        tf.isSelectable = false
-        tf.isBordered = false
-        tf.drawsBackground = false
-        tf.usesSingleLineMode = true
-        tf.maximumNumberOfLines = 1
-        tf.lineBreakMode = .byTruncatingTail
-        tf.cell?.truncatesLastVisibleLine = true
-        tf.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        tf.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        return tf
+    func makeNSView(context: Context) -> PreviewTextView {
+        let view = PreviewTextView()
+        view.configure(text: text, fontName: fontName, fontSize: fontSize)
+        return view
     }
 
-    func updateNSView(_ tf: NSTextField, context: Context) {
-        tf.stringValue = text
-        tf.font = NSFont(name: fontName, size: fontSize) ?? .systemFont(ofSize: fontSize)
-        tf.textColor = .labelColor
-        tf.lineBreakMode = .byTruncatingTail
-        tf.maximumNumberOfLines = 1
+    func updateNSView(_ view: PreviewTextView, context: Context) {
+        view.configure(text: text, fontName: fontName, fontSize: fontSize)
+    }
+}
+
+final class PreviewTextView: NSView {
+    private var text: String = ""
+    private var font: NSFont = .systemFont(ofSize: 28)
+
+    func configure(text: String, fontName: String, fontSize: Double) {
+        self.text = text
+        self.font = NSFont(name: fontName, size: fontSize) ?? .systemFont(ofSize: fontSize)
+        needsDisplay = true
+    }
+
+    override var isFlipped: Bool { false }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        needsDisplay = true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        guard !text.isEmpty, let ctx = NSGraphicsContext.current?.cgContext else { return }
+
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: font,
+            kCTForegroundColorFromContextAttributeName as NSAttributedString.Key: true
+        ]
+        NSColor.labelColor.setFill()
+
+        var line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attrs))
+        let maxWidth = Double(bounds.width)
+        if CTLineGetTypographicBounds(line, nil, nil, nil) > maxWidth {
+            let ellipsis = CTLineCreateWithAttributedString(NSAttributedString(string: "\u{2026}", attributes: attrs))
+            if let truncated = CTLineCreateTruncatedLine(line, maxWidth, .end, ellipsis) {
+                line = truncated
+            }
+        }
+
+        var ascent: CGFloat = 0, descent: CGFloat = 0, leading: CGFloat = 0
+        CTLineGetTypographicBounds(line, &ascent, &descent, &leading)
+        let baselineY = (bounds.height - (ascent + descent)) / 2 + descent
+        ctx.textPosition = CGPoint(x: 0, y: baselineY)
+        CTLineDraw(line, ctx)
     }
 }
