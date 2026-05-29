@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct FontCell: View {
     let family: FontFamily
@@ -36,14 +37,10 @@ struct FontCell: View {
                     .padding(.top, 12)
             }
             .overlay(alignment: .bottomLeading) {
-                Text(resolvedPreviewText)
-                    .font(.custom(displayedFontName, size: fontSize))
-                    .lineSpacing(fontSize * 0.3)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .foregroundStyle(.primary)
+                FontPreviewLabel(text: resolvedPreviewText, fontName: displayedFontName, fontSize: fontSize)
+                    .frame(height: fontSize * 1.9)
                     .padding(.horizontal, 14)
-                    .alignmentGuide(.bottom) { d in d[.lastTextBaseline] + 24 }
+                    .padding(.bottom, 10)
                     .animation(.easeInOut(duration: 0.15), value: weightIndex)
             }
             .clipShape(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
@@ -150,5 +147,40 @@ struct FontCell: View {
                 .font(.system(size: Theme.smallSize))
                 .foregroundStyle(Theme.weightBadge)
         }
+    }
+}
+
+// MARK: - Preview Label (AppKit)
+
+/// Single-line, tail-truncating preview rendered via NSTextField. Unlike
+/// SwiftUI `Text`, AppKit clips to the view bounds (not the font's line box),
+/// so glyphs taller than the primary font's ascent — e.g. Korean drawn through
+/// system fallback inside a Latin-only font — are not sheared off at the top.
+struct FontPreviewLabel: NSViewRepresentable {
+    let text: String
+    let fontName: String
+    let fontSize: Double
+
+    func makeNSView(context: Context) -> NSTextField {
+        let tf = NSTextField(labelWithString: text)
+        tf.isEditable = false
+        tf.isSelectable = false
+        tf.isBordered = false
+        tf.drawsBackground = false
+        tf.usesSingleLineMode = true
+        tf.maximumNumberOfLines = 1
+        tf.lineBreakMode = .byTruncatingTail
+        tf.cell?.truncatesLastVisibleLine = true
+        tf.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        tf.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return tf
+    }
+
+    func updateNSView(_ tf: NSTextField, context: Context) {
+        tf.stringValue = text
+        tf.font = NSFont(name: fontName, size: fontSize) ?? .systemFont(ofSize: fontSize)
+        tf.textColor = .labelColor
+        tf.lineBreakMode = .byTruncatingTail
+        tf.maximumNumberOfLines = 1
     }
 }
