@@ -75,7 +75,7 @@ struct FavoriteRow: View {
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 8) {
+        HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(name)
                     .font(.system(size: Theme.smallSize))
@@ -84,11 +84,11 @@ struct FavoriteRow: View {
                     .truncationMode(.tail)
 
                 Text(sampleText)
-                    .font(.custom(name, size: 16))
+                    .font(.custom(name, size: 18))
                     .foregroundStyle(Color(white: 0.8))
                     .lineLimit(1)
                     .truncationMode(.tail)
-                    .frame(height: 20, alignment: .center)
+                    .frame(height: 22, alignment: .center)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .clipped()
             }
@@ -111,7 +111,10 @@ struct FavoriteRow: View {
         }
         .padding(.horizontal, 10)
         .frame(height: 56)
-        .background(hovering ? Color.white.opacity(0.05) : .clear)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(hovering ? Color.white.opacity(0.05) : .clear)
+        )
         .contentShape(Rectangle())
         .onTapGesture { onSelect() }
         .onHover { hovering = $0 }

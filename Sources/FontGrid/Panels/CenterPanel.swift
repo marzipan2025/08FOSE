@@ -8,6 +8,7 @@ struct CenterPanel: View {
     @EnvironmentObject var memos: MemoStore
     @AppStorage("previewText") private var previewText = "The quick brown fox jumps over lazy dog"
     @Namespace private var cellHero
+    @State private var emptyStateFontName: String? = nil
 
     private var displayed: [FontFamily] {
         vm.library.families
@@ -16,13 +17,14 @@ struct CenterPanel: View {
             .filter { !vm.favoritesOnly || favorites.contains($0.name) }
             .filter { !vm.memoOnly || memos.hasNote(for: $0.name) }
             .filter { !vm.koreanOnly || $0.supportsKorean }
-            .filter { !vm.englishOnly || $0.supportsLatin }
+            .filter { !vm.englishOnly || $0.isNonKoreanText }
     }
 
     var body: some View {
         ZStack(alignment: .bottom) {
             gridArea
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+            emptyOverlay
             BottomFadeOverlay()
                 .frame(height: 110)
                 .allowsHitTesting(false)
@@ -32,6 +34,23 @@ struct CenterPanel: View {
                 .padding(.vertical, 12)
         }
         .background(Theme.panelBackground.ignoresSafeArea())
+    }
+
+    @ViewBuilder
+    private var emptyOverlay: some View {
+        if displayed.isEmpty && !vm.favoritesOnly {
+            Text("No Result")
+                .font(.custom(emptyStateFontName ?? "Helvetica", size: vm.gridFontSize))
+                .foregroundStyle(Color.white.opacity(0.10))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .allowsHitTesting(false)
+                .onAppear { pickEmptyStateFont() }
+        }
+    }
+
+    private func pickEmptyStateFont() {
+        let candidates = vm.library.families.filter { $0.supportsLatin && !$0.supportsKorean }
+        emptyStateFontName = candidates.randomElement()?.memberFontNames.first
     }
 
     @ViewBuilder
@@ -69,9 +88,7 @@ struct CenterPanel: View {
                 rows: rows,
                 effective: effective,
                 previewText: previewText,
-                cellHero: cellHero,
-                isEmpty: displayed.isEmpty,
-                emptyMessage: emptyMessage
+                cellHero: cellHero
             )
             .onAppear {
                 vm.maxColumns = computed
@@ -85,19 +102,6 @@ struct CenterPanel: View {
         }
     }
 
-    private var emptyMessage: String {
-        if !vm.searchQuery.isEmpty {
-            return "'\(vm.searchQuery)'와 일치하는 폰트가 없습니다."
-        }
-        if vm.favoritesOnly {
-            return "즐겨찾기된 폰트가 없습니다."
-        }
-        if vm.memoOnly {
-            return "메모가 있는 폰트가 없습니다."
-        }
-        return "표시할 폰트가 없습니다."
-    }
-
     private func computeMaxColumns(width: CGFloat) -> Int {
         let usable = max(0, width - Theme.gridPadding * 2)
         let n = Int(floor((usable + Theme.gridSpacing) / (Theme.minCellWidth + Theme.gridSpacing)))
@@ -109,23 +113,22 @@ struct CenterPanel: View {
 //
 // Holds the hover state locally so hovering a cell does NOT invalidate
 // CenterPanel's body (and thus does not re-run the family filter chain).
-// Uses LazyVStack so only on-screen rows are built — and only on-screen
-// fonts are loaded by Core Text — regardless of total font count.
+// Uses a plain VStack (not LazyVStack) so per-row zIndex applies across
+// rows — the hovered cell's drop shadow needs to spill into the row below,
+// and lazy stacks render rows in document order regardless of zIndex.
 
 private struct FontGridScroll: View {
     let rows: [[FontFamily]]
     let effective: Int
     let previewText: String
     let cellHero: Namespace.ID
-    let isEmpty: Bool
-    let emptyMessage: String
 
     @EnvironmentObject var vm: AppViewModel
     @State private var hoveredFamilyID: FontFamily.ID? = nil
 
     var body: some View {
         ScrollView {
-            LazyVStack(spacing: Theme.gridSpacing) {
+            VStack(spacing: Theme.gridSpacing) {
                 ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                     HStack(spacing: Theme.gridSpacing) {
                         ForEach(row) { family in
@@ -143,14 +146,7 @@ private struct FontGridScroll: View {
                 }
             }
             .padding(Theme.gridPadding)
-            .padding(.bottom, 16)
-
-            if isEmpty {
-                Text(emptyMessage)
-                    .font(.system(size: Theme.bodySize))
-                    .foregroundStyle(.secondary)
-                    .padding(.top, 40)
-            }
+            .padding(.bottom, 48)
         }
         .scrollContentBackground(.hidden)
     }

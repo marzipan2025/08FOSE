@@ -13,3 +13,6 @@ DerivedData/
 # Xcode user state
 xcuserdata/
 *.xcuserstate
+
+# App packaging output
+dist/

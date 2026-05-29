@@ -2,6 +2,9 @@ import SwiftUI
 import AppKit
 
 enum Theme {
+    // App
+    static let appVersion = "0.0.2"
+
     // Panels
     static let panelDefaultWidth: CGFloat = 240
     static let panelMinWidth: CGFloat = 240

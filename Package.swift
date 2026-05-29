@@ -7,7 +7,10 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "FontGrid",
-            path: "Sources/FontGrid"
+            path: "Sources/FontGrid",
+            resources: [
+                .copy("Resources/AppIcon.png")
+            ]
         )
     ]
 )

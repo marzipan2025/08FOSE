@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
+        applyAppIcon()
         applyWindowStyle()
         adjustTrafficLights()
 
@@ -28,6 +29,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func handleWindowEvent() {
         applyWindowStyle()
+    }
+
+    // Set the Dock icon at launch.
+    //
+    // - Packaged .app: the .icns in Contents/Resources is already shown by the
+    //   system via Info.plist's CFBundleIconFile; we also load it here so the
+    //   running Dock tile matches. Found through Bundle.main, which is valid
+    //   inside the app bundle.
+    // - Dev (`swift run`): there is no app bundle, so fall back to the PNG
+    //   carried in the SwiftPM resource bundle (Bundle.module). Checked second
+    //   so the packaged path never evaluates Bundle.module.
+    private func applyAppIcon() {
+        if let url = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
+           let image = NSImage(contentsOf: url) {
+            NSApp.applicationIconImage = image
+            return
+        }
+        if let url = Bundle.module.url(forResource: "AppIcon", withExtension: "png"),
+           let image = NSImage(contentsOf: url) {
+            NSApp.applicationIconImage = image
+        }
     }
 
     @objc private func applyWindowStyle() {
