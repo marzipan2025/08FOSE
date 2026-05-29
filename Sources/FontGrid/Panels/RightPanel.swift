@@ -30,8 +30,7 @@ struct RightPanel: View {
                 Spacer(minLength: 0)
             }
         }
-        .frame(width: Theme.rightPanelWidth)
-        .frame(maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.sidebarBackground.ignoresSafeArea())
     }
 
@@ -41,7 +40,11 @@ struct RightPanel: View {
                 ForEach(favorites.sorted, id: \.self) { name in
                     FavoriteRow(name: name) {
                         if let family = vm.library.families.first(where: { $0.name == name }) {
-                            withAnimation(.spring(response: 0.42, dampingFraction: 0.80)) {
+                            if vm.selectedFamily == nil {
+                                withAnimation(.spring(response: 0.42, dampingFraction: 0.80)) {
+                                    vm.selectedFamily = family
+                                }
+                            } else {
                                 vm.selectedFamily = family
                             }
                         }
@@ -61,8 +64,11 @@ struct FavoriteRow: View {
     let name: String
     let onSelect: () -> Void
     @EnvironmentObject var favorites: FavoritesStore
+    @EnvironmentObject var memos: MemoStore
     @AppStorage("previewText") private var previewText: String = "The quick brown fox jumps over lazy dog"
     @State private var hovering = false
+
+    private var hasMemo: Bool { memos.hasNote(for: name) }
 
     private var sampleText: String {
         previewText.isEmpty ? "The quick brown fox jumps over lazy dog." : previewText
@@ -88,12 +94,19 @@ struct FavoriteRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            Button { favorites.toggle(name) } label: {
-                Image(systemName: "star.fill")
-                    .foregroundStyle(Theme.accent)
-                    .font(.system(size: Theme.smallSize))
+            HStack(spacing: 3) {
+                if hasMemo {
+                    Circle()
+                        .fill(Theme.memoAccent)
+                        .frame(width: 9, height: 9)
+                }
+                Button { favorites.toggle(name) } label: {
+                    Circle()
+                        .fill(Theme.accent)
+                        .frame(width: 9, height: 9)
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
             .opacity(hovering ? 1 : 0.7)
         }
         .padding(.horizontal, 10)

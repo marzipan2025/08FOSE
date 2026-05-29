@@ -3,8 +3,9 @@ import AppKit
 
 enum Theme {
     // Panels
-    static let leftPanelWidth: CGFloat = 220
-    static let rightPanelWidth: CGFloat = 260
+    static let panelDefaultWidth: CGFloat = 240
+    static let panelMinWidth: CGFloat = 240
+    static let panelMaxWidth: CGFloat = 440
     static let panelHPadding: CGFloat = 16
     static let panelVPadding: CGFloat = 14
     static let sectionSpacing: CGFloat = 10
@@ -25,7 +26,7 @@ enum Theme {
     static let pillRadius: CGFloat = 6
 
     static func cellHeight(fontSize: Double) -> CGFloat {
-        max(90, CGFloat(fontSize) + 62)
+        max(90, CGFloat(fontSize) * 1.2 + 62)
     }
 
     // Colors
@@ -39,4 +40,5 @@ enum Theme {
     static let border = Color.white.opacity(0.10)
     static let borderHover = Color.white.opacity(0.35)
     static let surfaceFill = Color.white.opacity(0.06)
+    static let memoSurface = Color.white.opacity(0.05)
 }

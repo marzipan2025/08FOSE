@@ -38,11 +38,12 @@ struct FontCell: View {
             .overlay(alignment: .bottomLeading) {
                 Text(resolvedPreviewText)
                     .font(.custom(displayedFontName, size: fontSize))
+                    .lineSpacing(fontSize * 0.3)
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .foregroundStyle(.primary)
                     .padding(.horizontal, 14)
-                    .alignmentGuide(.bottom) { d in d[.lastTextBaseline] + 14 }
+                    .alignmentGuide(.bottom) { d in d[.lastTextBaseline] + 24 }
                     .animation(.easeInOut(duration: 0.15), value: weightIndex)
             }
             .clipShape(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
@@ -118,13 +119,32 @@ struct FontCell: View {
 
     @ViewBuilder
     private var trailingBadge: some View {
-        if hovering || isFavorited {
-            Button { favorites.toggle(family.name) } label: {
-                Image(systemName: isFavorited ? "star.fill" : "star")
-                    .font(.system(size: Theme.bodySize))
-                    .foregroundStyle(isFavorited ? Theme.accent : Color.secondary)
+        if hovering || isFavorited || hasMemo {
+            HStack(spacing: 3) {
+                if hasMemo {
+                    Circle()
+                        .fill(Theme.memoAccent)
+                        .frame(width: 9, height: 9)
+                }
+                if hovering || isFavorited {
+                    Button { favorites.toggle(family.name) } label: {
+                        ZStack {
+                            if isFavorited {
+                                Circle().fill(Theme.accent)
+                            } else {
+                                Circle().fill(Color.white.opacity(0.12))
+                                Circle().strokeBorder(Color.secondary, lineWidth: 1)
+                            }
+                        }
+                        .frame(width: 9, height: 9)
+                        .padding(10)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .frame(width: 9, height: 9)
+                }
             }
-            .buttonStyle(.plain)
+            .offset(x: 1, y: 1)
         } else {
             Text(String(format: "%02d", family.weightCount))
                 .font(.system(size: Theme.smallSize))

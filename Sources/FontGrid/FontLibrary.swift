@@ -4,6 +4,8 @@ import Foundation
 struct FontFamily: Identifiable, Hashable {
     let name: String
     let memberFontNames: [String]   // PostScript names sorted by weight (light → heavy)
+    let supportsKorean: Bool
+    let supportsLatin: Bool
     var weightCount: Int { memberFontNames.count }
     var id: String { name }
 }
@@ -35,9 +37,25 @@ final class FontLibrary: ObservableObject {
 
             guard !sortedNames.isEmpty else { return nil }
             let displayName = decodeFontFamilyName(family)
-            return FontFamily(name: displayName, memberFontNames: sortedNames)
+            let (kor, lat) = Self.scriptSupport(psName: sortedNames[0])
+            return FontFamily(
+                name: displayName,
+                memberFontNames: sortedNames,
+                supportsKorean: kor,
+                supportsLatin: lat
+            )
         }
         .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    private static func scriptSupport(psName: String) -> (korean: Bool, latin: Bool) {
+        guard let font = NSFont(name: psName, size: 12) else {
+            return (false, false)
+        }
+        let cs = font.coveredCharacterSet
+        let korean = cs.contains(Unicode.Scalar(0xAC00)!)   // 가
+        let latin = cs.contains(Unicode.Scalar(0x0041)!)    // A
+        return (korean, latin)
     }
 
     // NSFontManager returns Korean (and some other) font family names as

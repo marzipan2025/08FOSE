@@ -17,10 +17,24 @@ struct LeftPanel: View {
 
             PanelHDivider()
 
-            PanelSection("Filter") {
+            PanelSection("Filters") {
                 VStack(alignment: .leading, spacing: 14) {
                     weightFilter
-                    favoritesOnlyToggle
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Sortings")
+                            .font(.system(size: Theme.smallSize))
+                            .foregroundStyle(.secondary)
+                        VStack(spacing: 6) {
+                            HStack(spacing: 6) {
+                                favoritesOnlyToggle
+                                memoOnlyToggle
+                            }
+                            HStack(spacing: 6) {
+                                koreanToggle
+                                englishToggle
+                            }
+                        }
+                    }
                 }
             }
 
@@ -35,8 +49,7 @@ struct LeftPanel: View {
 
             Spacer(minLength: 0)
         }
-        .frame(width: Theme.leftPanelWidth)
-        .frame(maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.sidebarBackground.ignoresSafeArea())
     }
 
@@ -110,34 +123,67 @@ struct LeftPanel: View {
 
     private var favoritesOnlyToggle: some View {
         let disabled = favorites.sorted.isEmpty
-        return Button { vm.favoritesOnly.toggle() } label: {
+        return filterPill(
+            label: "Favorites",
+            icon: nil,
+            isOn: vm.favoritesOnly
+        ) {
+            vm.favoritesOnly.toggle()
+        }
+        .disabled(disabled)
+        .opacity(disabled ? 0.4 : 1)
+    }
+
+    private var memoOnlyToggle: some View {
+        filterPill(
+            label: "Memo",
+            icon: nil,
+            isOn: vm.memoOnly
+        ) {
+            vm.memoOnly.toggle()
+        }
+    }
+
+    private var koreanToggle: some View {
+        filterPill(label: "Korean", icon: nil, isOn: vm.koreanOnly) {
+            vm.koreanOnly.toggle()
+        }
+    }
+
+    private var englishToggle: some View {
+        filterPill(label: "English", icon: nil, isOn: vm.englishOnly) {
+            vm.englishOnly.toggle()
+        }
+    }
+
+    private func filterPill(
+        label: String,
+        icon: String?,
+        isOn: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
             HStack(spacing: 5) {
-                Image(systemName: vm.favoritesOnly ? "star.fill" : "star")
-                    .font(.system(size: Theme.smallSize))
-                Text("Favorites only")
-                    .font(.system(size: Theme.smallSize,
-                                  weight: vm.favoritesOnly ? .medium : .regular))
+                if let icon {
+                    Image(systemName: icon)
+                        .font(.system(size: Theme.smallSize))
+                }
+                Text(label)
+                    .font(.system(size: Theme.smallSize, weight: isOn ? .medium : .regular))
             }
-            .foregroundStyle(vm.favoritesOnly ? Theme.accent : Color.secondary)
+            .foregroundStyle(isOn ? Theme.accent : Color.secondary)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 5)
             .background(
                 RoundedRectangle(cornerRadius: Theme.pillRadius)
-                    .fill(vm.favoritesOnly
-                          ? Theme.accent.opacity(0.15)
-                          : Theme.surfaceFill)
+                    .fill(isOn ? Theme.accent.opacity(0.15) : Theme.surfaceFill)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: Theme.pillRadius)
-                    .stroke(vm.favoritesOnly
-                            ? Theme.accent.opacity(0.6)
-                            : Theme.border,
-                            lineWidth: 1)
+                    .stroke(isOn ? Theme.accent.opacity(0.6) : Theme.border, lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
-        .disabled(disabled)
-        .opacity(disabled ? 0.4 : 1)
     }
 
     // MARK: - Layout
@@ -183,20 +229,28 @@ struct LeftPanel: View {
                     .font(.system(size: Theme.smallSize))
                     .foregroundStyle(.secondary)
                 Spacer()
-                Text("\(Int(vm.fontSize))pt")
+                Text(formattedOffset(vm.previewSizeOffset))
                     .font(.system(size: Theme.smallSize, weight: .medium))
                     .foregroundStyle(.primary)
                     .monospacedDigit()
             }
-            Slider(value: $vm.fontSize, in: 14...56, step: 1)
+            Slider(value: $vm.previewSizeOffset, in: AppViewModel.previewOffsetRange, step: 1)
             HStack {
-                Text("14")
+                Text("\(Int(AppViewModel.previewOffsetRange.lowerBound))")
                 Spacer()
-                Text("56")
+                Text("0")
+                Spacer()
+                Text("+\(Int(AppViewModel.previewOffsetRange.upperBound))")
             }
             .font(.system(size: 10))
             .foregroundStyle(.tertiary)
             .monospacedDigit()
         }
+    }
+
+    private func formattedOffset(_ value: Double) -> String {
+        let i = Int(value.rounded())
+        if i > 0 { return "+\(i)" }
+        return "\(i)"
     }
 }

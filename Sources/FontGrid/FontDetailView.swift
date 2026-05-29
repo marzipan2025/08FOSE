@@ -9,6 +9,7 @@ struct FontDetailView: View {
 
     @EnvironmentObject var favorites: FavoritesStore
     @EnvironmentObject var memos: MemoStore
+    @EnvironmentObject var vm: AppViewModel
     @State private var copied = false
     @State private var memoExpanded: Bool = false
 
@@ -28,20 +29,29 @@ struct FontDetailView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             titleArea
-            Divider().opacity(0.35)
+            Rectangle()
+                .fill(Color.white.opacity(0.12))
+                .frame(height: 1)
             if memoExpanded {
                 expandedMemoArea
             } else {
                 weightList
                     .frame(maxHeight: .infinity)
-                Divider().opacity(0.35)
+                Rectangle()
+                .fill(Color.white.opacity(0.12))
+                .frame(height: 1)
                 collapsedMemoArea
             }
         }
-        .background(Theme.panelBackground)
-        .clipShape(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Theme.panelBackground)
+                .shadow(color: .black.opacity(0.55), radius: 14, x: 0, y: 10)
+                .shadow(color: .black.opacity(0.75), radius: 60, x: 0, y: 38)
+        )
         .overlay(
-            RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .stroke(Color.white, lineWidth: 1)
         )
         .onExitCommand {
@@ -56,22 +66,32 @@ struct FontDetailView: View {
     // MARK: - Memo (collapsed: single-line + expand toggle)
 
     private var collapsedMemoArea: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 0) {
             memoHeader(
                 icon: "arrow.up.left.and.arrow.down.right",
                 help: "Expand memo"
             ) {
                 withAnimation(.easeOut(duration: 0.2)) { memoExpanded = true }
             }
-            TextField("Add a note…", text: memoBinding)
-                .textFieldStyle(.plain)
-                .font(.system(size: 13))
-                .foregroundStyle(Theme.memoAccent)
-                .lineLimit(1)
+            ZStack(alignment: .leading) {
+                if memos.note(for: family.name).isEmpty {
+                    Text("Add a note…")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.memoAccent)
+                        .allowsHitTesting(false)
+                }
+                TextField("", text: memoBinding)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.memoAccent)
+                    .lineLimit(1)
+            }
         }
         .padding(.horizontal, 24)
-        .padding(.vertical, 20)
+        .padding(.top, 16)
+        .padding(.bottom, 26)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.memoSurface)
     }
 
     // MARK: - Memo (expanded: fills body)
@@ -88,7 +108,7 @@ struct FontDetailView: View {
                 if memos.note(for: family.name).isEmpty {
                     Text("Add a note…")
                         .font(.system(size: 13))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Theme.memoAccent)
                         .allowsHitTesting(false)
                 }
                 MemoEditor(
@@ -103,6 +123,7 @@ struct FontDetailView: View {
         .padding(.horizontal, 24)
         .padding(.vertical, 20)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Theme.memoSurface)
     }
 
     private func memoHeader(icon: String, help: String, action: @escaping () -> Void) -> some View {
@@ -141,6 +162,8 @@ struct FontDetailView: View {
                         .font(.system(size: Theme.bodySize))
                         .foregroundStyle(.secondary)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .unifiedGeometry()
 
                 Spacer(minLength: 16)
 
@@ -156,7 +179,7 @@ struct FontDetailView: View {
 
             HStack(spacing: 8) {
                 actionButton(
-                    icon: isFavorited ? "star.fill" : "star",
+                    icon: isFavorited ? "circle.fill" : "circle",
                     label: isFavorited ? "Favorited" : "Favorite",
                     active: isFavorited
                 ) { favorites.toggle(family.name) }
@@ -200,8 +223,10 @@ struct FontDetailView: View {
                 RoundedRectangle(cornerRadius: 7)
                     .stroke(active ? Theme.accent.opacity(0.4) : Theme.border, lineWidth: 1)
             )
+            .unifiedGeometry()
         }
         .buttonStyle(.plain)
+        .fixedSize()
     }
 
     // MARK: - Weight List
@@ -210,7 +235,7 @@ struct FontDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(family.memberFontNames.enumerated()), id: \.offset) { index, psName in
-                    WeightRow(psName: psName, sampleText: sampleText)
+                    WeightRow(psName: psName, sampleText: sampleText, sampleSize: CGFloat(vm.weightRowFontSize))
                     if index < family.memberFontNames.count - 1 {
                         Divider().opacity(0.15).padding(.horizontal, 24)
                     }
@@ -230,11 +255,28 @@ struct FontDetailView: View {
     }
 }
 
+// MARK: - Geometry Helper
+
+private extension View {
+    /// Treats a view's subtree as a single geometry unit so children animate
+    /// together (instead of background/text sliding independently) during an
+    /// ancestor's matchedGeometryEffect resize. Falls back to no-op pre-macOS 14.
+    @ViewBuilder
+    func unifiedGeometry() -> some View {
+        if #available(macOS 14.0, *) {
+            self.geometryGroup()
+        } else {
+            self
+        }
+    }
+}
+
 // MARK: - Weight Row
 
 struct WeightRow: View {
     let psName: String
     let sampleText: String
+    let sampleSize: CGFloat
 
     private var faceName: String {
         guard let font = NSFont(name: psName, size: 12) else { return psName }
@@ -242,7 +284,7 @@ struct WeightRow: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(faceName)
                     .font(.system(size: Theme.bodySize, weight: .medium))
@@ -254,10 +296,11 @@ struct WeightRow: View {
                     .truncationMode(.middle)
             }
             Text(sampleText)
-                .font(.custom(psName, size: 40))
+                .font(.custom(psName, size: sampleSize))
                 .foregroundStyle(.primary)
-                .lineLimit(1)
-                .truncationMode(.tail)
+                .lineSpacing(sampleSize * 0.3)
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, 24)
@@ -265,3 +308,4 @@ struct WeightRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
+

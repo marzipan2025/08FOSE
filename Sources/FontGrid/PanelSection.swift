@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct PanelSection<Content: View>: View {
     let title: String?
@@ -21,7 +22,7 @@ struct PanelSection<Content: View>: View {
                 HStack(spacing: 8) {
                     if let title {
                         Text(title.uppercased())
-                            .font(.system(size: Theme.sectionHeaderSize, weight: .semibold))
+                            .font(.system(size: Theme.sectionHeaderSize, weight: .bold))
                             .tracking(0.6)
                             .foregroundStyle(.secondary)
                     }
@@ -51,5 +52,54 @@ struct PanelVDivider: View {
             .fill(Theme.divider)
             .frame(width: 1)
             .ignoresSafeArea()
+    }
+}
+
+struct ResizableVDivider: View {
+    enum Edge { case left, right }
+
+    @Binding var width: CGFloat
+    @Binding var dragStartWidth: CGFloat?
+    let minWidth: CGFloat
+    let maxWidth: CGFloat
+    let edge: Edge
+
+    @State private var hovering = false
+
+    var body: some View {
+        Rectangle()
+            .fill(hovering || dragStartWidth != nil ? Theme.borderHover : Theme.divider)
+            .frame(width: 1)
+            .ignoresSafeArea()
+            .overlay(
+                Rectangle()
+                    .fill(Color.clear)
+                    .frame(width: 12)
+                    .contentShape(Rectangle())
+                    .onHover { isHovering in
+                        hovering = isHovering
+                        if isHovering {
+                            NSCursor.resizeLeftRight.push()
+                        } else {
+                            NSCursor.pop()
+                        }
+                    }
+                    .gesture(
+                        DragGesture(minimumDistance: 0, coordinateSpace: .global)
+                            .onChanged { value in
+                                if dragStartWidth == nil {
+                                    dragStartWidth = width
+                                }
+                                guard let base = dragStartWidth else { return }
+                                let delta = edge == .left
+                                    ? value.translation.width
+                                    : -value.translation.width
+                                width = min(maxWidth, max(minWidth, base + delta))
+                            }
+                            .onEnded { _ in
+                                dragStartWidth = nil
+                            }
+                    )
+            )
     }
 }
