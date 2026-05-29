@@ -15,9 +15,18 @@ final class AppViewModel: ObservableObject {
     @Published var maxColumns: Int = 6
     @Published var previewSizeOffset: Double = 0
 
+    // Wallpaper "skins" — bundled under Resources/Wallpapers/. More can be
+    // dropped in and listed here; the active one is persisted so a future
+    // settings switcher just binds to `wallpaper`.
+    // "" = none. Otherwise a file name under Resources/Wallpapers/.
+    static let wallpapers = ["Wallpaper01", "Wallpaper02", "Wallpaper03", "Wallpaper04"]
+    @Published var wallpaper: String = UserDefaults.standard.string(forKey: "wallpaper") ?? "Wallpaper02" {
+        didSet { UserDefaults.standard.set(wallpaper, forKey: "wallpaper") }
+    }
+
     static let gridBaseFontSize: Double = 28
     static let weightRowBaseFontSize: Double = 40
-    static let previewOffsetRange: ClosedRange<Double> = -14...14
+    static let previewOffsetRange: ClosedRange<Double> = -8...20
 
     var gridFontSize: Double { Self.gridBaseFontSize + previewSizeOffset }
     var weightRowFontSize: Double { Self.weightRowBaseFontSize + previewSizeOffset }

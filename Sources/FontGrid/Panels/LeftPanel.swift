@@ -44,6 +44,7 @@ struct LeftPanel: View {
                 VStack(alignment: .leading, spacing: 14) {
                     columnSlider
                     fontSizeSlider
+                    wallpaperPicker
                 }
             }
 
@@ -235,16 +236,50 @@ struct LeftPanel: View {
                     .monospacedDigit()
             }
             Slider(value: $vm.previewSizeOffset, in: AppViewModel.previewOffsetRange, step: 1)
-            HStack {
-                Text("\(Int(AppViewModel.previewOffsetRange.lowerBound))")
-                Spacer()
-                Text("0")
-                Spacer()
-                Text("+\(Int(AppViewModel.previewOffsetRange.upperBound))")
+            sliderScale
+        }
+    }
+
+    // The range is asymmetric (e.g. -8...20), so 0 is NOT at the track's
+    // midpoint. Place each label at its true fractional position so the
+    // numbers line up with the slider's tick marks and thumb.
+    private var sliderScale: some View {
+        let lo = AppViewModel.previewOffsetRange.lowerBound
+        let hi = AppViewModel.previewOffsetRange.upperBound
+        let labels: [Double] = [lo, 0, hi]
+        return GeometryReader { geo in
+            let inset: CGFloat = 11   // ≈ slider knob half-width
+            let usable = max(1, geo.size.width - inset * 2)
+            ZStack {
+                ForEach(labels, id: \.self) { value in
+                    let f = CGFloat((value - lo) / (hi - lo))
+                    Text(formattedOffset(value))
+                        .position(x: inset + usable * f, y: 7)
+                }
             }
-            .font(.system(size: 10))
-            .foregroundStyle(.tertiary)
-            .monospacedDigit()
+        }
+        .frame(height: 14)
+        .font(.system(size: 10))
+        .foregroundStyle(.tertiary)
+        .monospacedDigit()
+    }
+
+    // Temporary wallpaper switcher (None / 1–4). Will move into Settings later.
+    private var wallpaperPicker: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Wallpaper")
+                .font(.system(size: Theme.smallSize))
+                .foregroundStyle(.secondary)
+            HStack(spacing: 6) {
+                filterPill(label: "0", icon: nil, isOn: vm.wallpaper.isEmpty) {
+                    vm.wallpaper = ""
+                }
+                ForEach(Array(AppViewModel.wallpapers.enumerated()), id: \.offset) { index, name in
+                    filterPill(label: "\(index + 1)", icon: nil, isOn: vm.wallpaper == name) {
+                        vm.wallpaper = name
+                    }
+                }
+            }
         }
     }
 

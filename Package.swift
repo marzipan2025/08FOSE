@@ -9,7 +9,8 @@ let package = Package(
             name: "FontGrid",
             path: "Sources/FontGrid",
             resources: [
-                .copy("Resources/AppIcon.png")
+                .copy("Resources/AppIcon.png"),
+                .copy("Resources/Wallpapers")
             ]
         )
     ]

@@ -12,7 +12,11 @@ struct CenterPanel: View {
 
     private var displayed: [FontFamily] {
         vm.library.families
-            .filter { vm.searchQuery.isEmpty || $0.name.localizedCaseInsensitiveContains(vm.searchQuery) }
+            .filter { family in
+                vm.searchQuery.isEmpty
+                    || family.name.localizedCaseInsensitiveContains(vm.searchQuery)
+                    || memos.note(for: family.name).localizedCaseInsensitiveContains(vm.searchQuery)
+            }
             .filter { vm.minWeightCount <= 1 || $0.weightCount >= vm.minWeightCount }
             .filter { !vm.favoritesOnly || favorites.contains($0.name) }
             .filter { !vm.memoOnly || memos.hasNote(for: $0.name) }

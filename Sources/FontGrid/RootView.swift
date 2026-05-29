@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct RootView: View {
     @StateObject private var vm = AppViewModel()
@@ -34,10 +35,34 @@ struct RootView: View {
                 .frame(width: rightWidth)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay { WallpaperOverlay(name: vm.wallpaper).opacity(0.24) }
         .background(Theme.panelBackground.ignoresSafeArea())
         .environmentObject(vm)
         .environmentObject(favorites)
         .environmentObject(memos)
         .preferredColorScheme(.dark)
+    }
+}
+
+// Window-wide wallpaper drawn as the top layer over the whole app at low
+// opacity. Sits at the root, so filling the window needs no clipping or
+// per-panel safe-area handling, and it never affects layout.
+struct WallpaperOverlay: View {
+    let name: String
+
+    var body: some View {
+        if !name.isEmpty,
+           let url = Bundle.module.url(forResource: name, withExtension: "png", subdirectory: "Wallpapers"),
+           let img = NSImage(contentsOf: url) {
+            Image(nsImage: img)
+                .resizable()
+                .aspectRatio(img.size.width / img.size.height, contentMode: .fill)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .clipped()
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+        } else {
+            Color.clear
+        }
     }
 }

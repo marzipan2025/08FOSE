@@ -68,7 +68,7 @@ struct FontDetailView: View {
     private var collapsedMemoArea: some View {
         VStack(alignment: .leading, spacing: 0) {
             memoHeader(
-                icon: "arrow.up.left.and.arrow.down.right",
+                icon: "chevron.up",
                 help: "Expand memo"
             ) {
                 withAnimation(.easeOut(duration: 0.2)) { memoExpanded = true }
@@ -76,13 +76,13 @@ struct FontDetailView: View {
             ZStack(alignment: .leading) {
                 if memos.note(for: family.name).isEmpty {
                     Text("Add a note…")
-                        .font(.system(size: 13))
+                        .font(.system(size: 17))
                         .foregroundStyle(Theme.memoAccent)
                         .allowsHitTesting(false)
                 }
                 TextField("", text: memoBinding)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 13))
+                    .font(.system(size: 15))
                     .foregroundStyle(Theme.memoAccent)
                     .lineLimit(1)
             }
@@ -99,7 +99,7 @@ struct FontDetailView: View {
     private var expandedMemoArea: some View {
         VStack(alignment: .leading, spacing: 8) {
             memoHeader(
-                icon: "arrow.down.right.and.arrow.up.left",
+                icon: "chevron.down",
                 help: "Collapse memo"
             ) {
                 withAnimation(.easeOut(duration: 0.2)) { memoExpanded = false }
@@ -107,14 +107,14 @@ struct FontDetailView: View {
             ZStack(alignment: .topLeading) {
                 if memos.note(for: family.name).isEmpty {
                     Text("Add a note…")
-                        .font(.system(size: 13))
+                        .font(.system(size: 17))
                         .foregroundStyle(Theme.memoAccent)
                         .allowsHitTesting(false)
                 }
                 MemoEditor(
                     text: memoBinding,
-                    fontSize: 13,
-                    lineSpacing: 13 * 0.5,
+                    fontSize: 17,
+                    lineSpacing: 17 * 0.5,
                     textColor: NSColor(Theme.memoAccent)
                 )
             }
@@ -204,6 +204,15 @@ struct FontDetailView: View {
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 24)
+        .background(
+            // Subtle top-down darkening of the header, independent of the
+            // wallpaper. Clipped into the card by the view's outer clipShape.
+            LinearGradient(
+                colors: [Color.black.opacity(0.10), Color.black.opacity(0.30)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
     }
 
     private func actionButton(icon: String, label: String, active: Bool, action: @escaping () -> Void) -> some View {

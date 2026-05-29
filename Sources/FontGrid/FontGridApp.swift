@@ -68,8 +68,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func adjustTrafficLights() {
         DispatchQueue.main.async {
-            let offsetX: CGFloat = 6
-            let offsetY: CGFloat = -6   // AppKit Y is up; negative = visually down
+            let offsetX: CGFloat = 10
+            let offsetY: CGFloat = -10   // AppKit Y is up; negative = visually down
             let types: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
 
             for window in NSApp.windows {
