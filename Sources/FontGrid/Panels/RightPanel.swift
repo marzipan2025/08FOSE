@@ -66,6 +66,7 @@ struct RightPanel: View {
                 )
         }
         .buttonStyle(.plain)
+        .focusable(false)
         .help("Sort: \(vm.favoritesByRecent ? "most recent first" : "alphabetical")")
     }
 

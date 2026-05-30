@@ -1,9 +1,8 @@
 // make-icon.swift — shape a full-bleed square master into a macOS icon.
 //
 // macOS (unlike iOS) does NOT round app-icon corners automatically; it draws
-// the artwork as-is. So we bake the standard macOS "squircle" silhouette into
-// the art: an 824×824 rounded body centered on a 1024 transparent canvas with
-// a 100px margin, matching Apple's Big Sur+ icon grid.
+// the artwork as-is. Bake the rounded silhouette into the art so Finder and
+// Dock use the same visible shape.
 //
 //   usage: swift Tools/make-icon.swift <source.png> <out.png>
 
@@ -23,11 +22,8 @@ guard let src = NSImage(contentsOfFile: srcPath),
     exit(1)
 }
 
-// Apple macOS icon grid (1024 canvas)
 let canvas: CGFloat = 1024
-let body: CGFloat = 824          // rounded-rectangle width/height
-let radius: CGFloat = 185.4      // corner radius (~0.225 · body)
-let origin = (canvas - body) / 2 // 100px margin on every side
+let radius: CGFloat = 230
 
 let cs = CGColorSpace(name: CGColorSpace.sRGB)!
 guard let ctx = CGContext(
@@ -39,8 +35,7 @@ guard let ctx = CGContext(
 ctx.interpolationQuality = .high
 ctx.clear(CGRect(x: 0, y: 0, width: canvas, height: canvas))
 
-// Clip to the rounded body, then draw the (scaled) master art to fill it.
-let bodyRect = CGRect(x: origin, y: origin, width: body, height: body)
+let bodyRect = CGRect(x: 0, y: 0, width: canvas, height: canvas)
 let path = CGPath(roundedRect: bodyRect, cornerWidth: radius, cornerHeight: radius, transform: nil)
 ctx.addPath(path)
 ctx.clip()

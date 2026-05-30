@@ -20,8 +20,9 @@ final class AppViewModel: ObservableObject {
     // settings switcher just binds to `wallpaper`.
     // "" = none. Otherwise a file name under Resources/Wallpapers/.
     static let wallpapers = ["Wallpaper01", "Wallpaper02", "Wallpaper03", "Wallpaper04"]
-    @Published var wallpaper: String = UserDefaults.standard.string(forKey: "wallpaper") ?? "Wallpaper02" {
-        didSet { UserDefaults.standard.set(wallpaper, forKey: "wallpaper") }
+    private static let wallpaperKey = "selectedWallpaper"
+    @Published var wallpaper: String = UserDefaults.standard.string(forKey: wallpaperKey) ?? "" {
+        didSet { UserDefaults.standard.set(wallpaper, forKey: Self.wallpaperKey) }
     }
 
     // Favorites list order: false = alphabetical (가나다), true = most recent first.

@@ -175,6 +175,8 @@ struct FontDetailView: View {
                         .background(Circle().fill(Color.white.opacity(0.08)))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Close detail")
+                .help("Close detail")
             }
 
             HStack(spacing: 8) {
@@ -317,4 +319,3 @@ struct WeightRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
-

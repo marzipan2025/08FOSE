@@ -37,11 +37,27 @@ struct RootView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay { WallpaperOverlay(name: vm.wallpaper).opacity(0.24) }
         .background(Theme.panelBackground.ignoresSafeArea())
+        .background(InitialFocusClearer())
         .environmentObject(vm)
         .environmentObject(favorites)
         .environmentObject(memos)
         .preferredColorScheme(.dark)
     }
+}
+
+private struct InitialFocusClearer: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(frame: .zero)
+        DispatchQueue.main.async {
+            view.window?.makeFirstResponder(nil)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            view.window?.makeFirstResponder(nil)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
 }
 
 // Window-wide wallpaper drawn as the top layer over the whole app at low

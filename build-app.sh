@@ -9,6 +9,11 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+export CLANG_MODULE_CACHE_PATH="$PWD/.build/module-cache"
+export SWIFTPM_HOME="$PWD/.build/swiftpm-home"
+export XDG_CACHE_HOME="$PWD/.build/cache"
+mkdir -p "$CLANG_MODULE_CACHE_PATH" "$SWIFTPM_HOME" "$XDG_CACHE_HOME"
+
 APP_NAME="08FOSE"          # user-facing name: bundle, Dock, Finder
 PRODUCT="FontGrid"         # SwiftPM product / executable name
 BUNDLE_ID="com.marzipan.fontgrid"
@@ -22,14 +27,12 @@ MACOS="${CONTENTS}/MacOS"
 RES="${CONTENTS}/Resources"
 
 echo "▸ Building release binary…"
-swift build -c release
-BIN_DIR="$(swift build -c release --show-bin-path)"
+swift build -c release --disable-sandbox
+BIN_DIR="$(swift build -c release --disable-sandbox --show-bin-path)"
 
 echo "▸ Generating AppIcon.icns…"
 WORK="$(mktemp -d)"
-# macOS draws icon art as-is (no auto-rounding), so shape the full-bleed master
-# into the standard squircle silhouette with margin before slicing sizes.
-SHAPED="$WORK/AppIcon-shaped.png"
+SHAPED="$WORK/AppIcon-rounded.png"
 swift Tools/make-icon.swift "$ICON_SRC" "$SHAPED"
 ICONSET="$WORK/AppIcon.iconset"
 mkdir -p "$ICONSET"
@@ -37,13 +40,19 @@ for size in 16 32 128 256 512; do
   sips -z $size $size             "$SHAPED" --out "$ICONSET/icon_${size}x${size}.png"     >/dev/null
   sips -z $((size*2)) $((size*2)) "$SHAPED" --out "$ICONSET/icon_${size}x${size}@2x.png" >/dev/null
 done
-iconutil -c icns "$ICONSET" -o "$WORK/AppIcon.icns"
+if ! iconutil -c icns "$ICONSET" -o "$WORK/AppIcon.icns"; then
+  python3 Tools/make-icns.py "$ICONSET" "$WORK/AppIcon.icns"
+fi
 
 echo "▸ Assembling ${APP}…"
 rm -rf "$APP"
 mkdir -p "$MACOS" "$RES"
 cp "$BIN_DIR/$PRODUCT" "$MACOS/$PRODUCT"
 cp "$WORK/AppIcon.icns" "$RES/AppIcon.icns"
+cp "$SHAPED" "$RES/DockIcon.png"
+if [ -d "$BIN_DIR/${PRODUCT}_${PRODUCT}.bundle" ]; then
+  cp -R "$BIN_DIR/${PRODUCT}_${PRODUCT}.bundle" "$RES/"
+fi
 
 cat > "$CONTENTS/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

@@ -72,6 +72,7 @@ struct LeftPanel: View {
                         .foregroundStyle(.tertiary)
                 }
                 .buttonStyle(.plain)
+                .focusable(false)
             }
         }
         .padding(.horizontal, 10)
@@ -117,6 +118,7 @@ struct LeftPanel: View {
                             )
                     }
                     .buttonStyle(.plain)
+                    .focusable(false)
                 }
             }
         }
@@ -185,6 +187,7 @@ struct LeftPanel: View {
             )
         }
         .buttonStyle(.plain)
+        .focusable(false)
     }
 
     // MARK: - Layout

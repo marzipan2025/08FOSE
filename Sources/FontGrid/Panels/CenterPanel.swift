@@ -36,6 +36,7 @@ struct CenterPanel: View {
             PreviewInputBar(text: $previewText)
                 .padding(.horizontal, Theme.gridPadding)
                 .padding(.vertical, 12)
+                .zIndex(40)
         }
         .background(Theme.panelBackground.ignoresSafeArea())
     }
@@ -63,6 +64,7 @@ struct CenterPanel: View {
             Theme.panelBackground
                 .ignoresSafeArea(edges: .top)
                 .transition(.opacity)
+                .zIndex(20)
         }
         if let family = vm.selectedFamily {
             FontDetailView(
@@ -79,6 +81,14 @@ struct CenterPanel: View {
             .padding(.horizontal, Theme.gridPadding)
             .padding(.top, Theme.gridPadding)
             .padding(.bottom, 67)
+            .background(
+                EscapeKeyHandler {
+                    withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+                        vm.selectedFamily = nil
+                    }
+                }
+            )
+            .zIndex(30)
         }
     }
 
@@ -179,6 +189,55 @@ private struct FontGridScroll: View {
                 }
             )
             .matchedGeometryEffect(id: family.id, in: cellHero)
+        }
+    }
+}
+
+private struct EscapeKeyHandler: NSViewRepresentable {
+    let onEscape: () -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(frame: .zero)
+        context.coordinator.install()
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
+        coordinator.uninstall()
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onEscape: onEscape)
+    }
+
+    final class Coordinator {
+        private let onEscape: () -> Void
+        private var monitor: Any?
+
+        init(onEscape: @escaping () -> Void) {
+            self.onEscape = onEscape
+        }
+
+        func install() {
+            guard monitor == nil else { return }
+            monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                guard event.keyCode == 53 else { return event }
+                self?.onEscape()
+                return nil
+            }
+        }
+
+        func uninstall() {
+            if let monitor {
+                NSEvent.removeMonitor(monitor)
+                self.monitor = nil
+            }
+        }
+
+        deinit {
+            uninstall()
         }
     }
 }
