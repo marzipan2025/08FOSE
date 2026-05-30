@@ -24,6 +24,11 @@ final class AppViewModel: ObservableObject {
         didSet { UserDefaults.standard.set(wallpaper, forKey: "wallpaper") }
     }
 
+    // Favorites list order: false = alphabetical (가나다), true = most recent first.
+    @Published var favoritesByRecent: Bool = UserDefaults.standard.bool(forKey: "favoritesByRecent") {
+        didSet { UserDefaults.standard.set(favoritesByRecent, forKey: "favoritesByRecent") }
+    }
+
     static let gridBaseFontSize: Double = 28
     static let weightRowBaseFontSize: Double = 40
     static let previewOffsetRange: ClosedRange<Double> = -8...20

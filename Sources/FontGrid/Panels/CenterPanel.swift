@@ -42,7 +42,7 @@ struct CenterPanel: View {
 
     @ViewBuilder
     private var emptyOverlay: some View {
-        if displayed.isEmpty && !vm.favoritesOnly {
+        if displayed.isEmpty {
             Text("No Result")
                 .font(.custom(emptyStateFontName ?? "Helvetica", size: vm.gridFontSize))
                 .foregroundStyle(Color.white.opacity(0.10))

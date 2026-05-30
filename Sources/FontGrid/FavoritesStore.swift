@@ -2,27 +2,36 @@ import Foundation
 
 @MainActor
 final class FavoritesStore: ObservableObject {
-    @Published private(set) var names: Set<String> = []
+    // Insertion order, oldest → newest. Persisted so recency survives relaunch.
+    @Published private(set) var ordered: [String] = []
+    private var nameSet: Set<String> = []
     private let key = "FontGrid.favorites"
 
     init() {
         if let saved = UserDefaults.standard.array(forKey: key) as? [String] {
-            names = Set(saved)
+            ordered = saved
+            nameSet = Set(saved)
         }
     }
 
-    func contains(_ name: String) -> Bool { names.contains(name) }
+    func contains(_ name: String) -> Bool { nameSet.contains(name) }
 
     func toggle(_ name: String) {
-        if names.contains(name) {
-            names.remove(name)
+        if let index = ordered.firstIndex(of: name) {
+            ordered.remove(at: index)
+            nameSet.remove(name)
         } else {
-            names.insert(name)
+            ordered.append(name)   // newest goes last
+            nameSet.insert(name)
         }
-        UserDefaults.standard.set(Array(names), forKey: key)
+        UserDefaults.standard.set(ordered, forKey: key)
     }
 
+    /// Alphabetical (가나다 / A–Z).
     var sorted: [String] {
-        names.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+        ordered.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
+
+    /// Most recently favorited first.
+    var byRecency: [String] { ordered.reversed() }
 }

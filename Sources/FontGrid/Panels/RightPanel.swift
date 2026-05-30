@@ -6,38 +6,77 @@ struct RightPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            PanelSection(
-                "Favorites",
-                trailing: AnyView(
-                    Text(favorites.sorted.isEmpty ? "" : "\(favorites.sorted.count)")
-                        .font(.system(size: Theme.smallSize, weight: .medium))
-                        .foregroundStyle(.tertiary)
-                        .monospacedDigit()
-                )
-            ) {
-                if favorites.sorted.isEmpty {
-                    Text("아직 즐겨찾기가 없어요.\n폰트 카드에 마우스를 올려 별을 눌러보세요.")
-                        .font(.system(size: Theme.smallSize))
-                        .foregroundStyle(.tertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
+            favoritesHeader
+                .padding(.horizontal, Theme.panelHPadding)
+                .padding(.vertical, Theme.panelVPadding)
+            PanelHDivider()
 
-            if !favorites.sorted.isEmpty {
-                PanelHDivider()
-                favoritesList
-            } else {
+            if favorites.ordered.isEmpty {
+                Text("No favorites yet.\nHover a font card and tap the dot to add one.")
+                    .font(.system(size: Theme.smallSize))
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, Theme.panelHPadding)
+                    .padding(.vertical, Theme.panelVPadding)
                 Spacer(minLength: 0)
+            } else {
+                favoritesList
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.sidebarBackground.ignoresSafeArea())
     }
 
+    private var favoritesHeader: some View {
+        HStack(spacing: 8) {
+            Text("FAVORITES")
+                .font(.system(size: Theme.sectionHeaderSize, weight: .bold))
+                .tracking(0.6)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+            if !favorites.ordered.isEmpty {
+                Text("\(favorites.ordered.count)")
+                    .font(.system(size: Theme.smallSize, weight: .medium))
+                    .foregroundStyle(.tertiary)
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+            Spacer(minLength: 8)
+            if !favorites.ordered.isEmpty {
+                sortToggle
+            }
+        }
+    }
+
+    private var sortToggle: some View {
+        Button {
+            vm.favoritesByRecent.toggle()
+        } label: {
+            Text(vm.favoritesByRecent ? "Recent" : "A–Z")
+                .font(.system(size: Theme.smallSize, weight: .medium))
+                .foregroundStyle(Theme.accent)
+                .lineLimit(1)
+                .frame(width: 56)
+                .padding(.vertical, 3)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Theme.accent.opacity(0.15))
+                )
+        }
+        .buttonStyle(.plain)
+        .help("Sort: \(vm.favoritesByRecent ? "most recent first" : "alphabetical")")
+    }
+
+    private var displayedFavorites: [String] {
+        vm.favoritesByRecent ? favorites.byRecency : favorites.sorted
+    }
+
     private var favoritesList: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 2) {
-                ForEach(favorites.sorted, id: \.self) { name in
+                ForEach(displayedFavorites, id: \.self) { name in
                     FavoriteRow(name: name) {
                         if let family = vm.library.families.first(where: { $0.name == name }) {
                             if vm.selectedFamily == nil {
