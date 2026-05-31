@@ -23,6 +23,13 @@ struct FontDetailView: View {
         previewText.isEmpty ? "The quick brown fox jumps over lazy dog." : previewText
     }
 
+    // Hairline between header / weight list / memo. White in dark mode (lifts
+    // off the dark bg), black at the same strength in light mode (sits darker
+    // than its surroundings).
+    private var detailDivider: Color {
+        colorScheme == .light ? Color.black.opacity(0.12) : Color.white.opacity(0.12)
+    }
+
     private var memoBinding: Binding<String> {
         Binding(
             get: { memos.note(for: family.name) },
@@ -34,7 +41,7 @@ struct FontDetailView: View {
         VStack(alignment: .leading, spacing: 0) {
             titleArea
             Rectangle()
-                .fill(Color.white.opacity(0.12))
+                .fill(detailDivider)
                 .frame(height: 1)
             if memoExpanded {
                 expandedMemoArea
@@ -42,7 +49,7 @@ struct FontDetailView: View {
                 weightList
                     .frame(maxHeight: .infinity)
                 Rectangle()
-                .fill(Color.white.opacity(0.12))
+                .fill(detailDivider)
                 .frame(height: 1)
                 collapsedMemoArea
             }
@@ -50,7 +57,9 @@ struct FontDetailView: View {
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Theme.panelBackground)
+                // Light mode: card body is brighter than the global panel bg
+                // (0.92 → 0.952, white-ward 40%) so the card lifts off the grid.
+                .fill(colorScheme == .light ? Color(white: 0.952) : Theme.panelBackground)
                 .shadow(color: .black.opacity(0.55 * shadowScale), radius: 14, x: 0, y: 10)
                 .shadow(color: .black.opacity(0.75 * shadowScale), radius: 60, x: 0, y: 38)
         )
@@ -95,7 +104,13 @@ struct FontDetailView: View {
         .padding(.top, 16)
         .padding(.bottom, 26)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.memoSurface)
+        .background(memoAreaBackground)
+    }
+
+    // Memo strip background. Light mode uses a brighter solid (≈0.93,
+    // white-ward 40%) instead of the global memoSurface overlay.
+    private var memoAreaBackground: Color {
+        colorScheme == .light ? Color(white: 0.93) : Theme.memoSurface
     }
 
     // MARK: - Memo (expanded: fills body)
@@ -127,7 +142,7 @@ struct FontDetailView: View {
         .padding(.horizontal, 24)
         .padding(.vertical, 20)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Theme.memoSurface)
+        .background(memoAreaBackground)
     }
 
     private func memoHeader(icon: String, help: String, action: @escaping () -> Void) -> some View {
@@ -155,8 +170,8 @@ struct FontDetailView: View {
 
     private var titleArea: some View {
         // Header darkening gradient is full strength in dark mode, very faint
-        // in light (≈9% of the original).
-        let gradientScale = colorScheme == .light ? 0.09 : 1.0
+        // in light.
+        let gradientScale = colorScheme == .light ? 0.06 : 1.0
         return VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
