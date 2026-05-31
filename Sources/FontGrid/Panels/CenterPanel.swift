@@ -9,6 +9,25 @@ struct CenterPanel: View {
     @AppStorage("previewText") private var previewText = "The quick brown fox jumps over lazy dog"
     @Namespace private var cellHero
     @State private var emptyStateFontName: String? = nil
+    // Top edge of the grid container, in WINDOW coordinates. Reflects the safe
+    // area (title-bar inset in windowed mode, 0 in fullscreen), so the same
+    // scroll-top position reads ~44 windowed but ~16 in fullscreen.
+    @State private var gridTopY: CGFloat = .infinity
+    // Collapsed visibility flag actually driving opacity. We don't measure the
+    // title text: it's pinned to the top of the window at a fixed height, so we
+    // just compare the grid's top against that fixed band. Measuring topBar via
+    // GeometryReader returned 0 in fullscreen (ignoresSafeArea + infinite frame
+    // collapse), which is why the overlap check failed there.
+    @State private var topBarHidden = false
+
+    // Height of the pinned title band (top padding 4 + height 28), plus a small
+    // margin. Grid cells scrolling above this overlap the title text.
+    private static let titleBandHeight: CGFloat = 40
+
+    private func recomputeTopBarHidden() {
+        let hidden = gridTopY < Self.titleBandHeight
+        if hidden != topBarHidden { topBarHidden = hidden }
+    }
 
     private var displayed: [FontFamily] {
         vm.library.families
@@ -36,6 +55,8 @@ struct CenterPanel: View {
             // Title + stats, always visible at the top. Above the detail,
             // below the input bar.
             topBar
+                .opacity(topBarHidden ? 0 : 1)
+                .animation(.easeInOut(duration: 0.15), value: topBarHidden)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .ignoresSafeArea(edges: .top)
                 .allowsHitTesting(false)
@@ -45,6 +66,7 @@ struct CenterPanel: View {
                 .padding(.vertical, 12)
                 .zIndex(40)
         }
+        .onPreferenceChange(GridTopYKey.self) { gridTopY = $0; recomputeTopBarHidden() }
         .background(Theme.panelBackground.ignoresSafeArea())
     }
 
@@ -157,6 +179,13 @@ struct CenterPanel: View {
     }
 }
 
+private struct GridTopYKey: PreferenceKey {
+    static var defaultValue: CGFloat = .infinity
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = min(value, nextValue())
+    }
+}
+
 // MARK: - Scrollable Font Grid
 //
 // Holds the hover state locally so hovering a cell does NOT invalidate
@@ -193,6 +222,14 @@ private struct FontGridScroll: View {
                     .zIndex(row.contains(where: { $0.id == hoveredFamilyID }) ? 1 : 0)
                 }
             }
+            .background(
+                GeometryReader { geo in
+                    Color.clear.preference(
+                        key: GridTopYKey.self,
+                        value: geo.frame(in: .global).minY
+                    )
+                }
+            )
             .padding(Theme.gridPadding)
             .padding(.bottom, 48)
         }

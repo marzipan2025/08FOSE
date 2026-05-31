@@ -15,7 +15,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSWindow.didEnterFullScreenNotification,
             NSWindow.didExitFullScreenNotification,
             NSWindow.didBecomeKeyNotification,
-            NSWindow.didBecomeMainNotification
+            NSWindow.didBecomeMainNotification,
+            NSWindow.didResizeNotification
         ]
         for name in restyleEvents {
             NotificationCenter.default.addObserver(
@@ -29,6 +30,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func handleWindowEvent() {
         applyWindowStyle()
+        // AppKit resets the traffic-light positions on resize and when
+        // returning from fullscreen, so re-apply our offset after each event.
+        adjustTrafficLights()
     }
 
     // Set the Dock icon at launch.
