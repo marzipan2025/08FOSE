@@ -79,6 +79,15 @@ struct FontCell: View {
                 onHoverChange(isHovering)
             }
             .onDisappear { stopCycling() }
+            .help(memoTooltip)
+    }
+
+    // Hover tooltip: the memo text (up to 16 chars) when one exists, else empty
+    // (an empty help string shows no tooltip).
+    private var memoTooltip: String {
+        let note = memos.note(for: family.name)
+        guard !note.isEmpty else { return "" }
+        return note.count > 16 ? String(note.prefix(16)) + "…" : note
     }
 
     private var headerRow: some View {

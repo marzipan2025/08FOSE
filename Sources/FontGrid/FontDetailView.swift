@@ -13,6 +13,8 @@ struct FontDetailView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var copied = false
     @State private var memoExpanded: Bool = false
+    @State private var closeHovering = false
+    @State private var memoHeaderHovering = false
 
     // Light mode uses lighter shadows (30% of the dark-mode strength).
     private var shadowScale: Double { colorScheme == .light ? 0.3 : 1.0 }
@@ -158,10 +160,11 @@ struct FontDetailView: View {
                     .frame(width: 22, height: 22)
                     .background(
                         RoundedRectangle(cornerRadius: 5)
-                            .fill(Theme.surfaceFill)
+                            .fill(memoHeaderHovering ? Theme.surfaceFillHover : Theme.surfaceFill)
                     )
             }
             .buttonStyle(.plain)
+            .onHover { memoHeaderHovering = $0 }
             .help(help)
         }
     }
@@ -193,24 +196,25 @@ struct FontDetailView: View {
                     Image(systemName: "xmark")
                         .font(.system(size: 14, weight: .medium))
                         // Same color rule as the memo chevron button: secondary
-                        // glyph on a surfaceFill background.
+                        // glyph on a surfaceFill background (denser on hover).
                         .foregroundStyle(.secondary)
                         .frame(width: 32, height: 32)
-                        .background(Circle().fill(Theme.surfaceFill))
+                        .background(Circle().fill(closeHovering ? Theme.surfaceFillHover : Theme.surfaceFill))
                 }
                 .buttonStyle(.plain)
+                .onHover { closeHovering = $0 }
                 .accessibilityLabel("Close detail")
                 .help("Close detail")
             }
 
             HStack(spacing: 8) {
-                actionButton(
+                ActionButton(
                     icon: isFavorited ? "circle.fill" : "circle",
                     label: isFavorited ? "Favorited" : "Favorite",
                     active: isFavorited
                 ) { favorites.toggle(family.name) }
 
-                actionButton(
+                ActionButton(
                     icon: copied ? "checkmark" : "doc.on.doc",
                     label: copied ? "Copied" : "Copy name",
                     active: copied
@@ -223,7 +227,7 @@ struct FontDetailView: View {
                     }
                 }
 
-                actionButton(icon: "folder", label: "Show in Finder", active: false) {
+                ActionButton(icon: "folder", label: "Show in Finder", active: false) {
                     openInFinder()
                 }
             }
@@ -240,29 +244,6 @@ struct FontDetailView: View {
                 endPoint: .bottom
             )
         )
-    }
-
-    private func actionButton(icon: String, label: String, active: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 5) {
-                Image(systemName: icon).font(.system(size: Theme.bodySize))
-                Text(label).font(.system(size: Theme.bodySize))
-            }
-            .foregroundStyle(active ? Theme.accent : Color.secondary)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .background(
-                RoundedRectangle(cornerRadius: 7)
-                    .fill(active ? Theme.accent.opacity(0.08) : Theme.surfaceFill)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 7)
-                    .stroke(active ? Theme.accent.opacity(0.4) : Theme.border, lineWidth: 1)
-            )
-            .unifiedGeometry()
-        }
-        .buttonStyle(.plain)
-        .fixedSize()
     }
 
     // MARK: - Weight List
@@ -337,5 +318,43 @@ struct WeightRow: View {
         .padding(.horizontal, 24)
         .padding(.vertical, 20)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+// Title-area action button (Favorite / Copy name / Show in Finder) with a
+// light hover state: the fill grows a little denser on rollover.
+private struct ActionButton: View {
+    let icon: String
+    let label: String
+    let active: Bool
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: icon).font(.system(size: Theme.bodySize))
+                Text(label).font(.system(size: Theme.bodySize))
+            }
+            .foregroundStyle(active ? Theme.accent : Color.secondary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(
+                RoundedRectangle(cornerRadius: 7).fill(fillColor)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 7)
+                    .stroke(active ? Theme.accent.opacity(0.4) : Theme.border, lineWidth: 1)
+            )
+            .unifiedGeometry()
+        }
+        .buttonStyle(.plain)
+        .fixedSize()
+        .onHover { hovering = $0 }
+    }
+
+    private var fillColor: Color {
+        if active { return Theme.accent.opacity(hovering ? 0.16 : 0.08) }
+        return hovering ? Theme.surfaceFillHover : Theme.surfaceFill
     }
 }

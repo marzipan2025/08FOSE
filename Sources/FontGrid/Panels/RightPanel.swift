@@ -3,6 +3,7 @@ import SwiftUI
 struct RightPanel: View {
     @EnvironmentObject var vm: AppViewModel
     @EnvironmentObject var favorites: FavoritesStore
+    @State private var sortHovering = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -62,11 +63,12 @@ struct RightPanel: View {
                 .padding(.vertical, 3)
                 .background(
                     RoundedRectangle(cornerRadius: 6)
-                        .fill(Theme.accent.opacity(0.15))
+                        .fill(Theme.accent.opacity(sortHovering ? 0.24 : 0.15))
                 )
         }
         .buttonStyle(.plain)
         .focusable(false)
+        .onHover { sortHovering = $0 }
         .help("Sort: \(vm.favoritesByRecent ? "most recent first" : "alphabetical")")
     }
 
@@ -105,8 +107,13 @@ struct FavoriteRow: View {
     let onSelect: () -> Void
     @EnvironmentObject var favorites: FavoritesStore
     @EnvironmentObject var memos: MemoStore
+    @Environment(\.colorScheme) private var colorScheme
     @AppStorage("previewText") private var previewText: String = "The quick brown fox jumps over lazy dog"
     @State private var hovering = false
+
+    // Light mode uses a lighter shadow (30% of dark-mode strength), matching
+    // the font cells.
+    private var shadowScale: Double { colorScheme == .light ? 0.3 : 1.0 }
 
     private var hasMemo: Bool { memos.hasNote(for: name) }
 
@@ -115,7 +122,7 @@ struct FavoriteRow: View {
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
+        HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(name)
                     .font(.system(size: Theme.smallSize))
@@ -150,13 +157,28 @@ struct FavoriteRow: View {
             .opacity(hovering ? 1 : 0.7)
         }
         .padding(.horizontal, 10)
-        .frame(height: 56)
+        // Top margin matches the horizontal margin so the favorite dot sits the
+        // same distance from the top edge as from the right edge.
+        .padding(.top, 10)
+        .frame(height: 56, alignment: .top)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(hovering ? Theme.surfaceFill : .clear)
+                .fill(hovering ? Theme.rowHoverFill : .clear)
+                // Soft, wide shadow dropping below the row; lighter in light mode.
+                .shadow(color: .black.opacity(hovering ? 0.45 * shadowScale : 0),
+                        radius: hovering ? 28 : 0, x: 0, y: hovering ? 17 : 0)
         )
+        .zIndex(hovering ? 1 : 0)
         .contentShape(Rectangle())
         .onTapGesture { onSelect() }
         .onHover { hovering = $0 }
+        .help(memoTooltip)
+    }
+
+    // Hover tooltip: the memo text (up to 16 chars) when one exists, else empty.
+    private var memoTooltip: String {
+        let note = memos.note(for: name)
+        guard !note.isEmpty else { return "" }
+        return note.count > 16 ? String(note.prefix(16)) + "…" : note
     }
 }

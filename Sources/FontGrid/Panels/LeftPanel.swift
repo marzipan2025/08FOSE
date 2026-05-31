@@ -104,29 +104,9 @@ struct LeftPanel: View {
                 .foregroundStyle(.secondary)
             HStack(spacing: 6) {
                 ForEach(weightOptions, id: \.value) { option in
-                    let isSelected = vm.minWeightCount == option.value
-                    Button { vm.minWeightCount = option.value } label: {
-                        Text(option.label)
-                            .font(.system(size: Theme.smallSize, weight: isSelected ? .medium : .regular))
-                            .foregroundStyle(isSelected ? Theme.accent : Color.secondary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 5)
-                            .background(
-                                RoundedRectangle(cornerRadius: Theme.pillRadius)
-                                    .fill(isSelected
-                                          ? Theme.accent.opacity(0.15)
-                                          : Theme.surfaceFill)
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: Theme.pillRadius)
-                                    .stroke(isSelected
-                                            ? Theme.accent.opacity(0.6)
-                                            : Theme.border,
-                                            lineWidth: 1)
-                            )
+                    PillButton(label: option.label, icon: nil, isOn: vm.minWeightCount == option.value) {
+                        vm.minWeightCount = option.value
                     }
-                    .buttonStyle(.plain)
-                    .focusable(false)
                 }
             }
         }
@@ -173,29 +153,7 @@ struct LeftPanel: View {
         isOn: Bool,
         action: @escaping () -> Void
     ) -> some View {
-        Button(action: action) {
-            HStack(spacing: 5) {
-                if let icon {
-                    Image(systemName: icon)
-                        .font(.system(size: Theme.smallSize))
-                }
-                Text(label)
-                    .font(.system(size: Theme.smallSize, weight: isOn ? .medium : .regular))
-            }
-            .foregroundStyle(isOn ? Theme.accent : Color.secondary)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 5)
-            .background(
-                RoundedRectangle(cornerRadius: Theme.pillRadius)
-                    .fill(isOn ? Theme.accent.opacity(0.15) : Theme.surfaceFill)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.pillRadius)
-                    .stroke(isOn ? Theme.accent.opacity(0.6) : Theme.border, lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-        .focusable(false)
+        PillButton(label: label, icon: icon, isOn: isOn, action: action)
     }
 
     // MARK: - Layout
@@ -336,5 +294,46 @@ struct LeftPanel: View {
         let i = Int(value.rounded())
         if i > 0 { return "+\(i)" }
         return "\(i)"
+    }
+}
+
+// Pill-style toggle button with a light hover state: the fill grows a little
+// denser on rollover. Used for all left-panel toggles.
+private struct PillButton: View {
+    let label: String
+    var icon: String? = nil
+    let isOn: Bool
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                if let icon {
+                    Image(systemName: icon)
+                        .font(.system(size: Theme.smallSize))
+                }
+                Text(label)
+                    .font(.system(size: Theme.smallSize, weight: isOn ? .medium : .regular))
+            }
+            .foregroundStyle(isOn ? Theme.accent : Color.secondary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 5)
+            .background(
+                RoundedRectangle(cornerRadius: Theme.pillRadius).fill(fillColor)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.pillRadius)
+                    .stroke(isOn ? Theme.accent.opacity(0.6) : Theme.border, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .onHover { hovering = $0 }
+    }
+
+    private var fillColor: Color {
+        if isOn { return Theme.accent.opacity(hovering ? 0.24 : 0.15) }
+        return hovering ? Theme.surfaceFillHover : Theme.surfaceFill
     }
 }
