@@ -35,13 +35,15 @@ struct RootView: View {
                 .frame(width: rightWidth)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .overlay { WallpaperOverlay(name: vm.wallpaper).opacity(0.24) }
+        // Wallpapers are a dark-mode-only feature. Light mode shows none, but
+        // the dark-mode selection (vm.wallpaper) is preserved for when you return.
+        .overlay { WallpaperOverlay(name: vm.isLightMode ? "" : vm.wallpaper).opacity(0.24) }
         .background(Theme.panelBackground.ignoresSafeArea())
         .background(InitialFocusClearer())
         .environmentObject(vm)
         .environmentObject(favorites)
         .environmentObject(memos)
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(vm.isLightMode ? .light : .dark)
     }
 }
 

@@ -125,7 +125,7 @@ struct FavoriteRow: View {
 
                 Text(sampleText)
                     .font(.custom(name, size: 18))
-                    .foregroundStyle(Color(white: 0.8))
+                    .foregroundStyle(Color.primary.opacity(0.8))
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .frame(height: 22, alignment: .center)
@@ -153,7 +153,7 @@ struct FavoriteRow: View {
         .frame(height: 56)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(hovering ? Color.white.opacity(0.05) : .clear)
+                .fill(hovering ? Theme.surfaceFill : .clear)
         )
         .contentShape(Rectangle())
         .onTapGesture { onSelect() }

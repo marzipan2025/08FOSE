@@ -44,6 +44,14 @@ struct LeftPanel: View {
                 VStack(alignment: .leading, spacing: 14) {
                     columnSlider
                     fontSizeSlider
+                }
+            }
+
+            PanelHDivider()
+
+            PanelSection("Appearance") {
+                VStack(alignment: .leading, spacing: 14) {
+                    themePicker
                     wallpaperPicker
                 }
             }
@@ -268,19 +276,57 @@ struct LeftPanel: View {
     }
 
     // Temporary wallpaper switcher (None / 1–4). Will move into Settings later.
+    // Wallpapers are dark-mode only: in light mode this collapses to a single
+    // outlined "unavailable" pill, while the dark-mode selection (vm.wallpaper)
+    // is kept untouched for when you switch back.
     private var wallpaperPicker: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Wallpaper")
                 .font(.system(size: Theme.smallSize))
                 .foregroundStyle(.secondary)
-            HStack(spacing: 6) {
-                filterPill(label: "0", icon: nil, isOn: vm.wallpaper.isEmpty) {
-                    vm.wallpaper = ""
-                }
-                ForEach(Array(AppViewModel.wallpapers.enumerated()), id: \.offset) { index, name in
-                    filterPill(label: "\(index + 1)", icon: nil, isOn: vm.wallpaper == name) {
-                        vm.wallpaper = name
+            if vm.isLightMode {
+                unavailablePill
+            } else {
+                HStack(spacing: 6) {
+                    filterPill(label: "0", icon: nil, isOn: vm.wallpaper.isEmpty) {
+                        vm.wallpaper = ""
                     }
+                    ForEach(Array(AppViewModel.wallpapers.enumerated()), id: \.offset) { index, name in
+                        filterPill(label: "\(index + 1)", icon: nil, isOn: vm.wallpaper == name) {
+                            vm.wallpaper = name
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Single outlined pill shown in light mode: no fill, border only, full
+    // opacity, labelled "unavailable".
+    private var unavailablePill: some View {
+        Text("unavailable")
+            .font(.system(size: Theme.smallSize))
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 5)
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.pillRadius)
+                    .stroke(Theme.border, lineWidth: 1)
+            )
+    }
+
+    // Dark / Light theme switch. Light mode is a work in progress.
+    private var themePicker: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Theme")
+                .font(.system(size: Theme.smallSize))
+                .foregroundStyle(.secondary)
+            HStack(spacing: 6) {
+                filterPill(label: "Dark", icon: "moon.fill", isOn: !vm.isLightMode) {
+                    vm.isLightMode = false
+                }
+                filterPill(label: "Light", icon: "sun.max.fill", isOn: vm.isLightMode) {
+                    vm.isLightMode = true
                 }
             }
         }

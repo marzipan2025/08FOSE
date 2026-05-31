@@ -102,7 +102,7 @@ struct CenterPanel: View {
         if displayed.isEmpty {
             Text("No Result")
                 .font(.custom(emptyStateFontName ?? "Helvetica", size: vm.gridFontSize))
-                .foregroundStyle(Color.white.opacity(0.10))
+                .foregroundStyle(Color.primary.opacity(0.10))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .allowsHitTesting(false)
                 .onAppear { pickEmptyStateFont() }
@@ -367,7 +367,7 @@ struct PreviewInputBar: View {
         .padding(.vertical, 14)
         .background(
             RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
-                .fill(Theme.panelBackground)
+                .fill(Theme.cellSurface)
         )
         .overlay(
             RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
@@ -393,11 +393,13 @@ struct BottomFadeOverlay: View {
                         endPoint: .bottom
                     )
                 )
+            // Tint toward the panel background (not hard black) so the fade
+            // reads correctly in both light and dark appearance.
             LinearGradient(
                 stops: [
-                    .init(color: Color.black.opacity(0), location: 0),
-                    .init(color: Color.black.opacity(0.35), location: 0.45),
-                    .init(color: Color.black.opacity(0.75), location: 1)
+                    .init(color: Theme.panelBackground.opacity(0), location: 0),
+                    .init(color: Theme.panelBackground.opacity(0.35), location: 0.45),
+                    .init(color: Theme.panelBackground.opacity(0.75), location: 1)
                 ],
                 startPoint: .top,
                 endPoint: .bottom

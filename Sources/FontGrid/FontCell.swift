@@ -11,7 +11,11 @@ struct FontCell: View {
 
     @EnvironmentObject var favorites: FavoritesStore
     @EnvironmentObject var memos: MemoStore
+    @Environment(\.colorScheme) private var colorScheme
     @State private var hovering = false
+
+    // Light mode uses lighter shadows (30% of the dark-mode strength).
+    private var shadowScale: Double { colorScheme == .light ? 0.3 : 1.0 }
     @State private var weightIndex: Int = 0
     @State private var cycleTask: Task<Void, Never>? = nil
 
@@ -49,13 +53,13 @@ struct FontCell: View {
                 RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
                     .fill(Theme.cellSurface)
                     .shadow(
-                        color: .black.opacity(hovering ? 0.75 : 0),
+                        color: .black.opacity(hovering ? 0.75 * shadowScale : 0),
                         radius: hovering ? 14 : 0,
                         x: 0,
                         y: hovering ? 16 : 0
                     )
                     .shadow(
-                        color: .black.opacity(hovering ? 0.90 : 0),
+                        color: .black.opacity(hovering ? 0.90 * shadowScale : 0),
                         radius: hovering ? 80 : 0,
                         x: 0,
                         y: hovering ? 70 : 0

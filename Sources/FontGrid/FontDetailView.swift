@@ -10,8 +10,12 @@ struct FontDetailView: View {
     @EnvironmentObject var favorites: FavoritesStore
     @EnvironmentObject var memos: MemoStore
     @EnvironmentObject var vm: AppViewModel
+    @Environment(\.colorScheme) private var colorScheme
     @State private var copied = false
     @State private var memoExpanded: Bool = false
+
+    // Light mode uses lighter shadows (30% of the dark-mode strength).
+    private var shadowScale: Double { colorScheme == .light ? 0.3 : 1.0 }
 
     private var isFavorited: Bool { favorites.contains(family.name) }
 
@@ -47,12 +51,12 @@ struct FontDetailView: View {
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(Theme.panelBackground)
-                .shadow(color: .black.opacity(0.55), radius: 14, x: 0, y: 10)
-                .shadow(color: .black.opacity(0.75), radius: 60, x: 0, y: 38)
+                .shadow(color: .black.opacity(0.55 * shadowScale), radius: 14, x: 0, y: 10)
+                .shadow(color: .black.opacity(0.75 * shadowScale), radius: 60, x: 0, y: 38)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.white, lineWidth: 1)
+                .stroke(colorScheme == .light ? Color(white: 0.56) : Color.white, lineWidth: 1)
         )
         .onExitCommand {
             if memoExpanded {
@@ -150,7 +154,10 @@ struct FontDetailView: View {
     // MARK: - Title Area
 
     private var titleArea: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        // Header darkening gradient is full strength in dark mode, very faint
+        // in light (≈9% of the original).
+        let gradientScale = colorScheme == .light ? 0.09 : 1.0
+        return VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(family.name)
@@ -170,9 +177,11 @@ struct FontDetailView: View {
                 Button { onClose() } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: 14, weight: .medium))
+                        // Same color rule as the memo chevron button: secondary
+                        // glyph on a surfaceFill background.
                         .foregroundStyle(.secondary)
                         .frame(width: 32, height: 32)
-                        .background(Circle().fill(Color.white.opacity(0.08)))
+                        .background(Circle().fill(Theme.surfaceFill))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Close detail")
@@ -210,7 +219,8 @@ struct FontDetailView: View {
             // Subtle top-down darkening of the header, independent of the
             // wallpaper. Clipped into the card by the view's outer clipShape.
             LinearGradient(
-                colors: [Color.black.opacity(0.10), Color.black.opacity(0.30)],
+                colors: [Color.black.opacity(0.10 * gradientScale),
+                         Color.black.opacity(0.30 * gradientScale)],
                 startPoint: .top,
                 endPoint: .bottom
             )

@@ -30,6 +30,11 @@ final class AppViewModel: ObservableObject {
         didSet { UserDefaults.standard.set(favoritesByRecent, forKey: "favoritesByRecent") }
     }
 
+    // Appearance: false = dark (default), true = light. Persisted.
+    @Published var isLightMode: Bool = UserDefaults.standard.bool(forKey: "isLightMode") {
+        didSet { UserDefaults.standard.set(isLightMode, forKey: "isLightMode") }
+    }
+
     static let gridBaseFontSize: Double = 28
     static let weightRowBaseFontSize: Double = 40
     static let previewOffsetRange: ClosedRange<Double> = -8...20
