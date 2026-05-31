@@ -33,12 +33,46 @@ struct CenterPanel: View {
                 .frame(height: 110)
                 .allowsHitTesting(false)
             detailOverlay
+            // Title + stats, always visible at the top. Above the detail,
+            // below the input bar.
+            topBar
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .ignoresSafeArea(edges: .top)
+                .allowsHitTesting(false)
+                .zIndex(35)
             PreviewInputBar(text: $previewText)
                 .padding(.horizontal, Theme.gridPadding)
                 .padding(.vertical, 12)
                 .zIndex(40)
         }
         .background(Theme.panelBackground.ignoresSafeArea())
+    }
+
+    // Title + font-count stats in the otherwise-empty title-bar band at the top
+    // of the center panel. Uses the smallest type size in the app.
+    private var topBar: some View {
+        HStack(spacing: 8) {
+            Text("08FOSE")
+                .font(.system(size: Theme.sectionHeaderSize + 2, weight: .bold))
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 8)
+            Text(statsText)
+                .font(.system(size: Theme.sectionHeaderSize + 2))
+                .foregroundStyle(.tertiary)
+                .monospacedDigit()
+        }
+        .padding(.horizontal, Theme.gridPadding)
+        .frame(maxWidth: .infinity)
+        .frame(height: 28)
+        .padding(.top, 4)
+    }
+
+    private var statsText: String {
+        let all = vm.library.families
+        let total = all.count
+        let kr = all.filter { $0.supportsKorean }.count
+        let en = all.filter { $0.isNonKoreanText }.count
+        return "\(total) fonts · \(kr) Korean · \(en) English"
     }
 
     @ViewBuilder

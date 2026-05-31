@@ -39,20 +39,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     //   carried in the SwiftPM resource bundle (Bundle.module). Checked second
     //   so the packaged path never evaluates Bundle.module.
     private func applyAppIcon() {
-        if let url = Bundle.main.url(forResource: "DockIcon", withExtension: "png"),
-           let image = NSImage(contentsOf: url) {
-            NSApp.applicationIconImage = image
-            return
-        }
+        // Packaged .app already shows the rounded .icns via Info.plist; still set
+        // it on the running tile to match.
         if let url = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
            let image = NSImage(contentsOf: url) {
             NSApp.applicationIconImage = image
             return
         }
+        // Dev (`swift run`): no app bundle, so the full-bleed master PNG would
+        // show as a hard square. Round it to the macOS squircle at runtime so
+        // the Dock tile matches the packaged app.
         if let url = Bundle.module.url(forResource: "AppIcon", withExtension: "png"),
            let image = NSImage(contentsOf: url) {
-            NSApp.applicationIconImage = image
+            NSApp.applicationIconImage = Self.roundedIcon(image) ?? image
         }
+    }
+
+    /// Mask a full-bleed square icon into the macOS rounded-rect silhouette.
+    /// Mirrors Tools/make-icon.swift (radius 230 on a 1024 canvas).
+    private static func roundedIcon(_ image: NSImage) -> NSImage? {
+        let side: CGFloat = 1024
+        let radius = 230.0 / 1024.0 * side
+        guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
+              let cs = CGColorSpace(name: CGColorSpace.sRGB),
+              let ctx = CGContext(
+                  data: nil, width: Int(side), height: Int(side),
+                  bitsPerComponent: 8, bytesPerRow: 0, space: cs,
+                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+              ) else { return nil }
+        ctx.interpolationQuality = .high
+        let rect = CGRect(x: 0, y: 0, width: side, height: side)
+        ctx.addPath(CGPath(roundedRect: rect, cornerWidth: radius, cornerHeight: radius, transform: nil))
+        ctx.clip()
+        ctx.draw(cg, in: rect)
+        guard let out = ctx.makeImage() else { return nil }
+        return NSImage(cgImage: out, size: NSSize(width: side, height: side))
     }
 
     @objc private func applyWindowStyle() {

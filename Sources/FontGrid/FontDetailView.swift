@@ -306,12 +306,7 @@ struct WeightRow: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
-            Text(sampleText)
-                .font(.custom(psName, size: sampleSize))
-                .foregroundStyle(.primary)
-                .lineSpacing(sampleSize * 0.3)
-                .lineLimit(nil)
-                .fixedSize(horizontal: false, vertical: true)
+            WrappingPreviewLabel(text: sampleText, fontName: psName, fontSize: sampleSize)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, 24)
