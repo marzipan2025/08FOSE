@@ -13,20 +13,29 @@ struct CenterPanel: View {
     // area (title-bar inset in windowed mode, 0 in fullscreen), so the same
     // scroll-top position reads ~44 windowed but ~16 in fullscreen.
     @State private var gridTopY: CGFloat = .infinity
-    // Collapsed visibility flag actually driving opacity. We don't measure the
-    // title text: it's pinned to the top of the window at a fixed height, so we
-    // just compare the grid's top against that fixed band. Measuring topBar via
-    // GeometryReader returned 0 in fullscreen (ignoresSafeArea + infinite frame
-    // collapse), which is why the overlap check failed there.
-    @State private var topBarHidden = false
+    // Mirrors the key window's .fullScreen styleMask. In fullscreen there is no
+    // titlebar inset, so the topBar would sit directly on top of the detail card
+    // — we keep it hidden in that case.
+    @State private var isFullscreen: Bool = false
 
     // Height of the pinned title band (top padding 4 + height 28), plus a small
     // margin. Grid cells scrolling above this overlap the title text.
     private static let titleBandHeight: CGFloat = 40
 
-    private func recomputeTopBarHidden() {
-        let hidden = gridTopY < Self.titleBandHeight
-        if hidden != topBarHidden { topBarHidden = hidden }
+    // The topBar is hidden only when a grid cell is actually about to overlap
+    // the title band. When the detail overlay is open in WINDOWED mode, the
+    // grid is covered by the card and the titlebar inset gives the topBar a
+    // place to sit clear of the card — so we force it visible. In fullscreen
+    // there is no such inset, and the topBar would overlap the card; we let
+    // the normal "hidden when scrolled to the top" path apply.
+    private var topBarHidden: Bool {
+        if vm.selectedFamily != nil && !isFullscreen { return false }
+        return gridTopY < Self.titleBandHeight
+    }
+
+    private func syncFullscreenState() {
+        let window = NSApp.keyWindow ?? NSApp.mainWindow ?? NSApp.windows.first
+        isFullscreen = window?.styleMask.contains(.fullScreen) ?? false
     }
 
     private var displayed: [FontFamily] {
@@ -67,7 +76,14 @@ struct CenterPanel: View {
                 .padding(.vertical, 12)
                 .zIndex(40)
         }
-        .onPreferenceChange(GridTopYKey.self) { gridTopY = $0; recomputeTopBarHidden() }
+        .onPreferenceChange(GridTopYKey.self) { gridTopY = $0 }
+        .onAppear { syncFullscreenState() }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { _ in
+            isFullscreen = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didExitFullScreenNotification)) { _ in
+            isFullscreen = false
+        }
         .background(Theme.panelBackground.ignoresSafeArea())
     }
 
