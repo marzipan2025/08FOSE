@@ -16,16 +16,23 @@ struct FontFamily: Identifiable, Hashable {
     var isNonKoreanText: Bool { !supportsKorean && !isSymbolFont }
 }
 
+struct FontLibraryStats {
+    var total: Int = 0
+    var korean: Int = 0
+    var english: Int = 0
+}
+
 @MainActor
 final class FontLibrary: ObservableObject {
     @Published private(set) var families: [FontFamily] = []
+    @Published private(set) var stats = FontLibraryStats()
 
     init() { reload() }
 
     func reload() {
         let manager = NSFontManager.shared
         let names = manager.availableFontFamilies
-        families = names.compactMap { family -> FontFamily? in
+        let loadedFamilies = names.compactMap { family -> FontFamily? in
             guard !family.hasPrefix(".") else { return nil }
             guard let members = manager.availableMembers(ofFontFamily: family) else { return nil }
 
@@ -53,6 +60,12 @@ final class FontLibrary: ObservableObject {
             )
         }
         .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        stats = FontLibraryStats(
+            total: loadedFamilies.count,
+            korean: loadedFamilies.filter { $0.supportsKorean }.count,
+            english: loadedFamilies.filter { $0.isNonKoreanText }.count
+        )
+        families = loadedFamilies
     }
 
     // One representative LETTER from every major writing system. A font that

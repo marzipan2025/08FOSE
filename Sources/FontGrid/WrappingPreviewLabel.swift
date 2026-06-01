@@ -26,10 +26,19 @@ struct WrappingPreviewLabel: NSViewRepresentable {
 
 final class WrappingPreviewView: NSView {
     private var attributed = NSAttributedString(string: "")
+    private var text: String = ""
+    private var fontName: String = ""
+    private var fontSize: CGFloat = 0
 
     override var isFlipped: Bool { true }
 
     func update(text: String, fontName: String, fontSize: CGFloat) {
+        guard text != self.text || fontName != self.fontName || fontSize != self.fontSize else {
+            return
+        }
+        self.text = text
+        self.fontName = fontName
+        self.fontSize = fontSize
         let font = NSFont(name: fontName, size: fontSize) ?? .systemFont(ofSize: fontSize)
         let attrs: [NSAttributedString.Key: Any] = [
             .font: font,

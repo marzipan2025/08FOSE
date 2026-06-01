@@ -44,10 +44,11 @@ struct CenterPanel: View {
     }
 
     var body: some View {
+        let displayedFamilies = displayed
         ZStack(alignment: .bottom) {
-            gridArea
+            gridArea(displayedFamilies)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            emptyOverlay
+            emptyOverlay(displayedFamilies)
             BottomFadeOverlay()
                 .frame(height: 110)
                 .allowsHitTesting(false)
@@ -90,16 +91,13 @@ struct CenterPanel: View {
     }
 
     private var statsText: String {
-        let all = vm.library.families
-        let total = all.count
-        let kr = all.filter { $0.supportsKorean }.count
-        let en = all.filter { $0.isNonKoreanText }.count
-        return "\(total) fonts · \(kr) Korean · \(en) English"
+        let stats = vm.library.stats
+        return "\(stats.total) fonts · \(stats.korean) Korean · \(stats.english) English"
     }
 
     @ViewBuilder
-    private var emptyOverlay: some View {
-        if displayed.isEmpty {
+    private func emptyOverlay(_ displayedFamilies: [FontFamily]) -> some View {
+        if displayedFamilies.isEmpty {
             Text("No Result")
                 .font(.custom(emptyStateFontName ?? "Helvetica", size: vm.gridFontSize))
                 .foregroundStyle(Color.primary.opacity(0.10))
@@ -148,11 +146,11 @@ struct CenterPanel: View {
         }
     }
 
-    private var gridArea: some View {
+    private func gridArea(_ displayedFamilies: [FontFamily]) -> some View {
         GeometryReader { geo in
             let computed = computeMaxColumns(width: geo.size.width)
             let effective = min(max(1, vm.columnCount), computed)
-            let rows = displayed.chunked(into: effective)
+            let rows = displayedFamilies.chunked(into: effective)
 
             FontGridScroll(
                 rows: rows,
@@ -190,9 +188,8 @@ private struct GridTopYKey: PreferenceKey {
 //
 // Holds the hover state locally so hovering a cell does NOT invalidate
 // CenterPanel's body (and thus does not re-run the family filter chain).
-// Uses a plain VStack (not LazyVStack) so per-row zIndex applies across
-// rows — the hovered cell's drop shadow needs to spill into the row below,
-// and lazy stacks render rows in document order regardless of zIndex.
+// LazyVStack keeps large installed-font libraries from instantiating every
+// Core Text preview at launch.
 
 private struct FontGridScroll: View {
     let rows: [[FontFamily]]
@@ -205,7 +202,7 @@ private struct FontGridScroll: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: Theme.gridSpacing) {
+            LazyVStack(spacing: Theme.gridSpacing) {
                 ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                     HStack(spacing: Theme.gridSpacing) {
                         ForEach(row) { family in

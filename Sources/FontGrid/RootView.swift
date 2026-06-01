@@ -69,9 +69,7 @@ struct WallpaperOverlay: View {
     let name: String
 
     var body: some View {
-        if !name.isEmpty,
-           let url = Bundle.module.url(forResource: name, withExtension: "png", subdirectory: "Wallpapers"),
-           let img = NSImage(contentsOf: url) {
+        if !name.isEmpty, let img = Self.image(named: name) {
             Image(nsImage: img)
                 .resizable()
                 .aspectRatio(img.size.width / img.size.height, contentMode: .fill)
@@ -82,5 +80,20 @@ struct WallpaperOverlay: View {
         } else {
             Color.clear
         }
+    }
+
+    private static var imageCache: [String: NSImage] = [:]
+
+    private static func image(named name: String) -> NSImage? {
+        if let cached = imageCache[name] { return cached }
+        guard let url = Bundle.module.url(
+            forResource: name,
+            withExtension: "png",
+            subdirectory: "Wallpapers"
+        ),
+              let image = NSImage(contentsOf: url)
+        else { return nil }
+        imageCache[name] = image
+        return image
     }
 }

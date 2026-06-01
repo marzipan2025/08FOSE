@@ -192,10 +192,17 @@ struct FontPreviewLabel: NSViewRepresentable {
 
 final class PreviewTextView: NSView {
     private var text: String = ""
+    private var fontName: String = ""
+    private var fontSize: Double = 28
     private var font: NSFont = .systemFont(ofSize: 28)
 
     func configure(text: String, fontName: String, fontSize: Double) {
+        guard text != self.text || fontName != self.fontName || fontSize != self.fontSize else {
+            return
+        }
         self.text = text
+        self.fontName = fontName
+        self.fontSize = fontSize
         self.font = NSFont(name: fontName, size: fontSize) ?? .systemFont(ofSize: fontSize)
         needsDisplay = true
     }
