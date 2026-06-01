@@ -16,3 +16,4 @@ xcuserdata/
 
 # App packaging output
 dist/
+releases/

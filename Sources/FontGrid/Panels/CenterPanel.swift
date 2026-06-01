@@ -316,7 +316,7 @@ private struct HoverShadow: View {
         .compositingGroup()
         .opacity(shown ? 1 : 0)
         .onAppear {
-            withAnimation(.easeOut(duration: 0.3).delay(0.12)) { shown = true }
+            withAnimation(.easeOut(duration: 0.3).delay(0.06)) { shown = true }
         }
     }
 }

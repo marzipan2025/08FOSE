@@ -5,6 +5,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var originalButtonOrigins: [ObjectIdentifier: [NSWindow.ButtonType: CGPoint]] = [:]
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Make .help() tooltips (memo alt-text on cells) appear near-instantly.
+        // NSInitialToolTipDelay (the documented defaults key) is not honored by
+        // the .help()/NSView tooltip path on modern macOS, so go through the
+        // private NSToolTipManager. 0.05s reads as immediate without flashing on
+        // fast pointer passes.
+        tuneTooltipDelay(0.05)
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         applyAppIcon()
@@ -118,6 +124,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         true
+    }
+
+    private func tuneTooltipDelay(_ seconds: TimeInterval) {
+        guard let cls = NSClassFromString("NSToolTipManager") as? NSObject.Type else { return }
+        let sel = NSSelectorFromString("sharedToolTipManager")
+        guard cls.responds(to: sel),
+              let mgr = cls.perform(sel)?.takeUnretainedValue() as? NSObject else { return }
+        mgr.setValue(seconds, forKey: "initialToolTipDelay")
     }
 }
 
