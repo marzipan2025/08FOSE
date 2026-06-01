@@ -36,7 +36,7 @@ struct CenterPanel: View {
                     || family.name.localizedCaseInsensitiveContains(vm.searchQuery)
                     || memos.note(for: family.name).localizedCaseInsensitiveContains(vm.searchQuery)
             }
-            .filter { vm.minWeightCount <= 1 || $0.weightCount >= vm.minWeightCount }
+            .filter { vm.weightFilter.matches($0.weightCount) }
             .filter { !vm.favoritesOnly || favorites.contains($0.name) }
             .filter { !vm.memoOnly || memos.hasNote(for: $0.name) }
             .filter { !vm.koreanOnly || $0.supportsKorean }

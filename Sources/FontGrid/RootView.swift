@@ -68,6 +68,15 @@ private struct InitialFocusClearer: NSViewRepresentable {
 struct WallpaperOverlay: View {
     let name: String
 
+    // Per-wallpaper blend mode over the rest of the app. Unknown / "" falls back
+    // to .normal, preserving the no-wallpaper path.
+    private static let blendModes: [String: BlendMode] = [
+        "Wallpaper01": .normal,
+        "Wallpaper02": .plusLighter,
+        "Wallpaper03": .screen,
+        "Wallpaper04": .softLight
+    ]
+
     var body: some View {
         if !name.isEmpty, let img = Self.image(named: name) {
             Image(nsImage: img)
@@ -75,6 +84,8 @@ struct WallpaperOverlay: View {
                 .aspectRatio(img.size.width / img.size.height, contentMode: .fill)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .clipped()
+                .compositingGroup()
+                .blendMode(Self.blendModes[name] ?? .normal)
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
         } else {

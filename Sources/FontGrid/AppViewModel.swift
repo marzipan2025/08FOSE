@@ -1,11 +1,29 @@
 import SwiftUI
 
+// Weight-count filter for the grid.
+// - .all: no filtering
+// - .exactly(n): families with exactly n weights (n=1 means single-weight only)
+// - .atLeast(n): families with n or more weights
+enum WeightFilter: Hashable {
+    case all
+    case exactly(Int)
+    case atLeast(Int)
+
+    func matches(_ weightCount: Int) -> Bool {
+        switch self {
+        case .all: return true
+        case .exactly(let n): return weightCount == n
+        case .atLeast(let n): return weightCount >= n
+        }
+    }
+}
+
 @MainActor
 final class AppViewModel: ObservableObject {
     let library: FontLibrary
 
     @Published var searchQuery: String = ""
-    @Published var minWeightCount: Int = 1
+    @Published var weightFilter: WeightFilter = .all
     @Published var favoritesOnly: Bool = false
     @Published var memoOnly: Bool = false
     @Published var koreanOnly: Bool = false

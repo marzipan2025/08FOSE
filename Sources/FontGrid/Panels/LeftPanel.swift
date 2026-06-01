@@ -5,8 +5,8 @@ struct LeftPanel: View {
     @EnvironmentObject var favorites: FavoritesStore
     @FocusState private var searchFocused: Bool
 
-    private let weightOptions: [(label: String, value: Int)] = [
-        ("All", 1), ("2+", 2), ("3+", 3), ("5+", 5)
+    private let weightOptions: [(label: String, value: WeightFilter)] = [
+        ("All", .all), ("1", .exactly(1)), ("3+", .atLeast(3)), ("5+", .atLeast(5))
     ]
 
     var body: some View {
@@ -19,7 +19,7 @@ struct LeftPanel: View {
 
             PanelSection("Filters") {
                 VStack(alignment: .leading, spacing: 14) {
-                    weightFilter
+                    weightFilterSection
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Sortings")
                             .font(.system(size: Theme.smallSize))
@@ -97,15 +97,15 @@ struct LeftPanel: View {
 
     // MARK: - Filter
 
-    private var weightFilter: some View {
+    private var weightFilterSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Min. Weights")
+            Text("Weights")
                 .font(.system(size: Theme.smallSize))
                 .foregroundStyle(.secondary)
             HStack(spacing: 6) {
                 ForEach(weightOptions, id: \.value) { option in
-                    PillButton(label: option.label, icon: nil, isOn: vm.minWeightCount == option.value) {
-                        vm.minWeightCount = option.value
+                    PillButton(label: option.label, icon: nil, isOn: vm.weightFilter == option.value) {
+                        vm.weightFilter = option.value
                     }
                 }
             }
