@@ -233,44 +233,25 @@ struct LeftPanel: View {
         .monospacedDigit()
     }
 
-    // Temporary wallpaper switcher (None / 1–4). Will move into Settings later.
-    // Wallpapers are dark-mode only: in light mode this collapses to a single
-    // outlined "unavailable" pill, while the dark-mode selection (vm.wallpaper)
-    // is kept untouched for when you switch back.
+    // Wallpaper switcher (None / 1–4). Shared between dark and light mode —
+    // the per-wallpaper blend map inside WallpaperOverlay decides how each
+    // image composites onto whichever appearance is active.
     private var wallpaperPicker: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Wallpaper")
                 .font(.system(size: Theme.smallSize))
                 .foregroundStyle(.secondary)
-            if vm.isLightMode {
-                unavailablePill
-            } else {
-                HStack(spacing: 6) {
-                    filterPill(label: "0", icon: nil, isOn: vm.wallpaper.isEmpty) {
-                        vm.wallpaper = ""
-                    }
-                    ForEach(Array(AppViewModel.wallpapers.enumerated()), id: \.offset) { index, name in
-                        filterPill(label: "\(index + 1)", icon: nil, isOn: vm.wallpaper == name) {
-                            vm.wallpaper = name
-                        }
+            HStack(spacing: 6) {
+                filterPill(label: "0", icon: nil, isOn: vm.wallpaper.isEmpty) {
+                    vm.wallpaper = ""
+                }
+                ForEach(Array(AppViewModel.wallpapers.enumerated()), id: \.offset) { index, name in
+                    filterPill(label: "\(index + 1)", icon: nil, isOn: vm.wallpaper == name) {
+                        vm.wallpaper = name
                     }
                 }
             }
         }
-    }
-
-    // Single outlined pill shown in light mode: no fill, border only, full
-    // opacity, labelled "unavailable".
-    private var unavailablePill: some View {
-        Text("unavailable")
-            .font(.system(size: Theme.smallSize))
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 5)
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.pillRadius)
-                    .stroke(Theme.border, lineWidth: 1)
-            )
     }
 
     // Dark / Light theme switch. Light mode is a work in progress.
