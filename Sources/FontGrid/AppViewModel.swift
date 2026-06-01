@@ -33,14 +33,44 @@ final class AppViewModel: ObservableObject {
     @Published var maxColumns: Int = 6
     @Published var previewSizeOffset: Double = 0
 
-    // Wallpaper "skins" — bundled under Resources/Wallpapers/. More can be
-    // dropped in and listed here; the active one is persisted so a future
-    // settings switcher just binds to `wallpaper`.
-    // "" = none. Otherwise a file name under Resources/Wallpapers/.
+    // Wallpaper "skins" — bundled under Resources/Wallpapers/. The picker writes
+    // a logical name (e.g. "Wallpaper02"); WallpaperOverlay resolves the actual
+    // file based on the current appearance (Wallpaper02.webp dark vs
+    // L_Wallpaper02.webp light).
+    // "" = none.
     static let wallpapers = ["Wallpaper01", "Wallpaper02", "Wallpaper03", "Wallpaper04"]
-    private static let wallpaperKey = "selectedWallpaper"
-    @Published var wallpaper: String = UserDefaults.standard.string(forKey: wallpaperKey) ?? "" {
-        didSet { UserDefaults.standard.set(wallpaper, forKey: Self.wallpaperKey) }
+    // Independent per-mode selections so dark and light each remember their
+    // own choice; toggling theme restores the corresponding wallpaper.
+    private static let darkWallpaperKey = "selectedWallpaperDark"
+    private static let lightWallpaperKey = "selectedWallpaperLight"
+    // Legacy key kept only for first-launch migration on existing installs.
+    private static let legacyWallpaperKey = "selectedWallpaper"
+
+    @Published var darkWallpaper: String = AppViewModel.loadInitialWallpaper(for: darkWallpaperKey) {
+        didSet { UserDefaults.standard.set(darkWallpaper, forKey: Self.darkWallpaperKey) }
+    }
+    @Published var lightWallpaper: String = AppViewModel.loadInitialWallpaper(for: lightWallpaperKey) {
+        didSet { UserDefaults.standard.set(lightWallpaper, forKey: Self.lightWallpaperKey) }
+    }
+
+    // Mode-aware accessor. Call sites that read `vm.wallpaper` (LeftPanel
+    // picker, WallpaperOverlay) keep working unchanged, but reads/writes are
+    // routed to the per-mode storage.
+    var wallpaper: String {
+        get { isLightMode ? lightWallpaper : darkWallpaper }
+        set {
+            if isLightMode { lightWallpaper = newValue }
+            else { darkWallpaper = newValue }
+        }
+    }
+
+    /// Resolve the initial value for a per-mode wallpaper key. Falls back to
+    /// the legacy single-key value the first time this build runs on an
+    /// existing install, so neither mode loses its previously-set choice.
+    private static func loadInitialWallpaper(for key: String) -> String {
+        let defaults = UserDefaults.standard
+        if let v = defaults.string(forKey: key) { return v }
+        return defaults.string(forKey: legacyWallpaperKey) ?? ""
     }
 
     // Favorites list order: false = alphabetical (가나다), true = most recent first.
