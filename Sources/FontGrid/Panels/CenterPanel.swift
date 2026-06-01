@@ -184,12 +184,29 @@ private struct GridTopYKey: PreferenceKey {
     }
 }
 
+// Identity + frame of the hovered cell. The id lets the shadow remount per
+// cell (so each hover re-runs the fade-in) and pins its position to that cell's
+// exact coordinates — no interpolation across cells.
+struct HoveredCellInfo {
+    let id: FontFamily.ID
+    let anchor: Anchor<CGRect>
+}
+
+struct HoveredCellAnchorKey: PreferenceKey {
+    static var defaultValue: HoveredCellInfo? = nil
+    static func reduce(value: inout HoveredCellInfo?, nextValue: () -> HoveredCellInfo?) {
+        if let next = nextValue() { value = next }
+    }
+}
+
+
 // MARK: - Scrollable Font Grid
 //
 // Holds the hover state locally so hovering a cell does NOT invalidate
 // CenterPanel's body (and thus does not re-run the family filter chain).
 // LazyVStack keeps large installed-font libraries from instantiating every
-// Core Text preview at launch.
+// Core Text preview at launch. Shadow is rendered via overlayPreferenceValue
+// so it always sits above all cells regardless of lazy-stack paint order.
 
 private struct FontGridScroll: View {
     let rows: [[FontFamily]]
@@ -198,7 +215,10 @@ private struct FontGridScroll: View {
     let cellHero: Namespace.ID
 
     @EnvironmentObject var vm: AppViewModel
+    @Environment(\.colorScheme) private var colorScheme
     @State private var hoveredFamilyID: FontFamily.ID? = nil
+
+    private var shadowScale: Double { colorScheme == .light ? 0.3 : 1.0 }
 
     var body: some View {
         ScrollView {
@@ -208,7 +228,6 @@ private struct FontGridScroll: View {
                         ForEach(row) { family in
                             cellView(for: family)
                                 .frame(maxWidth: .infinity)
-                                .zIndex(hoveredFamilyID == family.id ? 1 : 0)
                         }
                         if row.count < effective {
                             ForEach(0..<(effective - row.count), id: \.self) { _ in
@@ -216,7 +235,6 @@ private struct FontGridScroll: View {
                             }
                         }
                     }
-                    .zIndex(row.contains(where: { $0.id == hoveredFamilyID }) ? 1 : 0)
                 }
             }
             .background(
@@ -231,6 +249,23 @@ private struct FontGridScroll: View {
             .padding(.bottom, 48)
         }
         .scrollContentBackground(.hidden)
+        // Shadow for the single hovered cell, drawn above all cells so it is not
+        // covered by neighbours (LazyVStack paints rows in document order and
+        // ignores zIndex across rows). HoverShadow is keyed by the cell id, so
+        // it remounts per cell: position is fixed to that cell's exact frame (no
+        // glide between cells) and the fade-in re-runs on each new hover.
+        .overlayPreferenceValue(HoveredCellAnchorKey.self) { info in
+            if let info {
+                GeometryReader { geo in
+                    let f = geo[info.anchor]
+                    HoverShadow(shadowScale: shadowScale)
+                        .frame(width: f.width, height: f.height)
+                        .position(x: f.midX, y: f.midY)
+                        .id(info.id)
+                }
+                .allowsHitTesting(false)
+            }
+        }
     }
 
     @ViewBuilder
@@ -257,6 +292,31 @@ private struct FontGridScroll: View {
                 }
             )
             .matchedGeometryEffect(id: family.id, in: cellHero)
+        }
+    }
+}
+
+// Drop shadow halo for the hovered cell. ZStack + destinationOut keeps only the
+// shadow (the fill is punched out so the real cell shows through). Fades its own
+// opacity in on appear — a short delay so quick passes don't flash a shadow, and
+// a slightly longer ramp so it reads as the cell settling rather than snapping.
+private struct HoverShadow: View {
+    let shadowScale: Double
+    @State private var shown = false
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
+                .fill(Theme.cellSurface)
+                .shadow(color: .black.opacity(0.75 * shadowScale), radius: 14, x: 0, y: 16)
+                .shadow(color: .black.opacity(0.90 * shadowScale), radius: 80, x: 0, y: 70)
+            RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
+                .blendMode(.destinationOut)
+        }
+        .compositingGroup()
+        .opacity(shown ? 1 : 0)
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.3).delay(0.12)) { shown = true }
         }
     }
 }

@@ -52,23 +52,14 @@ struct FontCell: View {
             .background(
                 RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
                     .fill(Theme.cellSurface)
-                    .shadow(
-                        color: .black.opacity(hovering ? 0.75 * shadowScale : 0),
-                        radius: hovering ? 14 : 0,
-                        x: 0,
-                        y: hovering ? 16 : 0
-                    )
-                    .shadow(
-                        color: .black.opacity(hovering ? 0.90 * shadowScale : 0),
-                        radius: hovering ? 80 : 0,
-                        x: 0,
-                        y: hovering ? 70 : 0
-                    )
             )
             .overlay(
                 RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
                     .stroke(borderColor, lineWidth: 1)
             )
+            .anchorPreference(key: HoveredCellAnchorKey.self, value: .bounds) {
+                hovering ? HoveredCellInfo(id: family.id, anchor: $0) : nil
+            }
             .contentShape(Rectangle())
             .onTapGesture { onTap() }
             .onHover { isHovering in
