@@ -35,10 +35,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func handleWindowEvent() {
-        // Apply synchronously — we're already on the main thread, and deferring
-        // via async causes a one-frame flash where AppKit's reset is visible
-        // before our correction lands.
-        applyWindowStyleNow()
+        // Window style is set once at launch; only traffic-light positions need
+        // to be re-applied synchronously to avoid a one-frame flash.
         adjustTrafficLightsNow()
     }
 
