@@ -50,6 +50,7 @@ struct CenterPanel: View {
             .filter { !vm.memoOnly || memos.hasNote(for: $0.name) }
             .filter { !vm.koreanOnly || $0.supportsKorean }
             .filter { !vm.englishOnly || $0.isNonKoreanText }
+            .filter { vm.activeTag == nil || memos.tags(for: $0.name).contains(vm.activeTag!) }
     }
 
     var body: some View {

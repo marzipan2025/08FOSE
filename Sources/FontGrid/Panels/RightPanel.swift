@@ -3,7 +3,14 @@ import SwiftUI
 struct RightPanel: View {
     @EnvironmentObject var vm: AppViewModel
     @EnvironmentObject var favorites: FavoritesStore
+    @EnvironmentObject var memos: MemoStore
     @State private var sortHovering = false
+    // When true, the TAGS section grows up to cover the favorites list (down to
+    // just below the FAVORITES divider).
+    @State private var tagsExpanded = false
+    @State private var tagsChevronHovering = false
+
+    private var hasTags: Bool { !memos.tagCounts.isEmpty }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -12,20 +19,116 @@ struct RightPanel: View {
                 .padding(.vertical, Theme.panelVPadding)
             PanelHDivider()
 
-            if favorites.ordered.isEmpty {
-                Text("No favorites yet.\nHover a font card and tap the dot to add one.")
-                    .font(.system(size: Theme.smallSize))
-                    .foregroundStyle(.tertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, Theme.panelHPadding)
-                    .padding(.vertical, Theme.panelVPadding)
-                Spacer(minLength: 0)
+            if hasTags && tagsExpanded {
+                tagsSection(expanded: true)
+                    .frame(maxHeight: .infinity)
             } else {
-                favoritesList
+                Group {
+                    if favorites.ordered.isEmpty {
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text("No favorites yet.\nHover a font card and tap the dot to add one.")
+                                .font(.system(size: Theme.smallSize))
+                                .foregroundStyle(.tertiary)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(.horizontal, Theme.panelHPadding)
+                                .padding(.vertical, Theme.panelVPadding)
+                            Spacer(minLength: 0)
+                        }
+                    } else {
+                        favoritesList
+                    }
+                }
+                .frame(maxHeight: .infinity)
+
+                if hasTags {
+                    PanelHDivider()
+                    tagsSection(expanded: false)
+                }
             }
+
+            PanelHDivider()
+            versionFooter
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.sidebarBackground.ignoresSafeArea())
+    }
+
+    private var versionFooter: some View {
+        Text("© pa_st - v\(Theme.appVersion)")
+            .font(.system(size: Theme.smallSize))
+            .foregroundStyle(.tertiary)
+            .padding(.horizontal, Theme.panelHPadding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(height: 36)
+    }
+
+    // MARK: - Tags
+
+    private func tagsSection(expanded: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            tagsHeader
+                .padding(.horizontal, Theme.panelHPadding)
+                .padding(.vertical, Theme.panelVPadding)
+            ScrollView {
+                FlowLayout(spacing: 6, lineSpacing: 6) {
+                    ForEach(memos.tagCounts, id: \.tag) { item in
+                        TagCapsule(
+                            tag: item.tag,
+                            count: item.count,
+                            active: vm.activeTag == item.tag
+                        ) {
+                            vm.activeTag = (vm.activeTag == item.tag) ? nil : item.tag
+                        }
+                    }
+                }
+                .padding(.horizontal, Theme.panelHPadding)
+                .padding(.bottom, Theme.panelVPadding)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxHeight: expanded ? .infinity : 220)
+            .scrollContentBackground(.hidden)
+        }
+    }
+
+    private var tagsHeader: some View {
+        HStack(spacing: 8) {
+            Text("TAGS")
+                .font(.system(size: Theme.sectionHeaderSize, weight: .bold))
+                .tracking(0.6)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+            Text("\(memos.tagCounts.count)")
+                .font(.system(size: Theme.smallSize, weight: .medium))
+                .foregroundStyle(.tertiary)
+                .monospacedDigit()
+            Spacer(minLength: 8)
+            if vm.activeTag != nil {
+                Button { vm.activeTag = nil } label: {
+                    Text("Clear")
+                        .font(.system(size: Theme.smallSize, weight: .medium))
+                        .foregroundStyle(Theme.accent)
+                }
+                .buttonStyle(.plain)
+                .focusable(false)
+                .help("Clear tag filter")
+            }
+            // Expand/collapse over the favorites list. Same chevron as the memo
+            // area's toggle, but without the filled background.
+            Button {
+                withAnimation(.easeOut(duration: 0.2)) { tagsExpanded.toggle() }
+            } label: {
+                Image(systemName: tagsExpanded ? "chevron.down" : "chevron.up")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(tagsChevronHovering ? .primary : .secondary)
+                    .frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .focusable(false)
+            .onHover { tagsChevronHovering = $0 }
+            .help(tagsExpanded ? "Collapse tags" : "Expand tags")
+        }
     }
 
     private var favoritesHeader: some View {
@@ -97,6 +200,45 @@ struct RightPanel: View {
             .padding(.vertical, 8)
         }
         .scrollContentBackground(.hidden)
+    }
+}
+
+// MARK: - Tag Capsule
+
+// A pill button for one note tag in the right panel. Shows the tag (without
+// '#') and how many fonts use it; highlights in the accent color when active.
+struct TagCapsule: View {
+    let tag: String
+    let count: Int
+    let active: Bool
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Text(tag)
+                    .font(.system(size: Theme.smallSize + 1, weight: .medium))
+                Text("\(count)")
+                    .font(.system(size: Theme.smallSize))
+                    .monospacedDigit()
+                    .opacity(0.6)
+            }
+            .foregroundStyle(active ? Theme.accent : Color.secondary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                Capsule().fill(active ? Theme.accent.opacity(0.16)
+                                      : (hovering ? Theme.surfaceFillHover : Theme.surfaceFill))
+            )
+            .overlay(
+                Capsule().stroke(active ? Theme.accent.opacity(0.5) : Theme.border, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .onHover { hovering = $0 }
+        .help(active ? "Showing fonts tagged #\(tag)" : "Filter by #\(tag)")
     }
 }
 

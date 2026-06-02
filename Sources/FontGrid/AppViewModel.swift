@@ -29,6 +29,10 @@ final class AppViewModel: ObservableObject {
     @Published var koreanOnly: Bool = false
     @Published var englishOnly: Bool = false
 
+    // Active note tag (lowercased, without '#'). nil = no tag filter. Single
+    // selection: tapping the active tag again clears it.
+    @Published var activeTag: String? = nil
+
     @Published var columnCount: Int = 4
     @Published var maxColumns: Int = 6
     @Published var previewSizeOffset: Double = 0
