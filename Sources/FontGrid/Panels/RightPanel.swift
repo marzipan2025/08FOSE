@@ -103,16 +103,6 @@ struct RightPanel: View {
                 .foregroundStyle(.tertiary)
                 .monospacedDigit()
             Spacer(minLength: 8)
-            if vm.activeTag != nil {
-                Button { vm.activeTag = nil } label: {
-                    Text("Clear")
-                        .font(.system(size: Theme.smallSize, weight: .medium))
-                        .foregroundStyle(Theme.accent)
-                }
-                .buttonStyle(.plain)
-                .focusable(false)
-                .help("Clear tag filter")
-            }
             // Expand/collapse over the favorites list. Same chevron as the memo
             // area's toggle, but without the filled background.
             Button {
