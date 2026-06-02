@@ -114,7 +114,7 @@ struct CenterPanel: View {
     @ViewBuilder
     private func emptyOverlay(_ displayedFamilies: [FontFamily]) -> some View {
         if displayedFamilies.isEmpty {
-            Text("No Result")
+            Text("Nothing found")
                 .font(.custom(emptyStateFontName ?? "Helvetica", size: vm.gridFontSize))
                 .foregroundStyle(Color.primary.opacity(0.10))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

@@ -107,8 +107,9 @@ struct FontDetailView: View {
     }
 
     // Narrow: info flows as multiple aligned columns directly under the header,
-    // with no dividing lines and no per-item boxes. Capped to 3 rows with a
-    // "Read more" toggle when it overflows.
+    // with no dividing lines and no per-item boxes. Capped to 2 rows with a
+    // "Read more" toggle when it overflows. The info and the sample list share
+    // one scroll so nothing gets clipped between them.
     private func narrowLayout(width: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             titleArea
@@ -116,9 +117,13 @@ struct FontDetailView: View {
             if memoExpanded {
                 expandedMemoArea
             } else {
-                if !metadata.isEmpty { infoColumns(width: width) }
-                weightList
-                    .frame(maxHeight: .infinity)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        if !metadata.isEmpty { infoColumns(width: width) }
+                        weightListContent
+                    }
+                }
+                .frame(maxHeight: .infinity)
                 Rectangle().fill(detailDivider).frame(height: 1)
                 collapsedMemoArea
             }
@@ -146,7 +151,7 @@ struct FontDetailView: View {
         // exact, then drive the grid with that many flexible columns.
         let avail = max(0, width - hPad * 2)
         let cols = max(1, Int((avail + spacing) / (minItem + spacing)))
-        let maxVisible = cols * 3
+        let maxVisible = cols * 2
         let entries = metadata.entries
         let hasOverflow = entries.count > maxVisible
         let visible = (!infoExpanded && hasOverflow) ? Array(entries.prefix(maxVisible)) : entries
@@ -393,18 +398,22 @@ struct FontDetailView: View {
 
     // MARK: - Weight List
 
+    // Wide layout scrolls the sample list on its own; narrow layout embeds
+    // `weightListContent` in a shared scroll with the info section.
     private var weightList: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(family.memberFontNames.enumerated()), id: \.offset) { index, psName in
-                    WeightRow(psName: psName, sampleText: sampleText, sampleSize: CGFloat(vm.weightRowFontSize))
-                    if index < family.memberFontNames.count - 1 {
-                        Divider().opacity(0.15).padding(.horizontal, 24)
-                    }
+        ScrollView { weightListContent }
+    }
+
+    private var weightListContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(family.memberFontNames.enumerated()), id: \.offset) { index, psName in
+                WeightRow(psName: psName, sampleText: sampleText, sampleSize: CGFloat(vm.weightRowFontSize))
+                if index < family.memberFontNames.count - 1 {
+                    Divider().opacity(0.15).padding(.horizontal, 24)
                 }
             }
-            .padding(.vertical, 8)
         }
+        .padding(.vertical, 8)
     }
 
     // MARK: - Actions
