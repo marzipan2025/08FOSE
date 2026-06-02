@@ -265,7 +265,7 @@ struct FavoriteRow: View {
                     .truncationMode(.tail)
 
                 Text(sampleText)
-                    .font(.custom(name, size: 18))
+                    .font(.custom(name, size: 20))
                     .foregroundStyle(Color.primary.opacity(0.8))
                     .lineLimit(1)
                     .truncationMode(.tail)
