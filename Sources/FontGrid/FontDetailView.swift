@@ -15,6 +15,13 @@ struct FontDetailView: View {
     @State private var memoExpanded: Bool = false
     @State private var closeHovering = false
     @State private var memoHeaderHovering = false
+    @State private var metadata: FontMetadata = .empty
+    @State private var infoExpanded = false      // narrow layout "Read more" toggle
+
+    // At/above this card width the info section sits in the right of the middle
+    // (weight-list) section; below it, the info flows as multiple columns under
+    // the header.
+    private let wideThreshold: CGFloat = 640
 
     // Light mode uses lighter shadows (30% of the dark-mode strength).
     private var shadowScale: Double { colorScheme == .light ? 0.3 : 1.0 }
@@ -40,20 +47,11 @@ struct FontDetailView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            titleArea
-            Rectangle()
-                .fill(detailDivider)
-                .frame(height: 1)
-            if memoExpanded {
-                expandedMemoArea
+        GeometryReader { geo in
+            if geo.size.width >= wideThreshold {
+                wideLayout(width: geo.size.width)
             } else {
-                weightList
-                    .frame(maxHeight: .infinity)
-                Rectangle()
-                .fill(detailDivider)
-                .frame(height: 1)
-                collapsedMemoArea
+                narrowLayout(width: geo.size.width)
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -76,6 +74,153 @@ struct FontDetailView: View {
                 onClose()
             }
         }
+        .task(id: family.id) {
+            infoExpanded = false
+            metadata = FontMetadata.load(family: family)
+        }
+    }
+
+    // MARK: - Layouts
+
+    // Wide: the info column lives in the right of the middle (weight-list)
+    // section only. Title and memo keep the card's full width.
+    private func wideLayout(width: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            titleArea
+            Rectangle().fill(detailDivider).frame(height: 1)
+            if memoExpanded {
+                expandedMemoArea
+            } else {
+                HStack(spacing: 0) {
+                    weightList
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    if !metadata.isEmpty {
+                        infoColumn
+                            .frame(width: max(180, width * 0.25))
+                    }
+                }
+                .frame(maxHeight: .infinity)
+                Rectangle().fill(detailDivider).frame(height: 1)
+                collapsedMemoArea
+            }
+        }
+    }
+
+    // Narrow: info flows as multiple aligned columns directly under the header,
+    // with no dividing lines and no per-item boxes. Capped to 3 rows with a
+    // "Read more" toggle when it overflows.
+    private func narrowLayout(width: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            titleArea
+            Rectangle().fill(detailDivider).frame(height: 1)
+            if memoExpanded {
+                expandedMemoArea
+            } else {
+                if !metadata.isEmpty { infoColumns(width: width) }
+                weightList
+                    .frame(maxHeight: .infinity)
+                Rectangle().fill(detailDivider).frame(height: 1)
+                collapsedMemoArea
+            }
+        }
+    }
+
+    // MARK: - Info (wide: single right column; narrow: multi-column grid)
+
+    private var infoColumn: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                ForEach(metadata.entries) { infoEntryView($0) }
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 20)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func infoColumns(width: CGFloat) -> some View {
+        let spacing: CGFloat = 20
+        let minItem: CGFloat = 150
+        let hPad: CGFloat = 24
+        // Match the column count the grid will actually use so the 3-row cap is
+        // exact, then drive the grid with that many flexible columns.
+        let avail = max(0, width - hPad * 2)
+        let cols = max(1, Int((avail + spacing) / (minItem + spacing)))
+        let maxVisible = cols * 3
+        let entries = metadata.entries
+        let hasOverflow = entries.count > maxVisible
+        let visible = (!infoExpanded && hasOverflow) ? Array(entries.prefix(maxVisible)) : entries
+
+        // If the last row would hold a single item, pull it out of the grid and
+        // give it the full width instead of leaving it boxed in one column.
+        let singleLast = cols > 1 && visible.count > 1 && visible.count % cols == 1
+        let gridEntries = singleLast ? Array(visible.dropLast()) : visible
+
+        return VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 14) {
+                LazyVGrid(
+                    columns: Array(repeating: GridItem(.flexible(), spacing: spacing, alignment: .topLeading),
+                                   count: cols),
+                    alignment: .leading,
+                    spacing: 14
+                ) {
+                    ForEach(gridEntries) { infoEntryView($0) }
+                }
+                if singleLast, let last = visible.last {
+                    infoEntryView(last)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            if hasOverflow {
+                Button {
+                    withAnimation(.easeOut(duration: 0.2)) { infoExpanded.toggle() }
+                } label: {
+                    Text(infoExpanded ? "Read less" : "Read more")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Theme.accent)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, hPad)
+        .padding(.vertical, 16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func infoEntryView(_ entry: InfoEntry) -> some View {
+        switch entry {
+        case .field(let label, let value):
+            VStack(alignment: .leading, spacing: 2) {
+                infoLabel(label)
+                Text(value)
+                    .font(.system(size: 13))
+                    .foregroundStyle(.primary)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        case .features(let tags):
+            VStack(alignment: .leading, spacing: 4) {
+                infoLabel("Features")
+                FlowLayout(spacing: 8, lineSpacing: 4) {
+                    ForEach(tags, id: \.self) { featureTag($0) }
+                }
+            }
+        }
+    }
+
+    private func infoLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 10, weight: .medium))
+            .foregroundStyle(.tertiary)
+            .textCase(.uppercase)
+    }
+
+    private func featureTag(_ tag: String) -> some View {
+        Text(tag)
+            .font(.system(size: 13).italic())
+            .foregroundStyle(Theme.memoAccent)
+            .help(OpenTypeFeatureNames.friendly(tag) ?? tag)
     }
 
     // MARK: - Memo (collapsed: single-line + expand toggle)
