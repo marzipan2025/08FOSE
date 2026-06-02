@@ -92,14 +92,31 @@ struct CenterPanel: View {
     // of the center panel. Uses the smallest type size in the app.
     private var topBar: some View {
         HStack(spacing: 8) {
-            Text("08FOSE")
-                .font(.system(size: Theme.sectionHeaderSize + 2, weight: .bold))
-                .foregroundStyle(.secondary)
-            Spacer(minLength: 8)
-            Text(statsText)
-                .font(.system(size: Theme.sectionHeaderSize + 2))
-                .foregroundStyle(.tertiary)
-                .monospacedDigit()
+            if vm.selectedFamily != nil {
+                // Detail open: previous font (left) / next font (right). Display
+                // only — the bar is non-interactive (allowsHitTesting false).
+                Text(detailNeighbour(-1).map { "←  \($0)" } ?? "")
+                    .font(.system(size: Theme.sectionHeaderSize + 2))
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text(detailNeighbour(1).map { "\($0)  →" } ?? "")
+                    .font(.system(size: Theme.sectionHeaderSize + 2))
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            } else {
+                Text("08FOSE")
+                    .font(.system(size: Theme.sectionHeaderSize + 2, weight: .bold))
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 8)
+                Text(statsText)
+                    .font(.system(size: Theme.sectionHeaderSize + 2))
+                    .foregroundStyle(.tertiary)
+                    .monospacedDigit()
+            }
         }
         .padding(.horizontal, Theme.gridPadding)
         .frame(maxWidth: .infinity)
@@ -151,6 +168,17 @@ struct CenterPanel: View {
         let next = idx + delta
         guard next >= 0, next < list.count else { return }
         vm.selectedFamily = list[next]
+    }
+
+    // Names of the neighbours in the navigation list, for the top-bar label
+    // shown while the detail is open. nil at the list ends (matches clamp).
+    private func detailNeighbour(_ delta: Int) -> String? {
+        guard let current = vm.selectedFamily else { return nil }
+        let list = navigationFamilies
+        guard let idx = list.firstIndex(where: { $0.id == current.id }) else { return nil }
+        let n = idx + delta
+        guard n >= 0, n < list.count else { return nil }
+        return list[n].name
     }
 
     @ViewBuilder
