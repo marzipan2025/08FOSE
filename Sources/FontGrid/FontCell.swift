@@ -16,22 +16,11 @@ struct FontCell: View {
 
     // Light mode uses lighter shadows (30% of the dark-mode strength).
     private var shadowScale: Double { colorScheme == .light ? 0.3 : 1.0 }
-    @State private var weightIndex: Int = 0
-    @State private var cycleTask: Task<Void, Never>? = nil
 
     private var isFavorited: Bool { favorites.contains(family.name) }
     private var hasMemo: Bool { memos.hasNote(for: family.name) }
 
-    private var displayedFontName: String {
-        guard !family.memberFontNames.isEmpty else { return family.name }
-        return family.memberFontNames[weightIndex % family.memberFontNames.count]
-    }
-
     private var cellHeight: CGFloat { Theme.cellHeight(fontSize: fontSize) }
-
-    private var resolvedPreviewText: String {
-        previewText.isEmpty ? "The quick brown fox jumps over lazy dog." : previewText
-    }
 
     var body: some View {
         Color.clear
@@ -42,11 +31,18 @@ struct FontCell: View {
                     .padding(.top, 12)
             }
             .overlay(alignment: .bottomLeading) {
-                FontPreviewLabel(text: resolvedPreviewText, fontName: displayedFontName, fontSize: fontSize)
-                    .frame(height: fontSize * 1.9)
-                    .padding(.horizontal, 14)
-                    .padding(.bottom, 10)
-                    .animation(.easeInOut(duration: 0.15), value: weightIndex)
+                // CyclingPreviewLabel owns weightIndex state so that cycling
+                // re-renders stay isolated here and don't re-evaluate .help()
+                // on the parent, which would reset AppKit's tooltip timer.
+                CyclingPreviewLabel(
+                    family: family,
+                    previewText: previewText,
+                    fontSize: fontSize,
+                    isHovering: hovering
+                )
+                .frame(height: fontSize * 1.9)
+                .padding(.horizontal, 14)
+                .padding(.bottom, 10)
             }
             .clipShape(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
             .background(
@@ -66,10 +62,8 @@ struct FontCell: View {
                 withAnimation(.easeOut(duration: 0.15)) {
                     hovering = isHovering
                 }
-                if isHovering { startCycling() } else { stopCycling() }
                 onHoverChange(isHovering)
             }
-            .onDisappear { stopCycling() }
             .help(memoTooltip)
     }
 
@@ -91,25 +85,6 @@ struct FontCell: View {
             Spacer(minLength: 6)
             trailingBadge
         }
-    }
-
-    private func startCycling() {
-        cycleTask?.cancel()
-        weightIndex = 0
-        guard family.memberFontNames.count > 1 else { return }
-        cycleTask = Task { @MainActor in
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 400_000_000)
-                if Task.isCancelled { return }
-                weightIndex = (weightIndex + 1) % family.memberFontNames.count
-            }
-        }
-    }
-
-    private func stopCycling() {
-        cycleTask?.cancel()
-        cycleTask = nil
-        weightIndex = 0
     }
 
     private var borderColor: Color {
@@ -152,6 +127,55 @@ struct FontCell: View {
                 .font(.system(size: Theme.smallSize))
                 .foregroundStyle(Theme.weightBadge)
         }
+    }
+}
+
+// MARK: - Cycling Preview Label
+
+private struct CyclingPreviewLabel: View {
+    let family: FontFamily
+    let previewText: String
+    let fontSize: Double
+    let isHovering: Bool
+
+    @State private var weightIndex: Int = 0
+    @State private var cycleTask: Task<Void, Never>? = nil
+
+    private var displayedFontName: String {
+        guard !family.memberFontNames.isEmpty else { return family.name }
+        return family.memberFontNames[weightIndex % family.memberFontNames.count]
+    }
+
+    private var resolvedPreviewText: String {
+        previewText.isEmpty ? "The quick brown fox jumps over lazy dog." : previewText
+    }
+
+    var body: some View {
+        FontPreviewLabel(text: resolvedPreviewText, fontName: displayedFontName, fontSize: fontSize)
+            .animation(.easeInOut(duration: 0.15), value: weightIndex)
+            .onChange(of: isHovering) { hovering in
+                if hovering { startCycling() } else { stopCycling() }
+            }
+            .onDisappear { stopCycling() }
+    }
+
+    private func startCycling() {
+        cycleTask?.cancel()
+        weightIndex = 0
+        guard family.memberFontNames.count > 1 else { return }
+        cycleTask = Task { @MainActor in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 400_000_000)
+                if Task.isCancelled { return }
+                weightIndex = (weightIndex + 1) % family.memberFontNames.count
+            }
+        }
+    }
+
+    private func stopCycling() {
+        cycleTask?.cancel()
+        cycleTask = nil
+        weightIndex = 0
     }
 }
 
