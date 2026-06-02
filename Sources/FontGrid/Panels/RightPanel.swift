@@ -263,15 +263,19 @@ struct FavoriteRow: View {
                     .foregroundStyle(Theme.weightBadge)
                     .lineLimit(1)
                     .truncationMode(.tail)
+                    // Nudge up to line the name up with the trailing dot, without
+                    // changing the row's layout height.
+                    .offset(y: -2)
 
                 Text(sampleText)
                     .font(.custom(name, size: 20))
                     .foregroundStyle(Color.primary.opacity(0.8))
                     .lineLimit(1)
                     .truncationMode(.tail)
-                    .frame(height: 22, alignment: .center)
+                    .frame(height: 25, alignment: .center)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .clipped()
+                    .offset(y: -3)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
