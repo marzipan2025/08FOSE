@@ -69,7 +69,7 @@ struct FontCell: View {
     // Hover tooltip: the memo text (up to 16 chars) when one exists, else empty
     // (an empty string shows no tooltip).
     private var memoTooltip: String {
-        let note = memos.note(for: family.name)
+        let note = memos.note(for: family.name).replacingOccurrences(of: "#", with: "")
         guard !note.isEmpty else { return "" }
         return note.count > 16 ? String(note.prefix(16)) + "…" : note
     }

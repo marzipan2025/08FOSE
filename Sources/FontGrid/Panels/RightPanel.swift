@@ -228,7 +228,6 @@ struct TagCapsule: View {
         .buttonStyle(.plain)
         .focusable(false)
         .onHover { hovering = $0 }
-        .help(active ? "Showing fonts tagged #\(tag)" : "Filter by #\(tag)")
     }
 }
 
@@ -308,8 +307,9 @@ struct FavoriteRow: View {
     }
 
     // Hover tooltip: the memo text (up to 16 chars) when one exists, else empty.
+    // Tag '#' markers are dropped so tooltips read like the tag capsules.
     private var memoTooltip: String {
-        let note = memos.note(for: name)
+        let note = memos.note(for: name).replacingOccurrences(of: "#", with: "")
         guard !note.isEmpty else { return "" }
         return note.count > 16 ? String(note.prefix(16)) + "…" : note
     }
