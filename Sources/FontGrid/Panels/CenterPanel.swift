@@ -129,6 +129,30 @@ struct CenterPanel: View {
         emptyStateFontName = candidates.randomElement()?.memberFontNames.first
     }
 
+    // Ordered list the arrow keys step through, matching how the detail was
+    // opened: the filtered grid, or the favorites list in its current sort.
+    private var navigationFamilies: [FontFamily] {
+        switch vm.detailSource {
+        case .favorites:
+            let names = vm.favoritesByRecent ? favorites.byRecency : favorites.sorted
+            return names.compactMap { name in
+                vm.library.families.first { $0.name == name }
+            }
+        case .grid:
+            return displayed
+        }
+    }
+
+    // Move the open detail to the previous/next font (clamped at the ends).
+    private func stepDetail(_ delta: Int) {
+        guard let current = vm.selectedFamily else { return }
+        let list = navigationFamilies
+        guard let idx = list.firstIndex(where: { $0.id == current.id }) else { return }
+        let next = idx + delta
+        guard next >= 0, next < list.count else { return }
+        vm.selectedFamily = list[next]
+    }
+
     @ViewBuilder
     private var detailOverlay: some View {
         if vm.selectedFamily != nil {
@@ -153,11 +177,14 @@ struct CenterPanel: View {
             .padding(.top, Theme.gridPadding)
             .padding(.bottom, 67)
             .background(
-                EscapeKeyHandler {
-                    withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
-                        vm.selectedFamily = nil
-                    }
-                }
+                EscapeKeyHandler(
+                    onEscape: {
+                        withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+                            vm.selectedFamily = nil
+                        }
+                    },
+                    onStep: { stepDetail($0) }
+                )
             )
             .zIndex(30)
         }
@@ -303,6 +330,7 @@ private struct FontGridScroll: View {
                     }
                 },
                 onTap: {
+                    vm.detailSource = .grid
                     withAnimation(.spring(response: 0.42, dampingFraction: 0.80)) {
                         vm.selectedFamily = family
                     }
@@ -338,38 +366,64 @@ private struct HoverShadow: View {
     }
 }
 
+// Key handling while the detail view is open: ESC closes it, ←/→ step to the
+// previous/next font. Arrow keys are ignored when a text field is being edited
+// (so the preview bar / memo editor keep normal cursor movement).
 private struct EscapeKeyHandler: NSViewRepresentable {
     let onEscape: () -> Void
+    var onStep: (Int) -> Void = { _ in }
 
     func makeNSView(context: Context) -> NSView {
         let view = NSView(frame: .zero)
         context.coordinator.install()
+        // Drop text-field focus (e.g. the preview bar) when the detail opens so
+        // the arrow keys navigate instead of moving a hidden text cursor.
+        DispatchQueue.main.async { view.window?.makeFirstResponder(nil) }
         return view
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {}
+    func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.update(onEscape: onEscape, onStep: onStep)
+    }
 
     static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
         coordinator.uninstall()
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onEscape: onEscape)
+        Coordinator(onEscape: onEscape, onStep: onStep)
     }
 
     final class Coordinator {
-        private let onEscape: () -> Void
+        private var onEscape: () -> Void
+        private var onStep: (Int) -> Void
         private var monitor: Any?
 
-        init(onEscape: @escaping () -> Void) {
+        init(onEscape: @escaping () -> Void, onStep: @escaping (Int) -> Void) {
             self.onEscape = onEscape
+            self.onStep = onStep
+        }
+
+        func update(onEscape: @escaping () -> Void, onStep: @escaping (Int) -> Void) {
+            self.onEscape = onEscape
+            self.onStep = onStep
         }
 
         func install() {
             guard monitor == nil else { return }
             monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-                guard event.keyCode == 53 else { return event }
-                self?.onEscape()
+                guard let self else { return event }
+                // ESC
+                if event.keyCode == 53 { self.onEscape(); return nil }
+                // ←(123) / →(124)
+                guard event.keyCode == 123 || event.keyCode == 124 else { return event }
+                // Let text editing keep arrow keys (cursor movement).
+                if event.window?.firstResponder is NSText { return event }
+                // Plain arrows only — leave ⌘/⌥/⌃ combos for the system.
+                if !event.modifierFlags.intersection([.command, .option, .control]).isEmpty {
+                    return event
+                }
+                self.onStep(event.keyCode == 124 ? 1 : -1)
                 return nil
             }
         }

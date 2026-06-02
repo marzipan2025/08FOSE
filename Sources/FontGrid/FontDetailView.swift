@@ -76,6 +76,7 @@ struct FontDetailView: View {
         }
         .task(id: family.id) {
             infoExpanded = false
+            memoExpanded = false
             metadata = FontMetadata.load(family: family)
         }
     }

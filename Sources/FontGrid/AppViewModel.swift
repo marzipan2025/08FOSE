@@ -96,6 +96,11 @@ final class AppViewModel: ObservableObject {
 
     @Published var selectedFamily: FontFamily? = nil
 
+    // Where the open detail view was launched from — decides which ordered list
+    // the left/right arrow keys step through.
+    enum DetailSource { case grid, favorites }
+    @Published var detailSource: DetailSource = .grid
+
     init() {
         self.library = FontLibrary()
     }

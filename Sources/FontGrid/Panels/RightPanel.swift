@@ -69,6 +69,7 @@ struct RightPanel: View {
             tagsHeader
                 .padding(.horizontal, Theme.panelHPadding)
                 .padding(.vertical, Theme.panelVPadding)
+            PanelHDivider()
             ScrollView {
                 FlowLayout(spacing: 6, lineSpacing: 6) {
                     ForEach(memos.tagCounts, id: \.tag) { item in
@@ -82,6 +83,7 @@ struct RightPanel: View {
                     }
                 }
                 .padding(.horizontal, Theme.panelHPadding)
+                .padding(.top, 12)
                 .padding(.bottom, Theme.panelVPadding)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -175,6 +177,7 @@ struct RightPanel: View {
                 ForEach(displayedFavorites, id: \.self) { name in
                     FavoriteRow(name: name) {
                         if let family = vm.library.families.first(where: { $0.name == name }) {
+                            vm.detailSource = .favorites
                             if vm.selectedFamily == nil {
                                 withAnimation(.spring(response: 0.42, dampingFraction: 0.80)) {
                                     vm.selectedFamily = family
