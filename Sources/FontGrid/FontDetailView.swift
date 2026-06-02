@@ -335,11 +335,18 @@ struct FontDetailView: View {
         return VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(family.name)
-                        .font(.system(size: 23, weight: .bold))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.4)
+                    HStack(alignment: .center, spacing: 8) {
+                        Text(family.name)
+                            .font(.system(size: 23, weight: .bold))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.4)
+                        if family.supportsKorean {
+                            KoreanBadge(titleSize: 23)
+                                // Sit slightly above the title's vertical centre.
+                                .offset(y: -23 * 0.08)
+                        }
+                    }
                     Text("\(family.weightCount) weight\(family.weightCount == 1 ? "" : "s")")
                         .font(.system(size: Theme.bodySize))
                         .foregroundStyle(.secondary)
@@ -430,6 +437,29 @@ struct FontDetailView: View {
         let descriptor = CTFontDescriptorCreateWithNameAndSize(psName as CFString, 0)
         guard let url = CTFontDescriptorCopyAttribute(descriptor, kCTFontURLAttribute) as? URL else { return }
         NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+}
+
+// MARK: - Korean Badge
+
+// Custom marker shown beside the detail title for Korean-supporting fonts:
+// a squircle outline (no fill) holding uppercase "KR", sized ~60% of the
+// title's cap height.
+private struct KoreanBadge: View {
+    let titleSize: CGFloat
+
+    var body: some View {
+        let h = titleSize * 0.72   // ~60% of title, then +20%
+        Text("KR")
+            .font(.system(size: h * 0.6, weight: .bold))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, h * 0.26)
+            .frame(height: h)
+            .overlay(
+                RoundedRectangle(cornerRadius: h * 0.34, style: .continuous)
+                    .stroke(Color.secondary, lineWidth: max(1, h * 0.08))
+            )
+            .accessibilityLabel("Korean")
     }
 }
 

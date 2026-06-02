@@ -129,6 +129,7 @@ NSFontManager는 한글 등 비-ASCII family 이름을 `/B9CC/B144/C124/CCB4` �
 - 상세가 열린 동안(전체화면 제외) 중앙 상단 바는 `08FOSE·통계` 대신 **이전/다음 폰트명**(좌/다음 우)을 표기 — 비클릭, 좌우키 이동과 동일한 목록 기준
 - 셀↔상세는 `matchedGeometryEffect` 전환
 - **상단 헤더 (전체 폭)**: family 이름(~23pt bold) + "N weight(s)" + 액션 3종
+  - 한글 지원 폰트는 이름 오른쪽에 커스텀 **KR 배지**(squircle 실선 + 대문자 KR, 타이틀의 ~72% 높이, 중앙보다 살짝 위)
   - **Favorite** 토글 / **Copy name**(1.5초 "Copied") / **Show in Finder**
 - **정보 섹션** (1장 FontMetadata, 반응형):
   - 카드 폭 **≥ 640**: 중앙(weight 목록) 영역의 **우측 1/4**에 단일 컬럼으로 세로 나열
