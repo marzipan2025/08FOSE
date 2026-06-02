@@ -67,6 +67,12 @@ struct FontDetailView: View {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .stroke(colorScheme == .light ? Color(white: 0.56) : Color.white, lineWidth: 1)
         )
+        // Tapping the card's empty background drops any text-input focus (search
+        // / memo / preview bar) so the ←/→ navigation works again. Buttons and
+        // the memo field handle their own taps first, so they're unaffected.
+        .onTapGesture {
+            NSApp.keyWindow?.makeFirstResponder(nil)
+        }
         .onExitCommand {
             if memoExpanded {
                 withAnimation(.easeOut(duration: 0.2)) { memoExpanded = false }
