@@ -35,10 +35,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func handleWindowEvent() {
-        applyWindowStyle()
-        // AppKit resets the traffic-light positions on resize and when
-        // returning from fullscreen, so re-apply our offset after each event.
-        adjustTrafficLights()
+        // Apply synchronously — we're already on the main thread, and deferring
+        // via async causes a one-frame flash where AppKit's reset is visible
+        // before our correction lands.
+        applyWindowStyleNow()
+        adjustTrafficLightsNow()
     }
 
     // Set the Dock icon at launch.
@@ -87,38 +88,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func applyWindowStyle() {
-        DispatchQueue.main.async {
-            for window in NSApp.windows {
-                window.titlebarAppearsTransparent = true
-                window.titleVisibility = .hidden
-                window.styleMask.insert(.fullSizeContentView)
-                window.titlebarSeparatorStyle = .none
-                if let toolbar = window.toolbar {
-                    toolbar.showsBaselineSeparator = false
-                }
+        // Deferred on launch because the SwiftUI WindowGroup window may not
+        // exist yet at applicationDidFinishLaunching time.
+        DispatchQueue.main.async { self.applyWindowStyleNow() }
+    }
+
+    @objc private func adjustTrafficLights() {
+        DispatchQueue.main.async { self.adjustTrafficLightsNow() }
+    }
+
+    private func applyWindowStyleNow() {
+        for window in NSApp.windows {
+            window.titlebarAppearsTransparent = true
+            window.titleVisibility = .hidden
+            window.styleMask.insert(.fullSizeContentView)
+            window.titlebarSeparatorStyle = .none
+            if let toolbar = window.toolbar {
+                toolbar.showsBaselineSeparator = false
             }
         }
     }
 
-    @objc private func adjustTrafficLights() {
-        DispatchQueue.main.async {
-            let offsetX: CGFloat = 10
-            let offsetY: CGFloat = -10   // AppKit Y is up; negative = visually down
-            let types: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
+    private func adjustTrafficLightsNow() {
+        let offsetX: CGFloat = 10
+        let offsetY: CGFloat = -10   // AppKit Y is up; negative = visually down
+        let types: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
 
-            for window in NSApp.windows {
-                let id = ObjectIdentifier(window)
-                var stored = self.originalButtonOrigins[id] ?? [:]
-                for type in types {
-                    guard let btn = window.standardWindowButton(type) else { continue }
-                    if stored[type] == nil {
-                        stored[type] = btn.frame.origin
-                    }
-                    guard let original = stored[type] else { continue }
-                    btn.setFrameOrigin(CGPoint(x: original.x + offsetX, y: original.y + offsetY))
+        for window in NSApp.windows {
+            let id = ObjectIdentifier(window)
+            var stored = self.originalButtonOrigins[id] ?? [:]
+            for type in types {
+                guard let btn = window.standardWindowButton(type) else { continue }
+                if stored[type] == nil {
+                    stored[type] = btn.frame.origin
                 }
-                self.originalButtonOrigins[id] = stored
+                guard let original = stored[type] else { continue }
+                btn.setFrameOrigin(CGPoint(x: original.x + offsetX, y: original.y + offsetY))
             }
+            self.originalButtonOrigins[id] = stored
         }
     }
 

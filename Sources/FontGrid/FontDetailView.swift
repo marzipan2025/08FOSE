@@ -209,13 +209,13 @@ struct FontDetailView: View {
 
             HStack(spacing: 8) {
                 ActionButton(
-                    icon: isFavorited ? "circle.fill" : "circle",
+                    icon: nil,
                     label: isFavorited ? "Favorited" : "Favorite",
                     active: isFavorited
                 ) { favorites.toggle(family.name) }
 
                 ActionButton(
-                    icon: copied ? "checkmark" : "doc.on.doc",
+                    icon: copied ? "checkmark" : nil,
                     label: copied ? "Copied" : "Copy name",
                     active: copied
                 ) {
@@ -324,7 +324,7 @@ struct WeightRow: View {
 // Title-area action button (Favorite / Copy name / Show in Finder) with a
 // light hover state: the fill grows a little denser on rollover.
 private struct ActionButton: View {
-    let icon: String
+    let icon: String?
     let label: String
     let active: Bool
     let action: () -> Void
@@ -333,7 +333,9 @@ private struct ActionButton: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 5) {
-                Image(systemName: icon).font(.system(size: Theme.bodySize))
+                if let icon {
+                    Image(systemName: icon).font(.system(size: Theme.bodySize))
+                }
                 Text(label).font(.system(size: Theme.bodySize))
             }
             .foregroundStyle(active ? Theme.accent : Color.secondary)
