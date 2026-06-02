@@ -172,7 +172,7 @@ struct FavoriteRow: View {
         .contentShape(Rectangle())
         .onTapGesture { onSelect() }
         .onHover { hovering = $0 }
-        .help(memoTooltip)
+        .nativeTooltip(memoTooltip)
     }
 
     // Hover tooltip: the memo text (up to 16 chars) when one exists, else empty.

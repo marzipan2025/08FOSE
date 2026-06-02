@@ -35,8 +35,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func handleWindowEvent() {
-        // Window style is set once at launch; only traffic-light positions need
-        // to be re-applied synchronously to avoid a one-frame flash.
+        // The two halves need OPPOSITE timing, so they are deliberately split:
+        //
+        // - applyWindowStyle() is async. These notifications fire mid-layout;
+        //   setting titlebarSeparatorStyle synchronously here gets re-overridden
+        //   by AppKit in the same pass, leaving the hairline separator visible.
+        //   Deferring to the next runloop tick lets it stick.
+        //
+        // - adjustTrafficLightsNow() is sync. Deferring it leaves the buttons at
+        //   their default spot for one frame during live resize, which reads as
+        //   the lights jumping up and snapping back.
+        applyWindowStyle()
         adjustTrafficLightsNow()
     }
 
@@ -95,8 +104,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.async { self.adjustTrafficLightsNow() }
     }
 
+    // Only the app's real content window(s) — not transient tooltip/panel
+    // windows, which have no traffic lights and shouldn't have their chrome
+    // poked.
+    private func styledWindows() -> [NSWindow] {
+        NSApp.windows.filter { $0.styleMask.contains(.titled) }
+    }
+
     private func applyWindowStyleNow() {
-        for window in NSApp.windows {
+        for window in styledWindows() {
             window.titlebarAppearsTransparent = true
             window.titleVisibility = .hidden
             window.styleMask.insert(.fullSizeContentView)
@@ -112,7 +128,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let offsetY: CGFloat = -10   // AppKit Y is up; negative = visually down
         let types: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
 
-        for window in NSApp.windows {
+        for window in styledWindows() {
             let id = ObjectIdentifier(window)
             var stored = self.originalButtonOrigins[id] ?? [:]
             for type in types {

@@ -31,9 +31,8 @@ struct FontCell: View {
                     .padding(.top, 12)
             }
             .overlay(alignment: .bottomLeading) {
-                // CyclingPreviewLabel owns weightIndex state so that cycling
-                // re-renders stay isolated here and don't re-evaluate .help()
-                // on the parent, which would reset AppKit's tooltip timer.
+                // CyclingPreviewLabel owns weightIndex state so the 400ms weight
+                // cycling re-renders only the preview label, not the whole cell.
                 CyclingPreviewLabel(
                     family: family,
                     previewText: previewText,
@@ -64,11 +63,11 @@ struct FontCell: View {
                 }
                 onHoverChange(isHovering)
             }
-            .help(memoTooltip)
+            .nativeTooltip(memoTooltip)
     }
 
     // Hover tooltip: the memo text (up to 16 chars) when one exists, else empty
-    // (an empty help string shows no tooltip).
+    // (an empty string shows no tooltip).
     private var memoTooltip: String {
         let note = memos.note(for: family.name)
         guard !note.isEmpty else { return "" }
