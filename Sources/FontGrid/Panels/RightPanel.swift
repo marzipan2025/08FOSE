@@ -83,7 +83,7 @@ struct RightPanel: View {
                     }
                 }
                 .padding(.horizontal, Theme.panelHPadding)
-                .padding(.top, 12)
+                .padding(.top, 16)
                 .padding(.bottom, Theme.panelVPadding)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }

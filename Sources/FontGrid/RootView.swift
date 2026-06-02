@@ -7,7 +7,7 @@ struct RootView: View {
     @StateObject private var memos = MemoStore()
 
     @State private var leftWidth: CGFloat = Theme.panelDefaultWidth
-    @State private var rightWidth: CGFloat = Theme.panelDefaultWidth
+    @State private var rightWidth: CGFloat = 256
     @State private var leftDragStart: CGFloat? = nil
     @State private var rightDragStart: CGFloat? = nil
 
