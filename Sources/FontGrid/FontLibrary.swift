@@ -1,4 +1,5 @@
 import AppKit
+import CoreText
 import Foundation
 
 // Primary script bucket a font is filed under. Single-select per font (the
@@ -94,6 +95,11 @@ final class FontLibrary: ObservableObject {
     // is filed under .other rather than .latin. Cyrillic/Greek DO ride with
     // Latin, so they're only treated as .other when no Latin is present.
     private static func classify(psName: String) -> ScriptCategory {
+        // The OS/2 code-page bits state which CJK encoding the font targets, and
+        // that beats raw coverage: e.g. a Simplified-Chinese font often bundles
+        // kana, which the coverage rule below would misread as Japanese.
+        if let cjk = codePageCJK(psName) { return cjk }
+
         guard let font = NSFont(name: psName, size: 12) else { return .other }
         let cs = font.coveredCharacterSet
         func has(_ value: UInt32) -> Bool {
@@ -108,6 +114,26 @@ final class FontLibrary: ObservableObject {
         if has(0x0041) { return .latin }                        // A
         if has(0x0391) || has(0x0410) { return .other }         // Greek / Cyrillic only
         return .symbol                                          // no real-script letters
+    }
+
+    // CJK bucket from OS/2 ulCodePageRange1 (only present in OS/2 version ≥ 1).
+    // Korean (949/1361) > Japanese (932) > Chinese (936/950) for multi-CJK fonts.
+    // Returns nil when no CJK code page is declared, so callers fall back to
+    // coverage-based detection (Latin / scripts / symbol).
+    private static func codePageCJK(_ psName: String) -> ScriptCategory? {
+        let font = CTFontCreateWithName(psName as CFString, 12, nil)
+        let tag = ("OS/2".utf8.reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }) as CTFontTableTag
+        guard let data = CTFontCopyTable(font, tag, []) as Data? else { return nil }
+        let b = [UInt8](data)
+        guard b.count >= 82 else { return nil }                 // version 0 has no code-page range
+        let version = Int(b[0]) << 8 | Int(b[1])
+        guard version >= 1 else { return nil }
+        let cp = UInt32(b[78]) << 24 | UInt32(b[79]) << 16 | UInt32(b[80]) << 8 | UInt32(b[81])
+        func bit(_ n: Int) -> Bool { cp & (UInt32(1) << n) != 0 }
+        if bit(19) || bit(21) { return .korean }                // Wansung / Johab
+        if bit(17) { return .japanese }                         // JIS
+        if bit(18) || bit(20) { return .chinese }               // GBK / Big5
+        return nil
     }
 
     // Representative letters for scripts that generally appear on their own
