@@ -48,8 +48,7 @@ struct CenterPanel: View {
             .filter { vm.weightFilter.matches($0.weightCount) }
             .filter { !vm.favoritesOnly || favorites.contains($0.name) }
             .filter { !vm.memoOnly || memos.hasNote(for: $0.name) }
-            .filter { !vm.koreanOnly || $0.supportsKorean }
-            .filter { !vm.englishOnly || $0.isNonKoreanText }
+            .filter { vm.scriptFilter.isEmpty || vm.scriptFilter.contains($0.script) }
             .filter { vm.activeTag == nil || memos.tags(for: $0.name).contains(vm.activeTag!) }
     }
 
@@ -126,7 +125,7 @@ struct CenterPanel: View {
 
     private var statsText: String {
         let stats = vm.library.stats
-        return "\(stats.total) fonts · \(stats.korean) Korean · \(stats.english) English"
+        return "\(stats.total) fonts"
     }
 
     @ViewBuilder
@@ -142,7 +141,7 @@ struct CenterPanel: View {
     }
 
     private func pickEmptyStateFont() {
-        let candidates = vm.library.families.filter { $0.supportsLatin && !$0.supportsKorean }
+        let candidates = vm.library.families.filter { $0.script == .latin }
         emptyStateFontName = candidates.randomElement()?.memberFontNames.first
     }
 

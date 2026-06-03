@@ -29,10 +29,7 @@ struct LeftPanel: View {
                                 favoritesOnlyToggle
                                 memoOnlyToggle
                             }
-                            HStack(spacing: 6) {
-                                koreanToggle
-                                englishToggle
-                            }
+                            scriptFilterRows
                         }
                     }
                 }
@@ -135,15 +132,20 @@ struct LeftPanel: View {
         }
     }
 
-    private var koreanToggle: some View {
-        filterPill(label: "Korean", icon: nil, isOn: vm.koreanOnly) {
-            vm.koreanOnly.toggle()
-        }
-    }
-
-    private var englishToggle: some View {
-        filterPill(label: "English", icon: nil, isOn: vm.englishOnly) {
-            vm.englishOnly.toggle()
+    // Six script buckets, two per row, in ScriptCategory order.
+    private var scriptFilterRows: some View {
+        let cats = ScriptCategory.allCases
+        return VStack(spacing: 6) {
+            ForEach(Array(stride(from: 0, to: cats.count, by: 2)), id: \.self) { start in
+                HStack(spacing: 6) {
+                    ForEach(cats[start..<min(start + 2, cats.count)], id: \.self) { category in
+                        filterPill(label: category.label, icon: nil,
+                                   isOn: vm.scriptFilter.contains(category)) {
+                            vm.toggleScript(category)
+                        }
+                    }
+                }
+            }
         }
     }
 

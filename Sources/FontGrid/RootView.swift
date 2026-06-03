@@ -55,8 +55,9 @@ struct RootView: View {
     // App-wide single-key shortcuts (no modifiers, not while editing text):
     //   0–4 → wallpaper (0 = none, 1–4 = Wallpaper01–04)
     //   t   → toggle dark / light theme
-    //   f/m/k/e → toggle the four left-panel filters
-    //   (favorites / memo / korean / english)
+    //   f/m → favorites / memo filter
+    //   k/j/c/l/s/o → toggle script bucket
+    //   (korean / japanese / chinese / latin / symbol / other)
     // Returns true when the key was handled (and should be consumed).
     private func handleShortcut(_ key: String) -> Bool {
         switch key {
@@ -78,11 +79,10 @@ struct RootView: View {
         case "m":
             vm.memoOnly.toggle()
             return true
-        case "k":
-            vm.koreanOnly.toggle()
-            return true
-        case "e":
-            vm.englishOnly.toggle()
+        case "k", "j", "c", "l", "s", "o":
+            if let category = ScriptCategory.allCases.first(where: { $0.shortcutKey == key }) {
+                vm.toggleScript(category)
+            }
             return true
         default:
             return false

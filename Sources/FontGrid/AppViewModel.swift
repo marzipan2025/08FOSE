@@ -26,8 +26,14 @@ final class AppViewModel: ObservableObject {
     @Published var weightFilter: WeightFilter = .all
     @Published var favoritesOnly: Bool = false
     @Published var memoOnly: Bool = false
-    @Published var koreanOnly: Bool = false
-    @Published var englishOnly: Bool = false
+    // Selected script buckets. Empty = no script filter (show all). Multiple
+    // may be on at once (union); combined AND with the other filters.
+    @Published var scriptFilter: Set<ScriptCategory> = []
+
+    func toggleScript(_ category: ScriptCategory) {
+        if scriptFilter.contains(category) { scriptFilter.remove(category) }
+        else { scriptFilter.insert(category) }
+    }
 
     // Active note tag (lowercased, without '#'). nil = no tag filter. Single
     // selection: tapping the active tag again clears it.

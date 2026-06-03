@@ -7,11 +7,13 @@ import CoreText
 enum InfoEntry: Identifiable {
     case field(label: String, value: String)
     case features([String])
+    case scripts([String])
 
     var id: String {
         switch self {
         case .field(let label, _): return label
         case .features: return "__features"
+        case .scripts: return "__scripts"
         }
     }
 }
@@ -55,6 +57,8 @@ struct FontMetadata {
         add("Version", name(font, kCTFontVersionNameKey)?
             .replacingOccurrences(of: "Version ", with: ""))
 
+        entries.append(.scripts(supportedScripts(psName: psName)))
+
         var tags = Set<String>()
         if let gsub = tableBytes(font, "GSUB") { tags.formUnion(featureTags(gsub)) }
         if let gpos = tableBytes(font, "GPOS") { tags.formUnion(featureTags(gpos)) }
@@ -85,6 +89,49 @@ struct FontMetadata {
         guard let s = CTFontCopyName(font, key) as String?, !s.isEmpty else { return nil }
         return s
     }
+
+    // MARK: - Supported scripts (detail readout)
+
+    // Top 3 scripts the font meaningfully covers, in technical terms. Probes a
+    // sample of each script's letters and requires a threshold (so a stray glyph
+    // or two doesn't list a script). Distinctive scripts (Hangul/Kana/Han/Thai…)
+    // rank ahead of Latin/Cyrillic/Greek, which commonly ride along with Latin.
+    static func supportedScripts(psName: String) -> [String] {
+        guard let font = NSFont(name: psName, size: 12) else { return ["Symbol"] }
+        let cs = font.coveredCharacterSet
+        func covers(_ samples: [UInt32], _ need: Int) -> Bool {
+            var hits = 0
+            for v in samples where Unicode.Scalar(v).map({ cs.contains($0) }) == true {
+                hits += 1
+                if hits >= need { return true }
+            }
+            return false
+        }
+        let found = scriptProbes.filter { covers($0.samples, $0.need) }.map { $0.name }
+        return found.isEmpty ? ["Symbol"] : Array(found.prefix(3))
+    }
+
+    // Ordered preference: distinctive scripts first, Latin/Cyrillic/Greek last.
+    private static let scriptProbes: [(name: String, samples: [UInt32], need: Int)] = [
+        ("Hangul", [0xAC00,0xB098,0xB2E4,0xB77C,0xB9C8,0xBC14,0xC0AC,0xC544,0xC790,0xCC28,0xCE74,0xD0C0,0xD30C,0xD558], 10),
+        ("Kana",   [0x3042,0x3044,0x3046,0x3048,0x304A,0x304B,0x304D,0x304F,0x3051,0x3053,0x3055,0x3057,0x3059,0x305B,0x305D], 11),
+        ("Han",    [0x4E00,0x4E8C,0x4E09,0x56DB,0x4E94,0x516D,0x4EBA,0x5927,0x5C0F,0x4E2D,0x5C71,0x5DDD,0x65E5,0x6708,0x6728], 11),
+        ("Arabic", [0x0627,0x0628,0x062A,0x062B,0x062C,0x062D,0x062E,0x062F], 6),
+        ("Hebrew", [0x05D0,0x05D1,0x05D2,0x05D3,0x05D4,0x05D5,0x05D6,0x05D7], 6),
+        ("Thai",   [0x0E01,0x0E02,0x0E04,0x0E07,0x0E08,0x0E09,0x0E0A], 5),
+        ("Devanagari", [0x0905,0x0906,0x0907,0x0908,0x0909,0x0915,0x0916], 5),
+        ("Khmer",  [0x1780,0x1781,0x1782,0x1783,0x1784], 4),
+        ("Lao",    [0x0E81,0x0E82,0x0E84,0x0E87,0x0E88], 4),
+        ("Myanmar",[0x1000,0x1001,0x1002,0x1003,0x1004], 4),
+        ("Tamil",  [0x0B85,0x0B86,0x0B87,0x0B95,0x0B99], 4),
+        ("Tibetan",[0x0F40,0x0F41,0x0F42,0x0F44,0x0F45], 4),
+        ("Georgian",[0x10D0,0x10D1,0x10D2,0x10D3,0x10D4], 4),
+        ("Armenian",[0x0561,0x0562,0x0563,0x0564,0x0565], 4),
+        ("Ethiopic",[0x1200,0x1208,0x1210,0x1218,0x1220], 4),
+        ("Latin",  [0x0041,0x0045,0x0049,0x004F,0x0055,0x0052,0x0053,0x0054,0x004E,0x0047], 8),
+        ("Cyrillic",[0x0410,0x0411,0x0412,0x0413,0x0414,0x0415,0x0416,0x0417,0x0418,0x041A], 8),
+        ("Greek",  [0x0391,0x0392,0x0393,0x0394,0x0395,0x0396,0x0397,0x0398,0x0399,0x039A], 8),
+    ]
 
     // MARK: - Byte readers (big-endian)
 

@@ -211,7 +211,21 @@ struct FontDetailView: View {
                     ForEach(tags, id: \.self) { featureTag($0) }
                 }
             }
+        case .scripts(let names):
+            VStack(alignment: .leading, spacing: 4) {
+                infoLabel("Scripts")
+                FlowLayout(spacing: 8, lineSpacing: 4) {
+                    ForEach(names, id: \.self) { scriptTag($0) }
+                }
+            }
         }
+    }
+
+    // Same blue-italic treatment as feature tags, without the OpenType tooltip.
+    private func scriptTag(_ name: String) -> some View {
+        Text(name)
+            .font(.system(size: 13).italic())
+            .foregroundStyle(Theme.memoAccent)
     }
 
     private func infoLabel(_ text: String) -> some View {
@@ -334,7 +348,7 @@ struct FontDetailView: View {
                             .foregroundStyle(.primary)
                             .lineLimit(1)
                             .minimumScaleFactor(0.4)
-                        if family.supportsKorean {
+                        if family.script == .korean {
                             KoreanBadge(titleSize: 23)
                                 // Sit slightly above the title's vertical centre.
                                 .offset(y: -23 * 0.08)

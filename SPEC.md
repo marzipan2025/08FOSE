@@ -15,12 +15,12 @@ macOS에 설치된 폰트를 그리드로 훑어보고, 미리보기·즐겨찾�
   - `name`: 표시 이름 (CJK 디코딩 적용)
   - `memberFontNames: [String]`: PostScript 이름, weight 오름차순 정렬
   - `weightCount: Int`: 멤버 수 (`memberFontNames.count`)
-  - `supportsKorean: Bool`: 한글 음절 `가`(U+AC00) 커버 여부
-  - `supportsLatin: Bool`: 라틴 `A`(U+0041) 커버 여부
-  - `isSymbolFont: Bool`: 어떤 실제 문자 체계도 커버하지 않음 → 딩벳/심볼/이모지
-  - `isNonKoreanText: Bool` (파생): `!supportsKorean && !isSymbolFont` (= "English" 버킷)
+  - `script: ScriptCategory`: 주력(primary) 스크립트 버킷 — `korean / japanese / chinese / latin / symbol / other`
 - 정렬: `localizedCaseInsensitiveCompare` 오름차순
-- 스크립트 판정: 35개 대표 문자(라틴/그리스/키릴/아랍/히브리/인도계/CJK/한글 등) 중 하나라도 `coveredCharacterSet`에 있으면 텍스트 폰트, 하나도 없으면 심볼 폰트
+- **주력 스크립트 분류(coverage 우선순위)**: 대표 글자 커버로 판정하되 순서가 핵심 —
+  한글(가)→korean / 가나(あ·ア)→japanese / 한자(一)→chinese / 비라틴 고유문자(아랍·태국·인도계 등)→other / 라틴(A)→latin / 키릴·그리스 단독→other / 아무 문자체계도 없음→symbol.
+  한글 폰트가 가나·한자를 품어도 한글 우선이라 korean으로, 라틴 끼고 있는 태국/아랍은 other로 감.
+- 통계 `FontLibraryStats`: `total` + 카테고리별 `counts`
 
 ### CJK family 이름 디코딩 (중요·비자명)
 NSFontManager는 한글 등 비-ASCII family 이름을 `/B9CC/B144/C124/CCB4` 같은 슬래시 구분 16진수 유니코드 스칼라로 반환함. 첫 글자가 `/`이면 split → hex → `Unicode.Scalar` → `Character`로 복원해야 "만년설체"가 보인다. 디코딩 실패 시 원본 유지.
@@ -52,6 +52,7 @@ NSFontManager는 한글 등 비-ASCII family 이름을 `/B9CC/B144/C124/CCB4` �
 - **Version**: name 테이블 (`Version ` 접두 제거)
 - **Features**: GSUB/GPOS FeatureList 태그 합집합 (liga, smcp, ss01…)
 - **Foundry**: name 테이블 manufacturer
+- **Scripts**: 폰트가 의미 있게 덮는 스크립트 상위 3개 (기술 용어, 임계값 적용, 고유 스크립트 우선). 상세에서 Features와 같은 파란 이탤릭 표기
 - **Copyright**: name 테이블 copyright
 
 ---
@@ -91,7 +92,7 @@ NSFontManager는 한글 등 비-ASCII family 이름을 `/B9CC/B144/C124/CCB4` �
 ### 3.2 필터 (좌측 "Filters")
 - **Weights**: `All / 1 / 3+ / 5+` — `.all` / `.exactly(1)` / `.atLeast(3)` / `.atLeast(5)`
 - **Favorites only / Memo only**: 즐겨찾기/메모 보유 family만
-- **Korean / English**: 한글 폰트 / 비한글 텍스트 폰트
+- **Script 버킷**: Korean / Japanese / Chinese / Latin / Symbol / Other (주력 스크립트 기준, 다중 선택 시 합집합)
 - **Tag**: 우측 태그 캡슐로 선택 (단일 토글)
 - 검색·모든 필터·태그는 **AND**로 결합
 
@@ -162,7 +163,8 @@ NSFontManager는 한글 등 비-ASCII family 이름을 `/B9CC/B144/C124/CCB4` �
 
 - **0–4**: Wallpaper (`0` 없음, `1–4` Wallpaper01–04)
 - **t**: 다크 ↔ 라이트 토글
-- **f / m / k / e**: 좌측 패널 네 필터 토글 (Favorites only / Memo only / Korean / English)
+- **f / m**: Favorites only / Memo only 토글
+- **k / j / c / l / s / o**: Script 버킷 토글 (Korean / Japanese / Chinese / Latin / Symbol / Other)
 - **⌘ + ↑ / ↓**: Font Size 증가 / 감소
 - **⌘ + → / ←**: Columns 증가 / 감소 (→ 증가)
 - **← / →** (상세 열림, 입력 비포커스): 이전/다음 폰트

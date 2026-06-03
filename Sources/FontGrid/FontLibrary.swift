@@ -1,25 +1,47 @@
 import AppKit
 import Foundation
 
+// Primary script bucket a font is filed under. Single-select per font (the
+// font's dominant writing system), chosen by the coverage pipeline below.
+enum ScriptCategory: String, CaseIterable, Hashable {
+    case korean, japanese, chinese, latin, symbol, other
+
+    var label: String {
+        switch self {
+        case .korean:   return "Korean"
+        case .japanese: return "Japanese"
+        case .chinese:  return "Chinese"
+        case .latin:    return "Latin"
+        case .symbol:   return "Symbol"
+        case .other:    return "Other"
+        }
+    }
+
+    // Single-key shortcut for toggling this category's filter.
+    var shortcutKey: String {
+        switch self {
+        case .korean:   return "k"
+        case .japanese: return "j"
+        case .chinese:  return "c"
+        case .latin:    return "l"
+        case .symbol:   return "s"
+        case .other:    return "o"
+        }
+    }
+}
+
 struct FontFamily: Identifiable, Hashable {
     let name: String
     let memberFontNames: [String]   // PostScript names sorted by weight (light → heavy)
-    let supportsKorean: Bool        // covers a Hangul syllable (가)
-    let supportsLatin: Bool         // covers a Latin letter (A)
-    let isSymbolFont: Bool          // covers NO real-script letter → dingbat/symbol/emoji
+    let script: ScriptCategory      // primary script bucket
     var weightCount: Int { memberFontNames.count }
     var id: String { name }
-
-    /// A text-bearing font that is not Korean: the "English" filter bucket.
-    /// Includes Latin, Cyrillic, Arabic, Hebrew, Indic, CJK… anything with a
-    /// real orthography, but excludes Hangul fonts and pure symbol/emoji fonts.
-    var isNonKoreanText: Bool { !supportsKorean && !isSymbolFont }
 }
 
 struct FontLibraryStats {
     var total: Int = 0
-    var korean: Int = 0
-    var english: Int = 0
+    var counts: [ScriptCategory: Int] = [:]
+    func count(_ category: ScriptCategory) -> Int { counts[category] ?? 0 }
 }
 
 @MainActor
@@ -50,39 +72,54 @@ final class FontLibrary: ObservableObject {
 
             guard !sortedNames.isEmpty else { return nil }
             let displayName = decodeFontFamilyName(family)
-            let support = Self.scriptSupport(psName: sortedNames[0])
             return FontFamily(
                 name: displayName,
                 memberFontNames: sortedNames,
-                supportsKorean: support.korean,
-                supportsLatin: support.latin,
-                isSymbolFont: support.isSymbol
+                script: Self.classify(psName: sortedNames[0])
             )
         }
         .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-        stats = FontLibraryStats(
-            total: loadedFamilies.count,
-            korean: loadedFamilies.filter { $0.supportsKorean }.count,
-            english: loadedFamilies.filter { $0.isNonKoreanText }.count
-        )
+
+        var counts: [ScriptCategory: Int] = [:]
+        for family in loadedFamilies { counts[family.script, default: 0] += 1 }
+        stats = FontLibraryStats(total: loadedFamilies.count, counts: counts)
         families = loadedFamilies
     }
 
-    // One representative LETTER from every major writing system. A font that
-    // covers at least one of these carries a real orthography; a font that
-    // covers none is a dingbat / symbol / emoji / icon font (e.g. Wingdings,
-    // Zapf Dingbats, Apple Color Emoji, Apple Braille).
-    private static let scriptLetters: [UInt32] = [
-        0x0041, // Latin A
-        0x0391, // Greek Α
-        0x0410, // Cyrillic А
+    // MARK: - Script classification
+    //
+    // Coverage-based "primary script" pick. Order matters: the distinctive
+    // scripts that do NOT normally ride along with Latin are tested before
+    // Latin, so e.g. a Thai or Arabic font (which usually also covers ASCII)
+    // is filed under .other rather than .latin. Cyrillic/Greek DO ride with
+    // Latin, so they're only treated as .other when no Latin is present.
+    private static func classify(psName: String) -> ScriptCategory {
+        guard let font = NSFont(name: psName, size: 12) else { return .other }
+        let cs = font.coveredCharacterSet
+        func has(_ value: UInt32) -> Bool {
+            guard let scalar = Unicode.Scalar(value) else { return false }
+            return cs.contains(scalar)
+        }
+
+        if has(0xAC00) { return .korean }                       // 가 (Hangul syllable)
+        if has(0x3042) || has(0x30A2) { return .japanese }      // あ / ア (kana)
+        if has(0x4E00) { return .chinese }                      // 一 (Han, no kana/hangul)
+        if distinctiveNonLatinScripts.contains(where: { has($0) }) { return .other }
+        if has(0x0041) { return .latin }                        // A
+        if has(0x0391) || has(0x0410) { return .other }         // Greek / Cyrillic only
+        return .symbol                                          // no real-script letters
+    }
+
+    // Representative letters for scripts that generally appear on their own
+    // (not bundled into Latin text fonts). Tested before Latin.
+    private static let distinctiveNonLatinScripts: [UInt32] = [
         0x0531, // Armenian
-        0x05D0, // Hebrew א
-        0x0627, // Arabic ا
+        0x05D0, // Hebrew
+        0x0627, // Arabic
         0x0710, // Syriac
         0x0780, // Thaana
         0x07C0, // NKo
-        0x0905, // Devanagari अ
+        0x0905, // Devanagari
         0x0985, // Bengali
         0x0A05, // Gurmukhi
         0x0A85, // Gujarati
@@ -92,34 +129,16 @@ final class FontLibrary: ObservableObject {
         0x0C85, // Kannada
         0x0D05, // Malayalam
         0x0D85, // Sinhala
-        0x0E01, // Thai
-        0x0E81, // Lao
         0x0F40, // Tibetan
         0x1000, // Myanmar
         0x10A0, // Georgian
-        0x1100, // Hangul jamo ㄱ (conjoining)
         0x1200, // Ethiopic
         0x13A0, // Cherokee
         0x1700, // Tagalog
         0x1780, // Khmer
         0x1820, // Mongolian
         0x1BC0, // Batak
-        0x3042, // Hiragana あ
-        0x30A2, // Katakana ア
-        0x4E00, // CJK 一
-        0xAC00, // Hangul syllable 가
     ]
-
-    private static func scriptSupport(psName: String) -> (korean: Bool, latin: Bool, isSymbol: Bool) {
-        guard let font = NSFont(name: psName, size: 12) else {
-            return (false, false, false)
-        }
-        let cs = font.coveredCharacterSet
-        let korean = cs.contains(Unicode.Scalar(0xAC00)!)   // 가
-        let latin = cs.contains(Unicode.Scalar(0x0041)!)    // A
-        let hasLetter = scriptLetters.contains { cs.contains(Unicode.Scalar($0)!) }
-        return (korean, latin, isSymbol: !hasLetter)
-    }
 
     // NSFontManager returns Korean (and some other) font family names as
     // slash-separated hex Unicode scalar values, e.g. "/B9CC/B144/C124/CCB4"
