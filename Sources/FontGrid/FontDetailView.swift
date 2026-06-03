@@ -73,13 +73,6 @@ struct FontDetailView: View {
         .onTapGesture {
             NSApp.keyWindow?.makeFirstResponder(nil)
         }
-        .onExitCommand {
-            if memoExpanded {
-                withAnimation(.easeOut(duration: 0.2)) { memoExpanded = false }
-            } else {
-                onClose()
-            }
-        }
         .task(id: family.id) {
             infoExpanded = false
             memoExpanded = false

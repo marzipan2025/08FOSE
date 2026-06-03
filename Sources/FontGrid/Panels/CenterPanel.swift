@@ -205,14 +205,7 @@ struct CenterPanel: View {
             .padding(.top, Theme.gridPadding)
             .padding(.bottom, 67)
             .background(
-                EscapeKeyHandler(
-                    onEscape: {
-                        withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
-                            vm.selectedFamily = nil
-                        }
-                    },
-                    onStep: { stepDetail($0) }
-                )
+                DetailArrowKeyHandler(onStep: { stepDetail($0) })
             )
             .zIndex(30)
         }
@@ -394,11 +387,10 @@ private struct HoverShadow: View {
     }
 }
 
-// Key handling while the detail view is open: ESC closes it, ←/→ step to the
-// previous/next font. Arrow keys are ignored when a text field is being edited
-// (so the preview bar / memo editor keep normal cursor movement).
-private struct EscapeKeyHandler: NSViewRepresentable {
-    let onEscape: () -> Void
+// ←/→ navigation while the detail view is open: step to the previous/next
+// font. Ignored when a text field is being edited (so the preview bar / memo
+// editor keep normal cursor movement). ESC is handled globally in RootView.
+private struct DetailArrowKeyHandler: NSViewRepresentable {
     var onStep: (Int) -> Void = { _ in }
 
     func makeNSView(context: Context) -> NSView {
@@ -411,7 +403,7 @@ private struct EscapeKeyHandler: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
-        context.coordinator.update(onEscape: onEscape, onStep: onStep)
+        context.coordinator.onStep = onStep
     }
 
     static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
@@ -419,21 +411,14 @@ private struct EscapeKeyHandler: NSViewRepresentable {
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onEscape: onEscape, onStep: onStep)
+        Coordinator(onStep: onStep)
     }
 
     final class Coordinator {
-        private var onEscape: () -> Void
-        private var onStep: (Int) -> Void
+        var onStep: (Int) -> Void
         private var monitor: Any?
 
-        init(onEscape: @escaping () -> Void, onStep: @escaping (Int) -> Void) {
-            self.onEscape = onEscape
-            self.onStep = onStep
-        }
-
-        func update(onEscape: @escaping () -> Void, onStep: @escaping (Int) -> Void) {
-            self.onEscape = onEscape
+        init(onStep: @escaping (Int) -> Void) {
             self.onStep = onStep
         }
 
@@ -441,8 +426,6 @@ private struct EscapeKeyHandler: NSViewRepresentable {
             guard monitor == nil else { return }
             monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
                 guard let self else { return event }
-                // ESC
-                if event.keyCode == 53 { self.onEscape(); return nil }
                 // ←(123) / →(124)
                 guard event.keyCode == 123 || event.keyCode == 124 else { return event }
                 // Let text editing keep arrow keys (cursor movement).

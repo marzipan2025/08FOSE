@@ -41,10 +41,182 @@ struct RootView: View {
         .overlay { WallpaperOverlay(name: vm.wallpaper) }
         .background(Theme.panelBackground.ignoresSafeArea())
         .background(InitialFocusClearer())
+        .background(GlobalShortcutHandler(
+            onKey: handleShortcut,
+            onCloseDetail: closeDetailIfOpen,
+            onCommandArrow: handleCommandArrow
+        ))
         .environmentObject(vm)
         .environmentObject(favorites)
         .environmentObject(memos)
         .preferredColorScheme(vm.isLightMode ? .light : .dark)
+    }
+
+    // App-wide single-key shortcuts (no modifiers, not while editing text):
+    //   0–4 → wallpaper (0 = none, 1–4 = Wallpaper01–04)
+    //   t   → toggle dark / light theme
+    //   f/m/k/e → toggle the four left-panel filters
+    //   (favorites / memo / korean / english)
+    // Returns true when the key was handled (and should be consumed).
+    private func handleShortcut(_ key: String) -> Bool {
+        switch key {
+        case "0":
+            vm.wallpaper = ""
+            return true
+        case "1", "2", "3", "4":
+            let index = Int(key)! - 1
+            if index < AppViewModel.wallpapers.count {
+                vm.wallpaper = AppViewModel.wallpapers[index]
+            }
+            return true
+        case "t":
+            vm.isLightMode.toggle()
+            return true
+        case "f":
+            vm.favoritesOnly.toggle()
+            return true
+        case "m":
+            vm.memoOnly.toggle()
+            return true
+        case "k":
+            vm.koreanOnly.toggle()
+            return true
+        case "e":
+            vm.englishOnly.toggle()
+            return true
+        default:
+            return false
+        }
+    }
+
+    // ⌘ + arrows: ↑/↓ adjust Font Size, →/← adjust Columns (→ increases).
+    // Returns true when handled.
+    private func handleCommandArrow(_ keyCode: Int) -> Bool {
+        switch keyCode {
+        case 126: adjustFontSize(+1); return true   // up
+        case 125: adjustFontSize(-1); return true   // down
+        case 124: adjustColumns(+1); return true    // right
+        case 123: adjustColumns(-1); return true    // left
+        default: return false
+        }
+    }
+
+    private func adjustFontSize(_ delta: Double) {
+        let range = AppViewModel.previewOffsetRange
+        vm.previewSizeOffset = min(max(range.lowerBound, vm.previewSizeOffset + delta), range.upperBound)
+    }
+
+    private func adjustColumns(_ delta: Int) {
+        let maxC = max(1, vm.maxColumns)
+        vm.columnCount = min(max(1, vm.columnCount + delta), maxC)
+    }
+
+    // ESC cascade step: close the detail overlay if it's open. Returns true when
+    // it actually closed something (so the key is consumed for that press).
+    private func closeDetailIfOpen() -> Bool {
+        guard vm.selectedFamily != nil else { return false }
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+            vm.selectedFamily = nil
+        }
+        return true
+    }
+}
+
+// App-wide key monitor.
+//
+// ESC runs a one-step-per-press cascade (independent of text-editing state):
+//   1. a text field is being edited → blur it
+//   2. the detail overlay is open    → close it (via onCloseDetail)
+//   3. the window is fullscreen      → exit fullscreen
+//
+// Plain letter/number keys (no ⌘/⌥/⌃) are routed to `onKey`, but only when no
+// text field is being edited so search / memo / preview keep normal typing.
+// Both callbacks return true to consume the event.
+private struct GlobalShortcutHandler: NSViewRepresentable {
+    let onKey: (String) -> Bool
+    let onCloseDetail: () -> Bool
+    let onCommandArrow: (Int) -> Bool
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(frame: .zero)
+        context.coordinator.install()
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.onKey = onKey
+        context.coordinator.onCloseDetail = onCloseDetail
+        context.coordinator.onCommandArrow = onCommandArrow
+    }
+
+    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
+        coordinator.uninstall()
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onKey: onKey, onCloseDetail: onCloseDetail, onCommandArrow: onCommandArrow)
+    }
+
+    final class Coordinator {
+        var onKey: (String) -> Bool
+        var onCloseDetail: () -> Bool
+        var onCommandArrow: (Int) -> Bool
+        private var monitor: Any?
+
+        init(onKey: @escaping (String) -> Bool,
+             onCloseDetail: @escaping () -> Bool,
+             onCommandArrow: @escaping (Int) -> Bool) {
+            self.onKey = onKey
+            self.onCloseDetail = onCloseDetail
+            self.onCommandArrow = onCommandArrow
+        }
+
+        func install() {
+            guard monitor == nil else { return }
+            monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                guard let self else { return event }
+
+                // ESC cascade.
+                if event.keyCode == 53 {
+                    if let window = event.window, window.firstResponder is NSText {
+                        window.makeFirstResponder(nil)
+                        return nil
+                    }
+                    if self.onCloseDetail() { return nil }
+                    if let window = event.window, window.styleMask.contains(.fullScreen) {
+                        window.toggleFullScreen(nil)
+                        return nil
+                    }
+                    return event
+                }
+
+                let mods = event.modifierFlags.intersection([.command, .option, .control])
+
+                // ⌘ + arrows: Font Size (↑/↓) and Columns (←/→). Skipped while
+                // editing text so ⌘-arrow keeps its text-navigation meaning.
+                if mods == [.command] {
+                    if event.window?.firstResponder is NSText { return event }
+                    if self.onCommandArrow(Int(event.keyCode)) { return nil }
+                    return event
+                }
+
+                // Plain letter/number shortcuts.
+                if event.window?.firstResponder is NSText { return event }
+                if !mods.isEmpty { return event }
+                guard let key = event.charactersIgnoringModifiers?.lowercased(),
+                      self.onKey(key) else { return event }
+                return nil
+            }
+        }
+
+        func uninstall() {
+            if let monitor {
+                NSEvent.removeMonitor(monitor)
+                self.monitor = nil
+            }
+        }
+
+        deinit { uninstall() }
     }
 }
 
