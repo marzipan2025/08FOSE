@@ -410,6 +410,8 @@ private struct FontGridScroll: View {
                 family: family,
                 previewText: previewText,
                 fontSize: vm.gridFontSize,
+                // Suppress memo tooltips while the Settings blur covers the grid.
+                tooltipSuppressed: vm.showSettings,
                 onHoverChange: { isHovering in
                     if isHovering {
                         hoveredFamilyID = family.id

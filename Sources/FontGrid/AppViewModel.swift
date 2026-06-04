@@ -54,6 +54,15 @@ final class AppViewModel: ObservableObject {
     @Published var maxColumns: Int = 6
     @Published var previewSizeOffset: Double = 0
 
+    // Drives the full-window Settings overlay (see SettingsView).
+    @Published var showSettings: Bool = false
+    // Settings → Data "Clear All" confirmation dialogs. Kept here (not in the
+    // view) so the ESC key cascade can tell when a confirmation is open and let
+    // ESC dismiss only the dialog instead of closing the whole Settings modal.
+    @Published var confirmClearFavorites: Bool = false
+    @Published var confirmClearMemos: Bool = false
+    var isPresentingConfirm: Bool { confirmClearFavorites || confirmClearMemos }
+
     // Wallpaper "skins" — bundled under Resources/Wallpapers/. The picker writes
     // a logical name (e.g. "Wallpaper02"); WallpaperOverlay resolves the actual
     // file based on the current appearance (Wallpaper02.webp dark vs

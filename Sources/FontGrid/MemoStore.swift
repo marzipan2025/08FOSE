@@ -26,6 +26,12 @@ final class MemoStore: ObservableObject {
         UserDefaults.standard.set(notes, forKey: key)
     }
 
+    /// Remove every memo. Used by Settings → Data.
+    func clearAll() {
+        notes.removeAll()
+        UserDefaults.standard.set(notes, forKey: key)
+    }
+
     // MARK: - Tags
 
     /// Tags in a single note: tokens beginning with '#', taken up to the next

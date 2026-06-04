@@ -27,6 +27,13 @@ final class FavoritesStore: ObservableObject {
         UserDefaults.standard.set(ordered, forKey: key)
     }
 
+    /// Remove every favorite. Used by Settings → Data.
+    func clearAll() {
+        ordered.removeAll()
+        nameSet.removeAll()
+        UserDefaults.standard.set(ordered, forKey: key)
+    }
+
     /// Alphabetical (가나다 / A–Z).
     var sorted: [String] {
         ordered.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }

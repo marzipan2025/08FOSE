@@ -4,6 +4,7 @@ struct LeftPanel: View {
     @EnvironmentObject var vm: AppViewModel
     @EnvironmentObject var favorites: FavoritesStore
     @FocusState private var searchFocused: Bool
+    @State private var settingsHovering = false
 
     private let weightOptions: [(label: String, value: WeightFilter)] = [
         ("All", .all), ("1", .exactly(1)), ("3+", .atLeast(3)), ("5+", .atLeast(5))
@@ -11,52 +12,79 @@ struct LeftPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // Fixed top: search.
             PanelSection {
                 searchField
             }
 
             PanelHDivider()
 
-            PanelSection("Filters") {
-                VStack(alignment: .leading, spacing: 14) {
-                    weightFilterSection
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Sortings")
-                            .font(.system(size: Theme.smallSize))
-                            .foregroundStyle(.secondary)
-                        VStack(spacing: 6) {
-                            HStack(spacing: 6) {
-                                favoritesOnlyToggle
-                                memoOnlyToggle
-                            }
-                            scriptFilterRows
+            // Scrollable middle: grows as more controls are added without
+            // pushing the Settings footer off-screen.
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    PanelSection("Filters") {
+                        VStack(alignment: .leading, spacing: 14) {
+                            weightFilterSection
+                            collectionsSection
+                            scriptsSection
+                        }
+                    }
+
+                    PanelHDivider()
+
+                    PanelSection("Layout") {
+                        VStack(alignment: .leading, spacing: 14) {
+                            columnSlider
+                            fontSizeSlider
+                        }
+                    }
+
+                    PanelHDivider()
+
+                    PanelSection("Appearance") {
+                        VStack(alignment: .leading, spacing: 14) {
+                            themePicker
+                            wallpaperPicker
                         }
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
 
+            // Fixed bottom: Settings entry. Mirrors the right panel's version
+            // footer (divider above, same height).
             PanelHDivider()
-
-            PanelSection("Layout") {
-                VStack(alignment: .leading, spacing: 14) {
-                    columnSlider
-                    fontSizeSlider
-                }
-            }
-
-            PanelHDivider()
-
-            PanelSection("Appearance") {
-                VStack(alignment: .leading, spacing: 14) {
-                    themePicker
-                    wallpaperPicker
-                }
-            }
-
-            Spacer(minLength: 0)
+            settingsFooter
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.sidebarBackground.ignoresSafeArea())
+    }
+
+    // MARK: - Settings footer
+
+    private var settingsFooter: some View {
+        Button {
+            vm.showSettings = true
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "gearshape")
+                    .font(.system(size: Theme.bodySize))
+                Text("Settings")
+                    .font(.system(size: Theme.smallSize))
+            }
+            .foregroundStyle(settingsHovering ? Theme.accent : Color.secondary)
+            .padding(.horizontal, Theme.panelHPadding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            // 44 = old 36 + 8: lifts the divider 8px and centers the content in
+            // the taller footer region; nudged up 2px.
+            .frame(height: 44)
+            .offset(y: -2)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .onHover { settingsHovering = $0 }
     }
 
     // MARK: - Search
@@ -106,6 +134,30 @@ struct LeftPanel: View {
                     }
                 }
             }
+        }
+    }
+
+    // Favorites / Memo filters, pulled out of the old "Sortings" group into
+    // their own labeled section.
+    private var collectionsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Collections")
+                .font(.system(size: Theme.smallSize))
+                .foregroundStyle(.secondary)
+            HStack(spacing: 6) {
+                favoritesOnlyToggle
+                memoOnlyToggle
+            }
+        }
+    }
+
+    // The six script buckets, labeled "Scripts".
+    private var scriptsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Scripts")
+                .font(.system(size: Theme.smallSize))
+                .foregroundStyle(.secondary)
+            scriptFilterRows
         }
     }
 

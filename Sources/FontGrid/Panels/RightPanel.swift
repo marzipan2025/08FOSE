@@ -59,7 +59,11 @@ struct RightPanel: View {
             .foregroundStyle(.tertiary)
             .padding(.horizontal, Theme.panelHPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(height: 36)
+            // 44 = old 36 + 8: lifts the divider 8px and centers the text in the
+            // taller footer region (matches the left panel's Settings footer);
+            // nudged up 3px.
+            .frame(height: 44)
+            .offset(y: -3)
     }
 
     // MARK: - Tags
@@ -175,7 +179,7 @@ struct RightPanel: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 2) {
                 ForEach(displayedFavorites, id: \.self) { name in
-                    FavoriteRow(name: name) {
+                    FavoriteRow(name: name, tooltipSuppressed: vm.showSettings) {
                         if let family = vm.library.families.first(where: { $0.name == name }) {
                             vm.detailSource = .favorites
                             if vm.selectedFamily == nil {
@@ -238,6 +242,7 @@ struct TagCapsule: View {
 
 struct FavoriteRow: View {
     let name: String
+    var tooltipSuppressed: Bool = false
     let onSelect: () -> Void
     @EnvironmentObject var favorites: FavoritesStore
     @EnvironmentObject var memos: MemoStore
@@ -316,6 +321,8 @@ struct FavoriteRow: View {
     // Hover tooltip: the memo text (up to 16 chars) when one exists, else empty.
     // Tag '#' markers are dropped so tooltips read like the tag capsules.
     private var memoTooltip: String {
+        // No tooltip while it would be hidden behind the Settings blur.
+        guard !tooltipSuppressed else { return "" }
         let note = memos.note(for: name).replacingOccurrences(of: "#", with: "")
         guard !note.isEmpty else { return "" }
         return note.count > 16 ? String(note.prefix(16)) + "…" : note

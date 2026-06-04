@@ -39,11 +39,23 @@ struct RootView: View {
         // by vm.wallpaper. Image, blend mode and opacity are all picked inside
         // WallpaperOverlay based on the current colorScheme.
         .overlay { WallpaperOverlay(name: vm.wallpaper) }
+        // Full-window Settings modal, above everything including the wallpaper.
+        .overlay {
+            if vm.showSettings {
+                // Blur is full-window, but the settings content + close button
+                // are confined to the center panel column (dividers are 1pt).
+                SettingsOverlay(leftInset: leftWidth + 1, rightInset: rightWidth + 1)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.18), value: vm.showSettings)
         .background(Theme.panelBackground.ignoresSafeArea())
         .background(InitialFocusClearer())
         .background(GlobalShortcutHandler(
             onKey: handleShortcut,
             onCloseDetail: closeDetailIfOpen,
+            onCloseSettings: closeSettingsIfOpen,
+            onToggleSettings: toggleSettings,
             onCommandArrow: handleCommandArrow
         ))
         .environmentObject(vm)
@@ -61,6 +73,13 @@ struct RootView: View {
     //   (korean / japanese / chinese / latin / symbol / other)
     // Returns true when the key was handled (and should be consumed).
     private func handleShortcut(_ key: String) -> Bool {
+        // While the Settings modal is open, only theme (t) and wallpaper (0–4)
+        // stay live so they can be previewed; other shortcuts are swallowed so
+        // they don't silently mutate filters behind the blur. ESC is handled
+        // separately in the key cascade.
+        if vm.showSettings && !["t", "0", "1", "2", "3", "4"].contains(key) {
+            return false
+        }
         switch key {
         case "0":
             vm.wallpaper = ""
@@ -96,6 +115,7 @@ struct RootView: View {
     // ⌘ + arrows: ↑/↓ adjust Font Size, →/← adjust Columns (→ increases).
     // Returns true when handled.
     private func handleCommandArrow(_ keyCode: Int) -> Bool {
+        if vm.showSettings { return false }
         switch keyCode {
         case 126: adjustFontSize(+1); return true   // up
         case 125: adjustFontSize(-1); return true   // down
@@ -124,14 +144,32 @@ struct RootView: View {
         }
         return true
     }
+
+    // ESC cascade step: close the Settings modal if it's open. Returns true
+    // when it actually closed something.
+    private func closeSettingsIfOpen() -> Bool {
+        guard vm.showSettings else { return false }
+        // A Clear All confirmation is open: let ESC fall through so it dismisses
+        // only the dialog, keeping Settings open.
+        if vm.isPresentingConfirm { return false }
+        withAnimation(.easeOut(duration: 0.18)) { vm.showSettings = false }
+        return true
+    }
+
+    // ⌘, toggles the Settings modal (the standard macOS settings shortcut).
+    private func toggleSettings() -> Bool {
+        withAnimation(.easeOut(duration: 0.18)) { vm.showSettings.toggle() }
+        return true
+    }
 }
 
 // App-wide key monitor.
 //
 // ESC runs a one-step-per-press cascade (independent of text-editing state):
 //   1. a text field is being edited → blur it
-//   2. the detail overlay is open    → close it (via onCloseDetail)
-//   3. the window is fullscreen      → exit fullscreen
+//   2. the Settings modal is open    → close it (via onCloseSettings)
+//   3. the detail overlay is open    → close it (via onCloseDetail)
+//   4. the window is fullscreen      → exit fullscreen
 //
 // Plain letter/number keys (no ⌘/⌥/⌃) are routed to `onKey`, but only when no
 // text field is being edited so search / memo / preview keep normal typing.
@@ -139,6 +177,8 @@ struct RootView: View {
 private struct GlobalShortcutHandler: NSViewRepresentable {
     let onKey: (String) -> Bool
     let onCloseDetail: () -> Bool
+    let onCloseSettings: () -> Bool
+    let onToggleSettings: () -> Bool
     let onCommandArrow: (Int) -> Bool
 
     func makeNSView(context: Context) -> NSView {
@@ -150,6 +190,8 @@ private struct GlobalShortcutHandler: NSViewRepresentable {
     func updateNSView(_ nsView: NSView, context: Context) {
         context.coordinator.onKey = onKey
         context.coordinator.onCloseDetail = onCloseDetail
+        context.coordinator.onCloseSettings = onCloseSettings
+        context.coordinator.onToggleSettings = onToggleSettings
         context.coordinator.onCommandArrow = onCommandArrow
     }
 
@@ -158,20 +200,30 @@ private struct GlobalShortcutHandler: NSViewRepresentable {
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onKey: onKey, onCloseDetail: onCloseDetail, onCommandArrow: onCommandArrow)
+        Coordinator(onKey: onKey,
+                    onCloseDetail: onCloseDetail,
+                    onCloseSettings: onCloseSettings,
+                    onToggleSettings: onToggleSettings,
+                    onCommandArrow: onCommandArrow)
     }
 
     final class Coordinator {
         var onKey: (String) -> Bool
         var onCloseDetail: () -> Bool
+        var onCloseSettings: () -> Bool
+        var onToggleSettings: () -> Bool
         var onCommandArrow: (Int) -> Bool
         private var monitor: Any?
 
         init(onKey: @escaping (String) -> Bool,
              onCloseDetail: @escaping () -> Bool,
+             onCloseSettings: @escaping () -> Bool,
+             onToggleSettings: @escaping () -> Bool,
              onCommandArrow: @escaping (Int) -> Bool) {
             self.onKey = onKey
             self.onCloseDetail = onCloseDetail
+            self.onCloseSettings = onCloseSettings
+            self.onToggleSettings = onToggleSettings
             self.onCommandArrow = onCommandArrow
         }
 
@@ -186,6 +238,7 @@ private struct GlobalShortcutHandler: NSViewRepresentable {
                         window.makeFirstResponder(nil)
                         return nil
                     }
+                    if self.onCloseSettings() { return nil }
                     if self.onCloseDetail() { return nil }
                     if let window = event.window, window.styleMask.contains(.fullScreen) {
                         window.toggleFullScreen(nil)
@@ -196,9 +249,15 @@ private struct GlobalShortcutHandler: NSViewRepresentable {
 
                 let mods = event.modifierFlags.intersection([.command, .option, .control])
 
-                // ⌘ + arrows: Font Size (↑/↓) and Columns (←/→). Skipped while
-                // editing text so ⌘-arrow keeps its text-navigation meaning.
+                // ⌘ + key combos.
                 if mods == [.command] {
+                    // ⌘, toggles Settings (standard macOS shortcut). Works even
+                    // while editing text, like the system Settings shortcut.
+                    if event.charactersIgnoringModifiers == "," {
+                        if self.onToggleSettings() { return nil }
+                    }
+                    // ⌘ + arrows: Font Size (↑/↓) and Columns (←/→). Skipped
+                    // while editing text so ⌘-arrow keeps its navigation meaning.
                     if event.window?.firstResponder is NSText { return event }
                     if self.onCommandArrow(Int(event.keyCode)) { return nil }
                     return event

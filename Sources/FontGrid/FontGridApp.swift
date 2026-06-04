@@ -163,6 +163,7 @@ struct FontGridApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                .frame(minWidth: 880, minHeight: 640)
         }
         .windowStyle(.titleBar)
         .defaultSize(width: 1280, height: 860)
