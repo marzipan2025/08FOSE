@@ -55,6 +55,7 @@ struct RootView: View {
     // App-wide single-key shortcuts (no modifiers, not while editing text):
     //   0–4 → wallpaper (0 = none, 1–4 = Wallpaper01–04)
     //   t   → toggle dark / light theme
+    //   w   → cycle Weights filter (All → 1 → 3+ → 5+ → All)
     //   f/m → favorites / memo filter
     //   k/j/c/l/s/o → toggle script bucket
     //   (korean / japanese / chinese / latin / symbol / other)
@@ -72,6 +73,9 @@ struct RootView: View {
             return true
         case "t":
             vm.isLightMode.toggle()
+            return true
+        case "w":
+            vm.cycleWeightFilter()
             return true
         case "f":
             vm.favoritesOnly.toggle()
@@ -255,7 +259,7 @@ struct WallpaperOverlay: View {
     // wallpaper not listed (additive/lighten modes blow out against a bright
     // background, so .multiply is the sane default).
     private static let lightBlendModes: [String: BlendMode] = [
-        "Wallpaper01": .multiply,
+        "Wallpaper01": .darken,
         "Wallpaper02": .multiply,
         "Wallpaper03": .overlay,
         "Wallpaper04": .multiply

@@ -35,6 +35,17 @@ final class AppViewModel: ObservableObject {
         else { scriptFilter.insert(category) }
     }
 
+    // Canonical order of the Weights filter chips (All → 1 → 3+ → 5+), shared
+    // by the LeftPanel chips and the `w` shortcut so they stay in sync.
+    static let weightFilterCycle: [WeightFilter] = [.all, .exactly(1), .atLeast(3), .atLeast(5)]
+
+    // Advance the weight filter one step through weightFilterCycle, wrapping
+    // back to .all. Bound to the `w` shortcut.
+    func cycleWeightFilter() {
+        let idx = Self.weightFilterCycle.firstIndex(of: weightFilter) ?? 0
+        weightFilter = Self.weightFilterCycle[(idx + 1) % Self.weightFilterCycle.count]
+    }
+
     // Active note tag (lowercased, without '#'). nil = no tag filter. Single
     // selection: tapping the active tag again clears it.
     @Published var activeTag: String? = nil
