@@ -293,7 +293,10 @@ struct FavoriteRow: View {
                     .foregroundStyle(Color.primary.opacity(0.8))
                     .lineLimit(1)
                     .truncationMode(.tail)
-                    .frame(height: 25, alignment: .center)
+                    // 34: extra headroom top and bottom so tall scripts (e.g.
+                    // Hangul, incl. fallback-font glyphs) aren't clipped, font
+                    // size unchanged.
+                    .frame(height: 34, alignment: .center)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .clipped()
                     .offset(y: -3)
@@ -319,7 +322,8 @@ struct FavoriteRow: View {
         // Top margin matches the horizontal margin so the favorite dot sits the
         // same distance from the top edge as from the right edge.
         .padding(.top, 10)
-        .frame(height: 56, alignment: .top)
+        // 65: grows with the taller sample area above.
+        .frame(height: 65, alignment: .top)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(hovering ? Theme.rowHoverFill : .clear)

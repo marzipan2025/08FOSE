@@ -77,7 +77,11 @@ struct SettingsOverlay: View {
             VStack(alignment: .leading, spacing: 32) {
                 Text("Settings")
                     .font(.system(size: SettingsType.title, weight: .bold))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(Theme.accent)
+                    // Optical alignment: large bold glyphs have more apparent
+                    // left side-bearing, so nudge just the title left by 2pt
+                    // to sit flush with the section labels below.
+                    .offset(x: -2)
                 dataSection
                 aboutSection
                 shortcutsSection

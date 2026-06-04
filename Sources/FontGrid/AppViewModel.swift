@@ -116,7 +116,7 @@ final class AppViewModel: ObservableObject {
 
     static let gridBaseFontSize: Double = 28
     static let weightRowBaseFontSize: Double = 40
-    static let previewOffsetRange: ClosedRange<Double> = -8...20
+    static let previewOffsetRange: ClosedRange<Double> = -10...30
 
     var gridFontSize: Double { Self.gridBaseFontSize + previewSizeOffset }
     var weightRowFontSize: Double { Self.weightRowBaseFontSize + previewSizeOffset }
