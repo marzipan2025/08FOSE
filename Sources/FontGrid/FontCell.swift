@@ -268,7 +268,10 @@ final class PreviewTextView: NSView {
 
         var ascent: CGFloat = 0, descent: CGFloat = 0, leading: CGFloat = 0
         CTLineGetTypographicBounds(line, &ascent, &descent, &leading)
-        let baselineY = (bounds.height - (ascent + descent)) / 2 + descent
+        // Centred baseline, then nudged up 4pt (non-flipped view: +y is up). Pure
+        // draw-time offset — the frame/layout is unchanged, the glyphs just sit
+        // 4pt higher within their breathing room (top slack absorbs it, no clip).
+        let baselineY = (bounds.height - (ascent + descent)) / 2 + descent + 4
         ctx.textPosition = CGPoint(x: 0, y: baselineY)
         CTLineDraw(line, ctx)
     }
