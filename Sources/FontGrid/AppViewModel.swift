@@ -61,7 +61,8 @@ final class AppViewModel: ObservableObject {
     // ESC dismiss only the dialog instead of closing the whole Settings modal.
     @Published var confirmClearFavorites: Bool = false
     @Published var confirmClearMemos: Bool = false
-    var isPresentingConfirm: Bool { confirmClearFavorites || confirmClearMemos }
+    @Published var confirmReset: Bool = false
+    var isPresentingConfirm: Bool { confirmClearFavorites || confirmClearMemos || confirmReset }
 
     // Wallpaper "skins" — bundled under Resources/Wallpapers/. The picker writes
     // a logical name (e.g. "Wallpaper02"); WallpaperOverlay resolves the actual
@@ -129,5 +130,34 @@ final class AppViewModel: ObservableObject {
 
     init() {
         self.library = FontLibrary()
+    }
+
+    // Wipe ALL persisted state and return every in-memory setting to its
+    // first-launch default. Favorites/memos are cleared by their own stores
+    // (see SettingsView.resetEverything); this handles the view-model's own
+    // persisted keys (wallpaper, theme, sort order) and live UI state.
+    func resetToDefaults() {
+        // Remove the entire app defaults domain (wallpaper, theme, sort order,
+        // preview text, favorites/memos keys, the saved window frame, …).
+        if let bundleID = Bundle.main.bundleIdentifier {
+            UserDefaults.standard.removePersistentDomain(forName: bundleID)
+        }
+        // Restore live published state to defaults so the UI updates without a
+        // relaunch. The didSet observers re-write these default values.
+        darkWallpaper = ""
+        lightWallpaper = ""
+        isLightMode = false
+        favoritesByRecent = false
+        columnCount = 4
+        maxColumns = 6
+        previewSizeOffset = 0
+        activeTag = nil
+        weightFilter = .all
+        favoritesOnly = false
+        memoOnly = false
+        scriptFilter = []
+        searchQuery = ""
+        selectedFamily = nil
+        detailSource = .grid
     }
 }

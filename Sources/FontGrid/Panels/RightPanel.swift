@@ -26,7 +26,7 @@ struct RightPanel: View {
                 Group {
                     if favorites.ordered.isEmpty {
                         VStack(alignment: .leading, spacing: 0) {
-                            Text("No favorites yet.\nHover a font card and tap the dot to add one.")
+                            Text("No favorites yet.")
                                 .font(.system(size: Theme.smallSize))
                                 .foregroundStyle(.tertiary)
                                 .fixedSize(horizontal: false, vertical: true)

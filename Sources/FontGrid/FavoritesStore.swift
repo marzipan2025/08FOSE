@@ -34,6 +34,19 @@ final class FavoritesStore: ObservableObject {
         UserDefaults.standard.set(ordered, forKey: key)
     }
 
+    /// Union an imported list into the current favorites, preserving existing
+    /// order and appending only names not already present. Used by import.
+    func merge(_ names: [String]) {
+        for name in names where !nameSet.contains(name) {
+            ordered.append(name)
+            nameSet.insert(name)
+        }
+        UserDefaults.standard.set(ordered, forKey: key)
+    }
+
+    /// Snapshot for export (recency order, oldest → newest).
+    var exportList: [String] { ordered }
+
     /// Alphabetical (가나다 / A–Z).
     var sorted: [String] {
         ordered.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }

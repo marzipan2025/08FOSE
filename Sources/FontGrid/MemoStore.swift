@@ -32,6 +32,25 @@ final class MemoStore: ObservableObject {
         UserDefaults.standard.set(notes, forKey: key)
     }
 
+    /// Merge imported memos into the current set. For each font: if there is no
+    /// existing memo, take the imported one; if they are identical, keep one;
+    /// if they differ, append the imported note after the existing one (a
+    /// space separates them so tags stay distinct tokens — duplicates allowed).
+    func merge(_ incoming: [String: String]) {
+        for (name, incomingNote) in incoming where !incomingNote.isEmpty {
+            let existing = notes[name] ?? ""
+            if existing.isEmpty {
+                notes[name] = incomingNote
+            } else if existing != incomingNote {
+                notes[name] = existing + " " + incomingNote
+            }
+        }
+        UserDefaults.standard.set(notes, forKey: key)
+    }
+
+    /// Snapshot for export.
+    var exportMap: [String: String] { notes }
+
     // MARK: - Tags
 
     /// Tags in a single note: tokens beginning with '#', taken up to the next

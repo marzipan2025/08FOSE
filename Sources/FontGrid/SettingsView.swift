@@ -1,4 +1,6 @@
 import SwiftUI
+import AppKit
+import UniformTypeIdentifiers
 
 // Font sizes for the Settings screen — the app's base sizes scaled up 50%
 // (rounded to whole points) since this is a focused, full-screen surface.
@@ -7,6 +9,18 @@ private enum SettingsType {
     static let sectionHeader: CGFloat = 18
     static let body: CGFloat = 14
     static let small: CGFloat = 14
+}
+
+// On-disk shape of an export. JSON keyed by font family name, so it imports
+// cleanly on a Mac with a different font set — entries whose font is missing
+// are simply kept and ignored until that font appears. `version` lets the
+// format evolve without breaking older/newer files.
+struct ExportData: Codable {
+    var format: String = "08fose-export"
+    var version: Int = 1
+    var exportedAt: Date = Date()
+    var favorites: [String]
+    var memos: [String: String]
 }
 
 // Full-window Settings overlay: a blurred backdrop over the whole app with the
@@ -25,6 +39,10 @@ struct SettingsOverlay: View {
     @EnvironmentObject var vm: AppViewModel
     @EnvironmentObject var favorites: FavoritesStore
     @EnvironmentObject var memos: MemoStore
+
+    @AppStorage("previewText") private var previewText: String =
+        "The quick brown fox jumps over lazy dog"
+    private static let defaultPreviewText = "The quick brown fox jumps over lazy dog"
 
     // Equal gap from the top and right edges of the window for the close button.
     private static let closeInset: CGFloat = 40
@@ -64,6 +82,7 @@ struct SettingsOverlay: View {
                 aboutSection
                 shortcutsSection
                 licensesSection
+                resetSection
             }
             // Fixed 480pt content column (shrinks if the center panel is
             // narrower), centered within the center region.
@@ -108,7 +127,41 @@ struct SettingsOverlay: View {
                     Button("Clear All Memos", role: .destructive) { memos.clearAll() }
                     Button("Cancel", role: .cancel) {}
                 }
+
+                // Export / import favorites + memos (tags live inside memos).
+                backupRow(
+                    title: "Export",
+                    detail: "Save favorites & memos to a JSON file",
+                    button: "Export",
+                    action: exportData
+                )
+                backupRow(
+                    title: "Import",
+                    detail: "Merge favorites & memos from a JSON file",
+                    button: "Import",
+                    action: importData
+                )
             }
+        }
+    }
+
+    private func backupRow(
+        title: String,
+        detail: String,
+        button: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: SettingsType.body))
+                    .foregroundStyle(.primary)
+                Text(detail)
+                    .font(.system(size: SettingsType.small))
+                    .foregroundStyle(.tertiary)
+            }
+            Spacer()
+            SettingsButton(label: button, action: action)
         }
     }
 
@@ -210,10 +263,121 @@ struct SettingsOverlay: View {
         }
     }
 
+    private var resetSection: some View {
+        SettingsSection("Reset") {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Reset everything")
+                        .font(.system(size: SettingsType.body))
+                        .foregroundStyle(.primary)
+                    Text("Clears favorites, memos, theme, wallpaper and window size — back to a fresh install.")
+                        .font(.system(size: SettingsType.small))
+                        .foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 12)
+                SettingsButton(label: "Reset") { vm.confirmReset = true }
+                    .confirmationDialog(
+                        "Reset everything to a fresh install?",
+                        isPresented: $vm.confirmReset,
+                        titleVisibility: .visible
+                    ) {
+                        Button("Reset Everything", role: .destructive) { resetEverything() }
+                        Button("Cancel", role: .cancel) {}
+                    }
+            }
+        }
+    }
+
     // MARK: - Actions
 
     private func close() {
         withAnimation(.easeOut(duration: 0.18)) { vm.showSettings = false }
+    }
+
+    // MARK: - Export / Import
+
+    // e.g. 08FOSE_260604_142530 (YYMMDD_HHMMSS, local time).
+    private static func backupFileStem() -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyMMdd_HHmmss"
+        return "08FOSE_\(formatter.string(from: Date()))"
+    }
+
+    private func exportData() {
+        let payload = ExportData(
+            favorites: favorites.exportList,
+            memos: memos.exportMap
+        )
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        encoder.dateEncodingStrategy = .iso8601
+        guard let data = try? encoder.encode(payload) else { return }
+
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = "\(Self.backupFileStem()).json"
+        panel.canCreateDirectories = true
+        if panel.runModal() == .OK, let url = panel.url {
+            try? data.write(to: url)
+        }
+    }
+
+    private func importData() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        guard let data = try? Data(contentsOf: url) else {
+            presentImportError("The file could not be read.")
+            return
+        }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let payload = try? decoder.decode(ExportData.self, from: data) else {
+            presentImportError("This doesn't look like an 08FOSE backup file.")
+            return
+        }
+        // Merge: favorites union, memos appended when they differ. Entries for
+        // fonts not installed here are kept and simply stay hidden.
+        favorites.merge(payload.favorites)
+        memos.merge(payload.memos)
+    }
+
+    private func presentImportError(_ message: String) {
+        let alert = NSAlert()
+        alert.messageText = "Import failed"
+        alert.informativeText = message
+        alert.alertStyle = .warning
+        alert.runModal()
+    }
+
+    // MARK: - Reset
+
+    private func resetEverything() {
+        favorites.clearAll()
+        memos.clearAll()
+        previewText = Self.defaultPreviewText
+        vm.resetToDefaults()
+        resetWindowSize()
+    }
+
+    private func resetWindowSize() {
+        guard let window = NSApp.keyWindow ?? NSApp.mainWindow ?? NSApp.windows.first
+        else { return }
+        let size = NSSize(width: 1280, height: 860)   // matches .defaultSize
+        let screen = window.screen ?? NSScreen.main
+        let origin: NSPoint
+        if let visible = screen?.visibleFrame {
+            origin = NSPoint(x: visible.midX - size.width / 2,
+                             y: visible.midY - size.height / 2)
+        } else {
+            origin = window.frame.origin
+        }
+        window.setFrame(NSRect(origin: origin, size: size), display: true, animate: true)
     }
 }
 
