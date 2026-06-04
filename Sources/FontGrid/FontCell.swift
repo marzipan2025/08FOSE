@@ -23,6 +23,23 @@ struct FontCell: View {
 
     private var cellHeight: CGFloat { Theme.cellHeight(fontSize: fontSize) }
 
+    private var resolvedPreviewText: String {
+        previewText.isEmpty ? "The quick brown fox jumps over lazy dog." : previewText
+    }
+
+    // Size the preview area to the glyphs' REAL line height (ascent + descent,
+    // fallback-aware) plus a little breathing room, rather than a fixed multiple
+    // of the font size. A fixed multiple (e.g. 1.9×) leaves slack that is split
+    // above and below the centred line, so the bottom gap grew with the size.
+    // Matching the real line height keeps the bottom gap small and roughly
+    // constant while still fully containing the glyphs (no clipping). Capped so
+    // it never crowds the header at large sizes for tall fonts.
+    private var previewFrameHeight: CGFloat {
+        let name = family.memberFontNames.first ?? family.name
+        let line = previewLineHeight(fontName: name, fontSize: fontSize, text: resolvedPreviewText)
+        return min(line + 10, cellHeight - 38)
+    }
+
     var body: some View {
         Color.clear
             .frame(height: cellHeight)
@@ -40,9 +57,9 @@ struct FontCell: View {
                     fontSize: fontSize,
                     isHovering: hovering
                 )
-                .frame(height: fontSize * 1.9)
+                .frame(height: previewFrameHeight)
                 .padding(.horizontal, 14)
-                .padding(.bottom, 10)
+                .padding(.bottom, 6)
             }
             .clipShape(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
             .background(
@@ -255,4 +272,16 @@ final class PreviewTextView: NSView {
         ctx.textPosition = CGPoint(x: 0, y: baselineY)
         CTLineDraw(line, ctx)
     }
+}
+
+// Real typographic height (ascent + descent, fallback-aware) of one line of the
+// given text in `fontName` at `fontSize`. Mirrors PreviewTextView.draw's metrics
+// so the preview frame can be sized to fit exactly what will be drawn.
+private func previewLineHeight(fontName: String, fontSize: Double, text: String) -> CGFloat {
+    let font = NSFont(name: fontName, size: fontSize) ?? .systemFont(ofSize: fontSize)
+    let attrs: [NSAttributedString.Key: Any] = [.font: font]
+    let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attrs))
+    var ascent: CGFloat = 0, descent: CGFloat = 0, leading: CGFloat = 0
+    CTLineGetTypographicBounds(line, &ascent, &descent, &leading)
+    return ascent + descent
 }

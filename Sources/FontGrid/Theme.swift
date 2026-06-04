@@ -3,7 +3,7 @@ import AppKit
 
 enum Theme {
     // App
-    static let appVersion = "0.3.1"
+    static let appVersion = "0.3.2"
 
     // Panels
     static let panelDefaultWidth: CGFloat = 240
@@ -29,7 +29,12 @@ enum Theme {
     static let pillRadius: CGFloat = 6
 
     static func cellHeight(fontSize: Double) -> CGFloat {
-        max(90, CGFloat(fontSize) * 1.2 + 62)
+        // The constant encodes the fixed zones — header (~29) + name↔sample gap
+        // + bottom slack/padding (~11). The +49 (was +58) halves the built-in
+        // ~18px name↔sample gap to ~9px. The preview is bottom-anchored, so this
+        // tightens only the middle gap, not the bottom margin. Floor lowered in
+        // step so small sizes get the same halved gap.
+        max(74, CGFloat(fontSize) * 1.2 + 49)
     }
 
     // Colors — backgrounds & neutrals adapt to appearance. The key accent is
