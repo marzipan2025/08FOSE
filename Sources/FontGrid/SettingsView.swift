@@ -97,6 +97,9 @@ struct SettingsOverlay: View {
             .padding(.bottom, 48)
         }
         .scrollContentBackground(.hidden)
+        // Hide the scroll bar in the focused Settings modal for a cleaner look;
+        // scrolling (wheel/trackpad) still works. Scoped to this ScrollView only.
+        .scrollIndicators(.hidden)
     }
 
     // MARK: - Sections
