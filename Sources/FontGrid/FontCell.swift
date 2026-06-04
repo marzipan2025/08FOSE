@@ -72,7 +72,7 @@ struct FontCell: View {
     private var memoTooltip: String {
         // No tooltip while it would be hidden behind the Settings blur.
         guard !tooltipSuppressed else { return "" }
-        let note = memos.note(for: family.name).replacingOccurrences(of: "#", with: "")
+        let note = memos.note(for: family.name)
         guard !note.isEmpty else { return "" }
         return note.count > 16 ? String(note.prefix(16)) + "…" : note
     }

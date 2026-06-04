@@ -334,12 +334,12 @@ struct FavoriteRow: View {
         .nativeTooltip(memoTooltip)
     }
 
-    // Hover tooltip: the memo text (up to 16 chars) when one exists, else empty.
-    // Tag '#' markers are dropped so tooltips read like the tag capsules.
+    // Hover tooltip: the memo text (up to 16 chars) when one exists, else empty,
+    // shown exactly as written (including any '#' tag markers).
     private var memoTooltip: String {
         // No tooltip while it would be hidden behind the Settings blur.
         guard !tooltipSuppressed else { return "" }
-        let note = memos.note(for: name).replacingOccurrences(of: "#", with: "")
+        let note = memos.note(for: name)
         guard !note.isEmpty else { return "" }
         return note.count > 16 ? String(note.prefix(16)) + "…" : note
     }
