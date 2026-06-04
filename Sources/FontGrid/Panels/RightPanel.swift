@@ -68,6 +68,16 @@ struct RightPanel: View {
 
     // MARK: - Tags
 
+    // Append a tag (as a "#tag" token) to the open font's memo. If the memo
+    // already has text, the tag is added after it, separated by a space so it
+    // parses as its own token.
+    private func appendTagToMemo(_ tag: String, family: FontFamily) {
+        let token = "#\(tag)"
+        let existing = memos.note(for: family.name)
+        let newNote = existing.isEmpty ? token : existing + " " + token
+        memos.setNote(newNote, for: family.name)
+    }
+
     private func tagsSection(expanded: Bool) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             tagsHeader
@@ -80,9 +90,15 @@ struct RightPanel: View {
                         TagCapsule(
                             tag: item.tag,
                             count: item.count,
-                            active: vm.activeTag == item.tag
+                            active: vm.selectedFamily == nil && vm.activeTag == item.tag
                         ) {
-                            vm.activeTag = (vm.activeTag == item.tag) ? nil : item.tag
+                            // With the detail open, a tag tap appends the tag to
+                            // that font's memo; otherwise it toggles the filter.
+                            if let family = vm.selectedFamily {
+                                appendTagToMemo(item.tag, family: family)
+                            } else {
+                                vm.activeTag = (vm.activeTag == item.tag) ? nil : item.tag
+                            }
                         }
                     }
                 }
