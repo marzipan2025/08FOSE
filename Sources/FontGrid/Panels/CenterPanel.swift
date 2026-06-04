@@ -214,11 +214,10 @@ struct CenterPanel: View {
         GeometryReader { geo in
             let computed = computeMaxColumns(width: geo.size.width)
             let effective = min(max(1, vm.columnCount), computed)
-            let rows = displayedFamilies.chunked(into: effective)
 
             FontGridScroll(
-                rows: rows,
-                effective: effective,
+                families: displayedFamilies,
+                columns: effective,
                 previewText: previewText,
                 cellHero: cellHero
             )
@@ -263,6 +262,21 @@ struct HoveredCellAnchorKey: PreferenceKey {
     }
 }
 
+// One rendered cell's id + its top edge (minY) in the scroll viewport's
+// coordinate space. Collected for every visible cell so we can find which
+// family currently sits at the top of the viewport.
+private struct TopCandidate: Equatable {
+    let id: FontFamily.ID
+    let minY: CGFloat
+}
+
+private struct TopVisibleKey: PreferenceKey {
+    static var defaultValue: [TopCandidate] = []
+    static func reduce(value: inout [TopCandidate], nextValue: () -> [TopCandidate]) {
+        value.append(contentsOf: nextValue())
+    }
+}
+
 
 // MARK: - Scrollable Font Grid
 //
@@ -273,32 +287,50 @@ struct HoveredCellAnchorKey: PreferenceKey {
 // so it always sits above all cells regardless of lazy-stack paint order.
 
 private struct FontGridScroll: View {
-    let rows: [[FontFamily]]
-    let effective: Int
+    let families: [FontFamily]
+    let columns: Int
     let previewText: String
     let cellHero: Namespace.ID
+
+    // Equal-width flexible columns, matching the manual HStack layout this
+    // replaced. LazyVGrid (vs LazyVStack of HStacks) tracks every font as its
+    // own element, so ScrollViewProxy.scrollTo(family.id) reliably reaches a
+    // font even when it has scrolled off-screen — which is what makes the
+    // column/font-size position compensation work.
+    private var gridColumns: [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: Theme.gridSpacing),
+              count: max(1, columns))
+    }
 
     @EnvironmentObject var vm: AppViewModel
     @Environment(\.colorScheme) private var colorScheme
     @State private var hoveredFamilyID: FontFamily.ID? = nil
+    // The family currently at the top of the viewport. Tracked locally (so it
+    // does NOT invalidate CenterPanel's body / the filter chain) and read only
+    // when the column count or font size changes, to keep that family in view.
+    @State private var topVisibleFamily: FontFamily.ID? = nil
 
     private var shadowScale: Double { colorScheme == .light ? 0.3 : 1.0 }
 
     var body: some View {
+        ScrollViewReader { proxy in
         ScrollView {
-            LazyVStack(spacing: Theme.gridSpacing) {
-                ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                    HStack(spacing: Theme.gridSpacing) {
-                        ForEach(row) { family in
-                            cellView(for: family)
-                                .frame(maxWidth: .infinity)
-                        }
-                        if row.count < effective {
-                            ForEach(0..<(effective - row.count), id: \.self) { _ in
-                                Color.clear.frame(maxWidth: .infinity)
+            LazyVGrid(columns: gridColumns, spacing: Theme.gridSpacing) {
+                ForEach(families) { family in
+                    cellView(for: family)
+                        .frame(maxWidth: .infinity)
+                        .id(family.id)
+                        .background(
+                            GeometryReader { g in
+                                Color.clear.preference(
+                                    key: TopVisibleKey.self,
+                                    value: [TopCandidate(
+                                        id: family.id,
+                                        minY: g.frame(in: .named("fontGridScroll")).minY
+                                    )]
+                                )
                             }
-                        }
-                    }
+                        )
                 }
             }
             .background(
@@ -312,9 +344,10 @@ private struct FontGridScroll: View {
             .padding(Theme.gridPadding)
             .padding(.bottom, 48)
         }
+        .coordinateSpace(name: "fontGridScroll")
         .scrollContentBackground(.hidden)
         // Shadow for the single hovered cell, drawn above all cells so it is not
-        // covered by neighbours (LazyVStack paints rows in document order and
+        // covered by neighbours (LazyVGrid paints rows in document order and
         // ignores zIndex across rows). HoverShadow is keyed by the cell id, so
         // it remounts per cell: position is fixed to that cell's exact frame (no
         // glide between cells) and the fade-in re-runs on each new hover.
@@ -328,6 +361,41 @@ private struct FontGridScroll: View {
                         .id(info.id)
                 }
                 .allowsHitTesting(false)
+            }
+        }
+        // Track which family is at the top of the viewport. Local state only —
+        // updated just at row-boundary crossings (the id guard), so it does not
+        // re-render on every scroll frame.
+        .onPreferenceChange(TopVisibleKey.self) { candidates in
+            guard !candidates.isEmpty else { return }
+            // The top-of-viewport cell is the lowest one whose top is still at
+            // or above the visible top region (largest minY among those ≤ 20).
+            // Fall back to the first cell when scrolled all the way up.
+            let atOrAboveTop = candidates.filter { $0.minY <= 20 }
+            let best = atOrAboveTop.max(by: { $0.minY < $1.minY })
+                ?? candidates.min(by: { $0.minY < $1.minY })
+            if let id = best?.id, id != topVisibleFamily {
+                topVisibleFamily = id
+            }
+        }
+        // On a layout change (columns or font size), keep the previously-top
+        // family in view. Async so the new layout has been applied before we
+        // scroll. The target is captured synchronously to avoid a race with the
+        // preference updates the relayout triggers.
+        .onChange(of: vm.columnCount) { _ in keepTopInView(proxy) }
+        .onChange(of: vm.previewSizeOffset) { _ in keepTopInView(proxy) }
+        } // ScrollViewReader
+    }
+
+    private func keepTopInView(_ proxy: ScrollViewProxy) {
+        guard let target = topVisibleFamily else { return }
+        // Two passes: the first realizes the target's region (it may have been
+        // recycled by the lazy grid during the relayout); the second, after that
+        // cell exists, lands its top exactly at the viewport top.
+        DispatchQueue.main.async {
+            proxy.scrollTo(target, anchor: .top)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
+                proxy.scrollTo(target, anchor: .top)
             }
         }
     }
@@ -447,15 +515,6 @@ private struct DetailArrowKeyHandler: NSViewRepresentable {
 
         deinit {
             uninstall()
-        }
-    }
-}
-
-private extension Array {
-    func chunked(into size: Int) -> [[Element]] {
-        guard size > 0 else { return [self] }
-        return stride(from: 0, to: count, by: size).map { start in
-            Array(self[start..<Swift.min(start + size, count)])
         }
     }
 }
