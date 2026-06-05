@@ -275,7 +275,9 @@ struct FavoriteRow: View {
     private var hasSpecimen: Bool { samples.hasSample(for: name) }
 
     private var sampleText: String {
-        previewText.isEmpty ? "The quick brown fox jumps over lazy dog." : previewText
+        // A custom specimen replaces the preview text here too (color unchanged).
+        if hasSpecimen { return samples.sample(for: name) }
+        return previewText.isEmpty ? "The quick brown fox jumps over lazy dog." : previewText
     }
 
     var body: some View {

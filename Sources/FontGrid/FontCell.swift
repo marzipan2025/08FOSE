@@ -29,8 +29,14 @@ struct FontCell: View {
 
     private var cellHeight: CGFloat { Theme.cellHeight(fontSize: fontSize) }
 
+    // A custom specimen (if any) replaces the global preview text — same as the
+    // detail view, but here the color is left unchanged.
+    private var effectivePreviewText: String {
+        hasSpecimen ? samples.sample(for: family.name) : previewText
+    }
+
     private var resolvedPreviewText: String {
-        previewText.isEmpty ? "The quick brown fox jumps over lazy dog." : previewText
+        effectivePreviewText.isEmpty ? "The quick brown fox jumps over lazy dog." : effectivePreviewText
     }
 
     // Size the preview area to the glyphs' REAL line height (ascent + descent,
@@ -59,7 +65,7 @@ struct FontCell: View {
                 // cycling re-renders only the preview label, not the whole cell.
                 CyclingPreviewLabel(
                     family: family,
-                    previewText: previewText,
+                    previewText: effectivePreviewText,
                     fontSize: fontSize,
                     isHovering: hovering
                 )
