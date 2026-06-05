@@ -270,7 +270,7 @@ struct FontDetailView: View {
                 icon: "chevron.up",
                 help: "Expand memo"
             ) {
-                withAnimation(.easeOut(duration: 0.2)) { memoExpanded = true }
+                memoExpanded = true   // instant, no expand/collapse animation
             }
             ZStack(alignment: .leading) {
                 if memos.note(for: family.name).isEmpty {
@@ -328,7 +328,7 @@ struct FontDetailView: View {
                     icon: "chevron.down",
                     help: "Collapse memo"
                 ) {
-                    withAnimation(.easeOut(duration: 0.2)) { memoExpanded = false }
+                    memoExpanded = false   // instant, no expand/collapse animation
                 }
                 ZStack(alignment: .topLeading) {
                     if memos.note(for: family.name).isEmpty {
@@ -356,10 +356,10 @@ struct FontDetailView: View {
             // pinned below the memo. When set, it replaces the preview text for
             // every weight in this detail view. Margins are ~40% of the memo's.
             specimenBox
-                .padding(.horizontal, 10)
+                .padding(.horizontal, 11)
         }
         .padding(.top, 20)
-        .padding(.bottom, 10)
+        .padding(.bottom, 11)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(memoAreaBackground)
     }
@@ -395,9 +395,8 @@ struct FontDetailView: View {
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                // Slightly darker than the memo strip it sits on (~70% of the
-                // previous opacity, so it reads more transparent).
-                .fill(Color.black.opacity(colorScheme == .light ? 0.04 : 0.15))
+                // Darker than the memo strip it sits on; a touch more opaque.
+                .fill(Color.black.opacity(colorScheme == .light ? 0.08 : 0.24))
         )
     }
 

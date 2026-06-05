@@ -265,13 +265,34 @@ private struct GlobalShortcutHandler: NSViewRepresentable {
                     return event
                 }
 
-                // Plain letter/number shortcuts.
+                // Plain letter/number shortcuts. While a Korean input source is
+                // active, a letter key reports its Hangul jamo, so map it back to
+                // the Latin letter on the same physical key first.
                 if event.window?.firstResponder is NSText { return event }
                 if !mods.isEmpty { return event }
-                guard let key = event.charactersIgnoringModifiers?.lowercased(),
-                      self.onKey(key) else { return event }
+                guard let raw = event.charactersIgnoringModifiers?.lowercased() else { return event }
+                let key = Self.latinForHangul(raw)
+                guard self.onKey(key) else { return event }
                 return nil
             }
+        }
+
+        // Korean 2-set (두벌식) layout: each key produces a jamo. Map those jamo
+        // back to the Latin letter on the same physical key so single-key
+        // shortcuts (t, w, f, m, k, j, c, l, s, o, …) still fire while the input
+        // source is Korean.
+        private static let hangulToLatin: [Character: String] = [
+            "ㅂ": "q", "ㅃ": "q", "ㅈ": "w", "ㅉ": "w", "ㄷ": "e", "ㄸ": "e",
+            "ㄱ": "r", "ㄲ": "r", "ㅅ": "t", "ㅆ": "t", "ㅛ": "y", "ㅕ": "u",
+            "ㅑ": "i", "ㅐ": "o", "ㅒ": "o", "ㅔ": "p", "ㅖ": "p",
+            "ㅁ": "a", "ㄴ": "s", "ㅇ": "d", "ㄹ": "f", "ㅎ": "g", "ㅗ": "h",
+            "ㅓ": "j", "ㅏ": "k", "ㅣ": "l",
+            "ㅋ": "z", "ㅌ": "x", "ㅊ": "c", "ㅍ": "v", "ㅠ": "b", "ㅜ": "n", "ㅡ": "m"
+        ]
+
+        private static func latinForHangul(_ s: String) -> String {
+            guard s.count == 1, let ch = s.first, let latin = hangulToLatin[ch] else { return s }
+            return latin
         }
 
         func uninstall() {
