@@ -22,13 +22,37 @@ enum WeightFilter: Hashable {
 final class AppViewModel: ObservableObject {
     let library: FontLibrary
 
-    @Published var searchQuery: String = ""
-    @Published var weightFilter: WeightFilter = .all
-    @Published var favoritesOnly: Bool = false
-    @Published var memoOnly: Bool = false
+    // Persisted left-panel state — restored across launches so the user lands
+    // in the same filter/search context they left in. Keys are read at init
+    // and rewritten on every change via didSet.
+    private static let searchQueryKey = "searchQuery"
+    private static let weightFilterKey = "weightFilter"
+    private static let favoritesOnlyKey = "favoritesOnly"
+    private static let memoOnlyKey = "memoOnly"
+    private static let scriptFilterKey = "scriptFilter"
+    private static let activeTagKey = "activeTag"
+    private static let columnCountKey = "columnCount"
+    private static let previewSizeOffsetKey = "previewSizeOffset"
+
+    @Published var searchQuery: String = UserDefaults.standard.string(forKey: AppViewModel.searchQueryKey) ?? "" {
+        didSet { UserDefaults.standard.set(searchQuery, forKey: Self.searchQueryKey) }
+    }
+    @Published var weightFilter: WeightFilter = AppViewModel.loadWeightFilter() {
+        didSet { UserDefaults.standard.set(Self.encodeWeightFilter(weightFilter), forKey: Self.weightFilterKey) }
+    }
+    @Published var favoritesOnly: Bool = UserDefaults.standard.bool(forKey: AppViewModel.favoritesOnlyKey) {
+        didSet { UserDefaults.standard.set(favoritesOnly, forKey: Self.favoritesOnlyKey) }
+    }
+    @Published var memoOnly: Bool = UserDefaults.standard.bool(forKey: AppViewModel.memoOnlyKey) {
+        didSet { UserDefaults.standard.set(memoOnly, forKey: Self.memoOnlyKey) }
+    }
     // Selected script buckets. Empty = no script filter (show all). Multiple
     // may be on at once (union); combined AND with the other filters.
-    @Published var scriptFilter: Set<ScriptCategory> = []
+    @Published var scriptFilter: Set<ScriptCategory> = AppViewModel.loadScriptFilter() {
+        didSet {
+            UserDefaults.standard.set(scriptFilter.map { $0.rawValue }, forKey: Self.scriptFilterKey)
+        }
+    }
 
     func toggleScript(_ category: ScriptCategory) {
         if scriptFilter.contains(category) { scriptFilter.remove(category) }
@@ -48,11 +72,17 @@ final class AppViewModel: ObservableObject {
 
     // Active note tag (lowercased, without '#'). nil = no tag filter. Single
     // selection: tapping the active tag again clears it.
-    @Published var activeTag: String? = nil
+    @Published var activeTag: String? = AppViewModel.loadActiveTag() {
+        didSet { UserDefaults.standard.set(activeTag ?? "", forKey: Self.activeTagKey) }
+    }
 
-    @Published var columnCount: Int = 4
+    @Published var columnCount: Int = AppViewModel.loadColumnCount() {
+        didSet { UserDefaults.standard.set(columnCount, forKey: Self.columnCountKey) }
+    }
     @Published var maxColumns: Int = 6
-    @Published var previewSizeOffset: Double = 0
+    @Published var previewSizeOffset: Double = UserDefaults.standard.double(forKey: AppViewModel.previewSizeOffsetKey) {
+        didSet { UserDefaults.standard.set(previewSizeOffset, forKey: Self.previewSizeOffsetKey) }
+    }
 
     // Drives the full-window Settings overlay (see SettingsView).
     @Published var showSettings: Bool = false
@@ -105,6 +135,47 @@ final class AppViewModel: ObservableObject {
         let defaults = UserDefaults.standard
         if let v = defaults.string(forKey: key) { return v }
         return defaults.string(forKey: legacyWallpaperKey) ?? ""
+    }
+
+    // WeightFilter is an enum with associated values, so it has no Codable
+    // synthesis for free — round-trip through a short string instead.
+    private static func encodeWeightFilter(_ w: WeightFilter) -> String {
+        switch w {
+        case .all: return "all"
+        case .exactly(let n): return "exactly:\(n)"
+        case .atLeast(let n): return "atLeast:\(n)"
+        }
+    }
+
+    private static func loadWeightFilter() -> WeightFilter {
+        guard let s = UserDefaults.standard.string(forKey: weightFilterKey) else { return .all }
+        if s == "all" { return .all }
+        let parts = s.split(separator: ":")
+        if parts.count == 2, let n = Int(parts[1]) {
+            switch parts[0] {
+            case "exactly": return .exactly(n)
+            case "atLeast": return .atLeast(n)
+            default: break
+            }
+        }
+        return .all
+    }
+
+    private static func loadScriptFilter() -> Set<ScriptCategory> {
+        let raw = (UserDefaults.standard.array(forKey: scriptFilterKey) as? [String]) ?? []
+        return Set(raw.compactMap { ScriptCategory(rawValue: $0) })
+    }
+
+    private static func loadActiveTag() -> String? {
+        let s = UserDefaults.standard.string(forKey: activeTagKey)
+        return (s?.isEmpty ?? true) ? nil : s
+    }
+
+    // columnCount has a non-zero default (4) so we can't use the plain
+    // integer(forKey:) sentinel — distinguish "never set" from "set to 0".
+    private static func loadColumnCount() -> Int {
+        if UserDefaults.standard.object(forKey: columnCountKey) == nil { return 4 }
+        return max(1, UserDefaults.standard.integer(forKey: columnCountKey))
     }
 
     // Favorites list order: false = alphabetical (가나다), true = most recent first.

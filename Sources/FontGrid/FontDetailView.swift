@@ -19,11 +19,44 @@ struct FontDetailView: View {
     @State private var metadata: FontMetadata = .empty
     @State private var infoExpanded = false      // narrow layout "Read more" toggle
     @FocusState private var collapsedMemoFocused: Bool
+    // Laid-out height the expanded memo editor reports; drives its grow-upward
+    // frame (clamped). Title-area height is measured so the grow cap can stop
+    // exactly at the header divider.
+    @State private var memoContentHeight: CGFloat = 0
+    @State private var titleAreaHeight: CGFloat = 0
 
     // At/above this card width the info section sits in the right of the middle
     // (weight-list) section; below it, the info flows as multiple columns under
     // the header.
     private let wideThreshold: CGFloat = 640
+
+    // Expanded-memo layout — the editor grows with content between one line and
+    // a cap; everything around it (header, gap, specimen, paddings) is fixed.
+    private static let memoFontSize: CGFloat = 17
+    private static let memoLineSpacing: CGFloat = 17 * 0.21
+    private static let memoTopPad: CGFloat = 20
+    private static let memoBottomPad: CGFloat = 11
+    private static let memoHeaderHeight: CGFloat = 22
+    private static let memoHeaderToEditor: CGFloat = 8
+    private static let memoSpecimenGap: CGFloat = 20   // memo ↔ specimen gap
+    private static let specimenTotalHeight: CGFloat = 68
+    // One wrapped line of the memo font, used as the lower clamp.
+    private static let memoOneLine: CGFloat = {
+        NSLayoutManager().defaultLineHeight(for: .systemFont(ofSize: memoFontSize)) + memoLineSpacing
+    }()
+
+    // Max height the growing memo editor may reach: from the card height, drop
+    // the title area, the two hairline dividers (middle squeezed to zero), and
+    // the expanded memo's fixed chrome. Falls back to a sane default until the
+    // card/title measurements have arrived.
+    private func expandedEditorMax(cardHeight: CGFloat) -> CGFloat {
+        guard cardHeight > 0, titleAreaHeight > 0 else { return 110 }
+        let maxArea = cardHeight - titleAreaHeight - 2
+        let chrome = Self.memoTopPad + Self.memoBottomPad
+            + Self.memoHeaderHeight + Self.memoHeaderToEditor
+            + Self.memoSpecimenGap + Self.specimenTotalHeight
+        return max(Self.memoOneLine, maxArea - chrome)
+    }
 
     // Light mode uses lighter shadows (30% of the dark-mode strength).
     private var shadowScale: Double { colorScheme == .light ? 0.3 : 1.0 }
@@ -66,11 +99,12 @@ struct FontDetailView: View {
     var body: some View {
         GeometryReader { geo in
             if geo.size.width >= wideThreshold {
-                wideLayout(width: geo.size.width)
+                wideLayout(width: geo.size.width, height: geo.size.height)
             } else {
-                narrowLayout(width: geo.size.width)
+                narrowLayout(width: geo.size.width, height: geo.size.height)
             }
         }
+        .onPreferenceChange(TitleHeightKey.self) { titleAreaHeight = $0 }
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -93,6 +127,7 @@ struct FontDetailView: View {
         .task(id: family.id) {
             infoExpanded = false
             memoExpanded = false
+            memoContentHeight = 0
             metadata = FontMetadata.load(family: family)
         }
     }
@@ -101,7 +136,7 @@ struct FontDetailView: View {
 
     // Wide: the info column lives in the right of the middle (weight-list)
     // section only. Title and memo keep the card's full width.
-    private func wideLayout(width: CGFloat) -> some View {
+    private func wideLayout(width: CGFloat, height: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             titleArea
             Rectangle().fill(detailDivider).frame(height: 1)
@@ -115,7 +150,7 @@ struct FontDetailView: View {
             }
             .frame(maxHeight: .infinity)
             Rectangle().fill(detailDivider).frame(height: 1)
-            memoArea
+            memoArea(cardHeight: height)
         }
     }
 
@@ -123,7 +158,7 @@ struct FontDetailView: View {
     // with no dividing lines and no per-item boxes. Capped to 2 rows with a
     // "Read more" toggle when it overflows. The info and the sample list share
     // one scroll so nothing gets clipped between them.
-    private func narrowLayout(width: CGFloat) -> some View {
+    private func narrowLayout(width: CGFloat, height: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             titleArea
             Rectangle().fill(detailDivider).frame(height: 1)
@@ -135,16 +170,17 @@ struct FontDetailView: View {
             }
             .frame(maxHeight: .infinity)
             Rectangle().fill(detailDivider).frame(height: 1)
-            memoArea
+            memoArea(cardHeight: height)
         }
     }
 
-    // Bottom memo strip: a single line when collapsed, a fixed 210pt panel
-    // (memo editor + specimen box) when expanded via the chevron.
+    // Bottom memo strip: a single tail-ellipsized line when collapsed; when
+    // expanded via the chevron, the memo editor grows upward with its content
+    // (clamped at the header divider) above a fixed specimen box.
     @ViewBuilder
-    private var memoArea: some View {
+    private func memoArea(cardHeight: CGFloat) -> some View {
         if memoExpanded {
-            expandedMemoArea.frame(height: 210)
+            expandedMemoArea(cardHeight: cardHeight)
         } else {
             collapsedMemoArea
         }
@@ -319,11 +355,14 @@ struct FontDetailView: View {
 
     // MARK: - Memo (expanded: fills body)
 
-    private var expandedMemoArea: some View {
-        // spacing 12: the gap between the memo text and the specimen box.
-        VStack(alignment: .leading, spacing: 12) {
+    private func expandedMemoArea(cardHeight: CGFloat) -> some View {
+        // The editor grows with its content between one line and the cap; past
+        // the cap its own scroll view takes over (specimen stays pinned below).
+        let editorMax = expandedEditorMax(cardHeight: cardHeight)
+        let editorHeight = min(max(memoContentHeight, Self.memoOneLine), editorMax)
+        return VStack(alignment: .leading, spacing: Self.memoSpecimenGap) {
             // Memo header + editor keep the standard 24pt side margin.
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: Self.memoHeaderToEditor) {
                 memoHeader(
                     icon: "chevron.down",
                     help: "Collapse memo"
@@ -339,13 +378,15 @@ struct FontDetailView: View {
                     }
                     MemoEditor(
                         text: memoBinding,
-                        fontSize: 17,
-                        lineSpacing: 17 * 0.21,   // 0.35 reduced a further 40%
+                        fontSize: Self.memoFontSize,
+                        lineSpacing: Self.memoLineSpacing,   // 0.35 reduced a further 40%
                         textColor: NSColor(Theme.memoAccent),
-                        truncatesWhenInactive: true
+                        onHeightChange: { memoContentHeight = $0 },
+                        maxHeight: editorMax
                     )
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .frame(height: editorHeight, alignment: .topLeading)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
                 // Extra right margin (24 + 36 = 60 total) so wrapped memo text
                 // never runs under the collapse chevron at the top-right.
                 .padding(.trailing, 36)
@@ -358,9 +399,9 @@ struct FontDetailView: View {
             specimenBox
                 .padding(.horizontal, 11)
         }
-        .padding(.top, 20)
-        .padding(.bottom, 11)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(.top, Self.memoTopPad)
+        .padding(.bottom, Self.memoBottomPad)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .background(memoAreaBackground)
     }
 
@@ -436,7 +477,10 @@ struct FontDetailView: View {
                             .font(.system(size: 23, weight: .bold))
                             .foregroundStyle(.primary)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.4)
+                            // Tail-ellipsize a too-long name instead of shrinking
+                            // it; the Spacer below keeps a 16px gap to the close
+                            // button, so the ellipsis lands 16px clear of it.
+                            .truncationMode(.tail)
                         if family.script == .korean {
                             KoreanBadge(titleSize: 23)
                                 // Sit slightly above the title's vertical centre.
@@ -494,6 +538,11 @@ struct FontDetailView: View {
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 24)
+        // Fixed height: never let the VStack compress this band when the memo
+        // grows. Without this, a growing memo squeezes the title, the title's
+        // minimumScaleFactor shrinks the name, the measured title height drops,
+        // the memo cap grows, and it feeds back into a runaway shrink loop.
+        .fixedSize(horizontal: false, vertical: true)
         .background(
             // Subtle top-down darkening of the header, independent of the
             // wallpaper. Clipped into the card by the view's outer clipShape.
@@ -503,6 +552,13 @@ struct FontDetailView: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
+        )
+        // Report the title-area height so the expanded memo's grow cap can stop
+        // exactly at the divider just below the header.
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(key: TitleHeightKey.self, value: geo.size.height)
+            }
         )
     }
 
@@ -533,6 +589,15 @@ struct FontDetailView: View {
         let descriptor = CTFontDescriptorCreateWithNameAndSize(psName as CFString, 0)
         guard let url = CTFontDescriptorCopyAttribute(descriptor, kCTFontURLAttribute) as? URL else { return }
         NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+}
+
+// Reports the detail card's title-area height up to the root, so the expanded
+// memo can compute how far it may grow before its top hits the header divider.
+private struct TitleHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }
 

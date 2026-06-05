@@ -287,6 +287,8 @@ private struct TopVisibleKey: PreferenceKey {
 // so it always sits above all cells regardless of lazy-stack paint order.
 
 private struct FontGridScroll: View {
+    static let scrollOffsetKey = "centerGridScrollY"
+
     let families: [FontFamily]
     let columns: Int
     let previewText: String
@@ -341,6 +343,12 @@ private struct FontGridScroll: View {
                     )
                 }
             )
+            // Lives INSIDE the scroll view (background of the grid content) so
+            // its hosting NSView is a descendant of NSScrollView's document
+            // view — `enclosingScrollView` then resolves correctly. If this is
+            // moved out of the ScrollView, the probe can't find the scroller
+            // and offset restore silently no-ops.
+            .background(ScrollOffsetPersistence(key: Self.scrollOffsetKey))
             .padding(Theme.gridPadding)
             .padding(.bottom, 48)
         }
@@ -518,6 +526,131 @@ private struct DetailArrowKeyHandler: NSViewRepresentable {
         deinit {
             uninstall()
         }
+    }
+}
+
+// MARK: - Scroll Offset Persistence
+//
+// SwiftUI ScrollView exposes no public API for reading or setting its
+// content offset, so we walk up from a hidden NSView to find the enclosing
+// NSScrollView and:
+//   - on first sighting, restore the saved Y offset (after one runloop tick
+//     so the lazy grid has produced enough content for the offset to clamp
+//     correctly);
+//   - observe contentView bounds changes and write the new Y to defaults.
+//
+// The Y is in NSScrollView document coordinates (flipped or not depending on
+// the document view's isFlipped), but we read and write through the same
+// path so the value round-trips cleanly.
+
+private struct ScrollOffsetPersistence: NSViewRepresentable {
+    let key: String
+
+    func makeNSView(context: Context) -> NSView {
+        let view = ProbeView()
+        view.key = key
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        (nsView as? ProbeView)?.key = key
+    }
+
+    static func dismantleNSView(_ nsView: NSView, coordinator: ()) {
+        (nsView as? ProbeView)?.detach()
+    }
+
+    private final class ProbeView: NSView {
+        var key: String = ""
+        private weak var observedClipView: NSClipView?
+        private var didRestore = false
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard window != nil else { return }
+            // The scroll view doesn't exist yet on this tick; defer.
+            DispatchQueue.main.async { [weak self] in self?.attach() }
+        }
+
+        private func attach() {
+            guard observedClipView == nil,
+                  let scroll = enclosingScrollView,
+                  let clip = scroll.contentView as NSClipView?
+            else { return }
+
+            clip.postsBoundsChangedNotifications = true
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(boundsChanged(_:)),
+                name: NSView.boundsDidChangeNotification,
+                object: clip
+            )
+            observedClipView = clip
+
+            if !didRestore {
+                didRestore = true
+                let saved = UserDefaults.standard.double(forKey: key)
+                if saved > 0 {
+                    restoreWithRetry(target: saved, attempts: 12)
+                }
+            }
+        }
+
+        // LazyVGrid only realizes the visible window of cells, so the
+        // documentView is initially short and our target Y clamps to the
+        // bottom. Each restore pass scrolls toward the target, which forces
+        // the lazy grid to realize more rows; we retry until the documentView
+        // is tall enough (or we run out of attempts). Suppress the bounds
+        // observer's writes during this dance so the saved value isn't
+        // overwritten by intermediate clamped positions.
+        private func restoreWithRetry(target: CGFloat, attempts: Int) {
+            guard attempts > 0,
+                  let clip = observedClipView,
+                  let scroll = clip.enclosingScrollView else {
+                // Out of retries (or detached) without reaching the target —
+                // e.g. fewer fonts than last launch, so the saved Y is now past
+                // the bottom. Re-enable persistence; the clamped position we
+                // landed on is a fine value to start saving from.
+                suppressWrites = false
+                return
+            }
+            suppressWrites = true
+            let docHeight = scroll.documentView?.bounds.height ?? 0
+            let maxY = max(0, docHeight - clip.bounds.height)
+            let clamped = min(max(0, target), maxY)
+            clip.setBoundsOrigin(NSPoint(x: clip.bounds.origin.x, y: clamped))
+            scroll.reflectScrolledClipView(clip)
+
+            if clamped >= target - 0.5 {
+                // Reached the target. Re-enable writes on the next tick so any
+                // settle-frame doesn't overwrite the saved key.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                    self?.suppressWrites = false
+                }
+            } else {
+                // documentView wasn't tall enough yet — give the lazy grid a
+                // tick to realize more rows, then try again.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.04) { [weak self] in
+                    self?.restoreWithRetry(target: target, attempts: attempts - 1)
+                }
+            }
+        }
+
+        private var suppressWrites = false
+
+        @objc private func boundsChanged(_ note: Notification) {
+            guard !suppressWrites, let clip = note.object as? NSClipView else { return }
+            UserDefaults.standard.set(Double(clip.bounds.origin.y), forKey: key)
+        }
+
+        func detach() {
+            if let clip = observedClipView {
+                NotificationCenter.default.removeObserver(self, name: NSView.boundsDidChangeNotification, object: clip)
+            }
+            observedClipView = nil
+        }
+
+        deinit { detach() }
     }
 }
 

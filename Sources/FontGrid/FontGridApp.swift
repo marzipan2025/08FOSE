@@ -120,8 +120,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if let toolbar = window.toolbar {
                 toolbar.showsBaselineSeparator = false
             }
+            // Persist size/position across launches. AppKit writes the frame
+            // string to UserDefaults under "NSWindow Frame <name>".
+            if window.frameAutosaveName != Self.mainWindowAutosaveName {
+                window.setFrameAutosaveName(Self.mainWindowAutosaveName)
+            }
         }
     }
+
+    static let mainWindowAutosaveName = "MainWindow"
 
     private func adjustTrafficLightsNow() {
         let offsetX: CGFloat = 10

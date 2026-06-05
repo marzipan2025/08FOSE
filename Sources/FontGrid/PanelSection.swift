@@ -58,10 +58,10 @@ struct PanelVDivider: View {
 struct ResizableVDivider: View {
     enum Edge { case left, right }
 
-    @Binding var width: CGFloat
-    @Binding var dragStartWidth: CGFloat?
-    let minWidth: CGFloat
-    let maxWidth: CGFloat
+    @Binding var width: Double
+    @Binding var dragStartWidth: Double?
+    let minWidth: Double
+    let maxWidth: Double
     let edge: Edge
 
     @State private var hovering = false
@@ -91,9 +91,9 @@ struct ResizableVDivider: View {
                                     dragStartWidth = width
                                 }
                                 guard let base = dragStartWidth else { return }
-                                let delta = edge == .left
+                                let delta = Double(edge == .left
                                     ? value.translation.width
-                                    : -value.translation.width
+                                    : -value.translation.width)
                                 width = min(maxWidth, max(minWidth, base + delta))
                             }
                             .onEnded { _ in

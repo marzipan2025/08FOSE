@@ -10,6 +10,16 @@ struct MemoEditor: NSViewRepresentable {
     // mid-glyph) while it is NOT being edited, and switches to full word-wrap +
     // scrolling while editing so the whole note stays reachable.
     var truncatesWhenInactive: Bool = false
+    // When set, the editor word-wraps and reports its laid-out content height on
+    // every text/width change. The SwiftUI parent uses this to grow the field
+    // (clamped) and let the enclosing scroll view take over past the cap.
+    var onHeightChange: ((CGFloat) -> Void)? = nil
+    // Used with onHeightChange: the vertical scroller stays hidden while the
+    // content fits within this height (the field is still growing) and only
+    // appears once the content actually exceeds it. Prevents the scroller from
+    // flickering on every newline during the one-frame gap before SwiftUI
+    // applies the new grown height.
+    var maxHeight: CGFloat = .greatestFiniteMagnitude
 
     func makeCoordinator() -> Coordinator {
         Coordinator(text: $text, truncates: truncatesWhenInactive)
@@ -63,7 +73,11 @@ struct MemoEditor: NSViewRepresentable {
         context.coordinator.fontSize = fontSize
         context.coordinator.lineSpacing = lineSpacing
         context.coordinator.truncates = truncatesWhenInactive
-        if truncatesWhenInactive {
+        context.coordinator.onHeightChange = onHeightChange
+        context.coordinator.maxHeight = maxHeight
+        // The frame observer drives both the inactive-truncation recompute and
+        // the content-height report; wire it when either feature is in use.
+        if truncatesWhenInactive || onHeightChange != nil {
             scrollView.postsFrameChangedNotifications = true
             NotificationCenter.default.addObserver(
                 context.coordinator,
@@ -71,7 +85,10 @@ struct MemoEditor: NSViewRepresentable {
                 name: NSView.frameDidChangeNotification,
                 object: scrollView
             )
-            DispatchQueue.main.async { context.coordinator.applyTruncationIfNeeded() }
+            DispatchQueue.main.async {
+                context.coordinator.applyTruncationIfNeeded()
+                context.coordinator.reportHeight()
+            }
         }
         return scrollView
     }
@@ -82,6 +99,8 @@ struct MemoEditor: NSViewRepresentable {
         context.coordinator.fontSize = fontSize
         context.coordinator.lineSpacing = lineSpacing
         context.coordinator.truncates = truncatesWhenInactive
+        context.coordinator.onHeightChange = onHeightChange
+        context.coordinator.maxHeight = maxHeight
         if textView.string != text {
             setText(text, in: textView)
         } else {
@@ -90,6 +109,9 @@ struct MemoEditor: NSViewRepresentable {
         // Re-apply truncation unless the field is currently being edited.
         if truncatesWhenInactive, textView.window?.firstResponder !== textView {
             DispatchQueue.main.async { context.coordinator.applyTruncationIfNeeded() }
+        }
+        if onHeightChange != nil {
+            DispatchQueue.main.async { context.coordinator.reportHeight() }
         }
     }
 
@@ -129,6 +151,9 @@ struct MemoEditor: NSViewRepresentable {
         var truncates: Bool
         var fontSize: CGFloat = 13
         var lineSpacing: CGFloat = 0
+        var onHeightChange: ((CGFloat) -> Void)?
+        var maxHeight: CGFloat = .greatestFiniteMagnitude
+        private var lastReportedHeight: CGFloat = -1
         weak var scrollView: NSScrollView?
         weak var textView: NSTextView?
 
@@ -142,6 +167,7 @@ struct MemoEditor: NSViewRepresentable {
         func textDidChange(_ notification: Notification) {
             guard let tv = notification.object as? NSTextView else { return }
             textBinding.wrappedValue = tv.string
+            reportHeight()
         }
 
         // Editing: show the whole note (word-wrap + scroll).
@@ -155,9 +181,32 @@ struct MemoEditor: NSViewRepresentable {
         }
 
         @objc func frameChanged() {
+            // Width changes can rewrap the text, so always re-measure. Height
+            // depends on width (not on the scroll view's own height), so this
+            // can't feed back into an infinite resize loop.
+            reportHeight()
             // Don't fight the user while they're typing.
             if let tv = textView, tv.window?.firstResponder === tv { return }
             applyTruncationIfNeeded()
+        }
+
+        // Measure the laid-out text height and report it up, de-duplicated so a
+        // settle frame at the same height doesn't churn SwiftUI state.
+        func reportHeight() {
+            guard let onHeightChange,
+                  let tv = textView,
+                  let container = tv.textContainer,
+                  let lm = tv.layoutManager else { return }
+            lm.ensureLayout(for: container)
+            let h = lm.usedRect(for: container).height + tv.textContainerInset.height * 2
+            // Only show the scroller once the content truly overflows the cap;
+            // while still growing the field, keep it hidden so it doesn't flash
+            // on each newline during the SwiftUI frame-resize lag.
+            scrollView?.hasVerticalScroller = h > maxHeight + 1
+            if abs(h - lastReportedHeight) > 0.5 {
+                lastReportedHeight = h
+                onHeightChange(h)
+            }
         }
 
         func applyTruncationIfNeeded() {

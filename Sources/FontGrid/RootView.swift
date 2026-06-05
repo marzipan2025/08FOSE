@@ -7,10 +7,10 @@ struct RootView: View {
     @StateObject private var memos = MemoStore()
     @StateObject private var samples = SampleStore()
 
-    @State private var leftWidth: CGFloat = Theme.panelDefaultWidth
-    @State private var rightWidth: CGFloat = 256
-    @State private var leftDragStart: CGFloat? = nil
-    @State private var rightDragStart: CGFloat? = nil
+    @AppStorage("leftPanelWidth") private var leftWidth: Double = Double(Theme.panelDefaultWidth)
+    @AppStorage("rightPanelWidth") private var rightWidth: Double = 256
+    @State private var leftDragStart: Double? = nil
+    @State private var rightDragStart: Double? = nil
 
     var body: some View {
         HStack(spacing: 0) {
@@ -19,8 +19,8 @@ struct RootView: View {
             ResizableVDivider(
                 width: $leftWidth,
                 dragStartWidth: $leftDragStart,
-                minWidth: Theme.panelMinWidth,
-                maxWidth: Theme.panelMaxWidth,
+                minWidth: Double(Theme.panelMinWidth),
+                maxWidth: Double(Theme.panelMaxWidth),
                 edge: .left
             )
             CenterPanel()
@@ -28,8 +28,8 @@ struct RootView: View {
             ResizableVDivider(
                 width: $rightWidth,
                 dragStartWidth: $rightDragStart,
-                minWidth: Theme.panelMinWidth,
-                maxWidth: Theme.panelMaxWidth,
+                minWidth: Double(Theme.panelMinWidth),
+                maxWidth: Double(Theme.panelMaxWidth),
                 edge: .right
             )
             RightPanel()
