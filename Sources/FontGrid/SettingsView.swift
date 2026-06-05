@@ -39,6 +39,7 @@ struct SettingsOverlay: View {
     @EnvironmentObject var vm: AppViewModel
     @EnvironmentObject var favorites: FavoritesStore
     @EnvironmentObject var memos: MemoStore
+    @Environment(\.colorScheme) private var colorScheme
 
     @AppStorage("previewText") private var previewText: String =
         "The quick brown fox jumps over lazy dog"
@@ -49,9 +50,14 @@ struct SettingsOverlay: View {
 
     var body: some View {
         ZStack {
-            // Blur everything behind, then dim slightly for focus.
-            VisualEffectBlur(material: .hudWindow, blendingMode: .withinWindow)
-            Color.black.opacity(0.18)
+            // Blur everything behind. Light mode uses the brightest material
+            // (.underPageBackground) to avoid a dark-grey cast; dark mode uses
+            // .hudWindow which naturally sits darker.
+            VisualEffectBlur(
+                material: colorScheme == .dark ? .hudWindow : .underPageBackground,
+                blendingMode: .withinWindow
+            )
+            Color.clear
                 .contentShape(Rectangle())
                 .onTapGesture { close() }
 
