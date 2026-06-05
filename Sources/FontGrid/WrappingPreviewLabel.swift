@@ -12,15 +12,20 @@ struct WrappingPreviewLabel: NSViewRepresentable {
     let text: String
     let fontName: String
     let fontSize: CGFloat
+    var color: Color? = nil   // nil → default label color
+
+    private var nsColor: NSColor {
+        color.map { NSColor($0) } ?? .labelColor
+    }
 
     func makeNSView(context: Context) -> WrappingPreviewView {
         let view = WrappingPreviewView()
-        view.update(text: text, fontName: fontName, fontSize: fontSize)
+        view.update(text: text, fontName: fontName, fontSize: fontSize, color: nsColor)
         return view
     }
 
     func updateNSView(_ view: WrappingPreviewView, context: Context) {
-        view.update(text: text, fontName: fontName, fontSize: fontSize)
+        view.update(text: text, fontName: fontName, fontSize: fontSize, color: nsColor)
     }
 }
 
@@ -29,10 +34,15 @@ final class WrappingPreviewView: NSView {
     private var text: String = ""
     private var fontName: String = ""
     private var fontSize: CGFloat = 0
+    private var color: NSColor = .labelColor
 
     override var isFlipped: Bool { true }
 
-    func update(text: String, fontName: String, fontSize: CGFloat) {
+    func update(text: String, fontName: String, fontSize: CGFloat, color: NSColor) {
+        if color != self.color {
+            self.color = color
+            needsDisplay = true
+        }
         guard text != self.text || fontName != self.fontName || fontSize != self.fontSize else {
             return
         }
@@ -80,7 +90,7 @@ final class WrappingPreviewView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         guard attributed.length > 0,
               let ctx = NSGraphicsContext.current?.cgContext else { return }
-        NSColor.labelColor.setFill()
+        color.setFill()
 
         // We use a flipped view (origin top-left); Core Text draws bottom-up,
         // so flip the context vertically before laying out the frame.

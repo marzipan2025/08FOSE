@@ -12,6 +12,7 @@ struct FontCell: View {
 
     @EnvironmentObject var favorites: FavoritesStore
     @EnvironmentObject var memos: MemoStore
+    @EnvironmentObject var samples: SampleStore
     @Environment(\.colorScheme) private var colorScheme
     @State private var hovering = false
 
@@ -20,6 +21,11 @@ struct FontCell: View {
 
     private var isFavorited: Bool { favorites.contains(family.name) }
     private var hasMemo: Bool { memos.hasNote(for: family.name) }
+    private var hasSpecimen: Bool { samples.hasSample(for: family.name) }
+
+    // The annotation mark: shown when the font has a memo or a custom specimen.
+    // Always the memo color; a specimen makes it a square instead of a circle.
+    private var hasAnnotationDot: Bool { hasMemo || hasSpecimen }
 
     private var cellHeight: CGFloat { Theme.cellHeight(fontSize: fontSize) }
 
@@ -115,12 +121,19 @@ struct FontCell: View {
 
     @ViewBuilder
     private var trailingBadge: some View {
-        if hovering || isFavorited || hasMemo {
+        if hovering || isFavorited || hasAnnotationDot {
             HStack(spacing: 3) {
-                if hasMemo {
-                    Circle()
-                        .fill(Theme.memoAccent)
-                        .frame(width: 9, height: 9)
+                if hasAnnotationDot {
+                    Group {
+                        if hasSpecimen {
+                            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                                .fill(Theme.memoAccent)
+                        } else {
+                            Circle()
+                                .fill(Theme.memoAccent)
+                        }
+                    }
+                    .frame(width: 9, height: 9)
                 }
                 if hovering || isFavorited {
                     Button { favorites.toggle(family.name) } label: {

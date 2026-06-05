@@ -5,6 +5,7 @@ struct RootView: View {
     @StateObject private var vm = AppViewModel()
     @StateObject private var favorites = FavoritesStore()
     @StateObject private var memos = MemoStore()
+    @StateObject private var samples = SampleStore()
 
     @State private var leftWidth: CGFloat = Theme.panelDefaultWidth
     @State private var rightWidth: CGFloat = 256
@@ -61,6 +62,7 @@ struct RootView: View {
         .environmentObject(vm)
         .environmentObject(favorites)
         .environmentObject(memos)
+        .environmentObject(samples)
         .preferredColorScheme(vm.isLightMode ? .light : .dark)
     }
 

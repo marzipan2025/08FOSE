@@ -61,8 +61,11 @@ final class AppViewModel: ObservableObject {
     // ESC dismiss only the dialog instead of closing the whole Settings modal.
     @Published var confirmClearFavorites: Bool = false
     @Published var confirmClearMemos: Bool = false
+    @Published var confirmClearSamples: Bool = false
     @Published var confirmReset: Bool = false
-    var isPresentingConfirm: Bool { confirmClearFavorites || confirmClearMemos || confirmReset }
+    var isPresentingConfirm: Bool {
+        confirmClearFavorites || confirmClearMemos || confirmClearSamples || confirmReset
+    }
 
     // Wallpaper "skins" — bundled under Resources/Wallpapers/. The picker writes
     // a logical name (e.g. "Wallpaper02"); WallpaperOverlay resolves the actual

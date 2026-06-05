@@ -262,6 +262,7 @@ struct FavoriteRow: View {
     let onSelect: () -> Void
     @EnvironmentObject var favorites: FavoritesStore
     @EnvironmentObject var memos: MemoStore
+    @EnvironmentObject var samples: SampleStore
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("previewText") private var previewText: String = "The quick brown fox jumps over lazy dog"
     @State private var hovering = false
@@ -271,6 +272,7 @@ struct FavoriteRow: View {
     private var shadowScale: Double { colorScheme == .light ? 0.3 : 1.0 }
 
     private var hasMemo: Bool { memos.hasNote(for: name) }
+    private var hasSpecimen: Bool { samples.hasSample(for: name) }
 
     private var sampleText: String {
         previewText.isEmpty ? "The quick brown fox jumps over lazy dog." : previewText
@@ -304,10 +306,17 @@ struct FavoriteRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             HStack(spacing: 3) {
-                if hasMemo {
-                    Circle()
-                        .fill(Theme.memoAccent)
-                        .frame(width: 9, height: 9)
+                if hasMemo || hasSpecimen {
+                    Group {
+                        if hasSpecimen {
+                            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                                .fill(Theme.memoAccent)
+                        } else {
+                            Circle()
+                                .fill(Theme.memoAccent)
+                        }
+                    }
+                    .frame(width: 9, height: 9)
                 }
                 Button { favorites.toggle(name) } label: {
                     Circle()

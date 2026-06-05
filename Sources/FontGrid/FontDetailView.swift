@@ -9,6 +9,7 @@ struct FontDetailView: View {
 
     @EnvironmentObject var favorites: FavoritesStore
     @EnvironmentObject var memos: MemoStore
+    @EnvironmentObject var samples: SampleStore
     @EnvironmentObject var vm: AppViewModel
     @Environment(\.colorScheme) private var colorScheme
     @State private var copied = false
@@ -17,6 +18,7 @@ struct FontDetailView: View {
     @State private var memoHeaderHovering = false
     @State private var metadata: FontMetadata = .empty
     @State private var infoExpanded = false      // narrow layout "Read more" toggle
+    @FocusState private var collapsedMemoFocused: Bool
 
     // At/above this card width the info section sits in the right of the middle
     // (weight-list) section; below it, the info flows as multiple columns under
@@ -28,8 +30,23 @@ struct FontDetailView: View {
 
     private var isFavorited: Bool { favorites.contains(family.name) }
 
+    // A non-empty custom sample for this family overrides the global preview
+    // text across every weight (and is drawn in the accent color).
+    private var hasCustomSample: Bool { samples.hasSample(for: family.name) }
+
     private var sampleText: String {
-        previewText.isEmpty ? "The quick brown fox jumps over lazy dog." : previewText
+        if hasCustomSample { return samples.sample(for: family.name) }
+        return previewText.isEmpty ? "The quick brown fox jumps over lazy dog." : previewText
+    }
+
+    // nil → default label color; accent when a custom sample is in effect.
+    private var sampleColor: Color? { hasCustomSample ? Theme.accent : nil }
+
+    private var sampleBinding: Binding<String> {
+        Binding(
+            get: { samples.sample(for: family.name) },
+            set: { samples.setSample($0, for: family.name) }
+        )
     }
 
     // Hairline between header / weight list / memo. White in dark mode (lifts
@@ -88,21 +105,17 @@ struct FontDetailView: View {
         VStack(alignment: .leading, spacing: 0) {
             titleArea
             Rectangle().fill(detailDivider).frame(height: 1)
-            if memoExpanded {
-                expandedMemoArea
-            } else {
-                HStack(spacing: 0) {
-                    weightList
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    if !metadata.isEmpty {
-                        infoColumn
-                            .frame(width: max(180, width * 0.25))
-                    }
+            HStack(spacing: 0) {
+                weightList
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                if !metadata.isEmpty {
+                    infoColumn
+                        .frame(width: max(180, width * 0.25))
                 }
-                .frame(maxHeight: .infinity)
-                Rectangle().fill(detailDivider).frame(height: 1)
-                collapsedMemoArea
             }
+            .frame(maxHeight: .infinity)
+            Rectangle().fill(detailDivider).frame(height: 1)
+            memoArea
         }
     }
 
@@ -114,19 +127,26 @@ struct FontDetailView: View {
         VStack(alignment: .leading, spacing: 0) {
             titleArea
             Rectangle().fill(detailDivider).frame(height: 1)
-            if memoExpanded {
-                expandedMemoArea
-            } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        if !metadata.isEmpty { infoColumns(width: width) }
-                        weightListContent
-                    }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    if !metadata.isEmpty { infoColumns(width: width) }
+                    weightListContent
                 }
-                .frame(maxHeight: .infinity)
-                Rectangle().fill(detailDivider).frame(height: 1)
-                collapsedMemoArea
             }
+            .frame(maxHeight: .infinity)
+            Rectangle().fill(detailDivider).frame(height: 1)
+            memoArea
+        }
+    }
+
+    // Bottom memo strip: a single line when collapsed, a fixed 210pt panel
+    // (memo editor + specimen box) when expanded via the chevron.
+    @ViewBuilder
+    private var memoArea: some View {
+        if memoExpanded {
+            expandedMemoArea.frame(height: 210)
+        } else {
+            collapsedMemoArea
         }
     }
 
@@ -259,12 +279,30 @@ struct FontDetailView: View {
                         .foregroundStyle(Theme.memoAccent)
                         .allowsHitTesting(false)
                 }
+                // Editing surface (hidden until focused so the read-only,
+                // ellipsized label below is what shows at rest).
                 TextField("", text: memoBinding)
                     .textFieldStyle(.plain)
                     .font(.system(size: 15))
                     .foregroundStyle(Theme.memoAccent)
                     .lineLimit(1)
+                    .focused($collapsedMemoFocused)
+                    .opacity(collapsedMemoFocused ? 1 : 0)
+                // Resting display: one line, tail-ellipsized (no mid-glyph clip).
+                if !collapsedMemoFocused && !memos.note(for: family.name).isEmpty {
+                    Text(memos.note(for: family.name))
+                        .font(.system(size: 15))
+                        .foregroundStyle(Theme.memoAccent)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .allowsHitTesting(false)
+                }
             }
+            // Right margin of 90 total (24 + 66) so the single line clears the
+            // collapse chevron area with extra room.
+            .padding(.trailing, 66)
+            .contentShape(Rectangle())
+            .onTapGesture { collapsedMemoFocused = true }
         }
         .padding(.horizontal, 24)
         .padding(.top, 16)
@@ -282,33 +320,85 @@ struct FontDetailView: View {
     // MARK: - Memo (expanded: fills body)
 
     private var expandedMemoArea: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            memoHeader(
-                icon: "chevron.down",
-                help: "Collapse memo"
-            ) {
-                withAnimation(.easeOut(duration: 0.2)) { memoExpanded = false }
+        // spacing 12: the gap between the memo text and the specimen box.
+        VStack(alignment: .leading, spacing: 12) {
+            // Memo header + editor keep the standard 24pt side margin.
+            VStack(alignment: .leading, spacing: 8) {
+                memoHeader(
+                    icon: "chevron.down",
+                    help: "Collapse memo"
+                ) {
+                    withAnimation(.easeOut(duration: 0.2)) { memoExpanded = false }
+                }
+                ZStack(alignment: .topLeading) {
+                    if memos.note(for: family.name).isEmpty {
+                        Text("Add a note…")
+                            .font(.system(size: 17))
+                            .foregroundStyle(Theme.memoAccent)
+                            .allowsHitTesting(false)
+                    }
+                    MemoEditor(
+                        text: memoBinding,
+                        fontSize: 17,
+                        lineSpacing: 17 * 0.21,   // 0.35 reduced a further 40%
+                        textColor: NSColor(Theme.memoAccent),
+                        truncatesWhenInactive: true
+                    )
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                // Extra right margin (24 + 36 = 60 total) so wrapped memo text
+                // never runs under the collapse chevron at the top-right.
+                .padding(.trailing, 36)
             }
+            .padding(.horizontal, 24)
+
+            // Custom specimen text: a fixed-height, slightly darker rounded box
+            // pinned below the memo. When set, it replaces the preview text for
+            // every weight in this detail view. Margins are ~40% of the memo's.
+            specimenBox
+                .padding(.horizontal, 10)
+        }
+        .padding(.top, 20)
+        .padding(.bottom, 10)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(memoAreaBackground)
+    }
+
+    private var specimenBox: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Specimen")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
             ZStack(alignment: .topLeading) {
-                if memos.note(for: family.name).isEmpty {
-                    Text("Add a note…")
+                if samples.sample(for: family.name).isEmpty {
+                    Text("Add specimen text…")
                         .font(.system(size: 17))
-                        .foregroundStyle(Theme.memoAccent)
+                        .foregroundStyle(Theme.accent.opacity(0.55))
                         .allowsHitTesting(false)
                 }
                 MemoEditor(
-                    text: memoBinding,
+                    text: sampleBinding,
                     fontSize: 17,
-                    lineSpacing: 17 * 0.5,
-                    textColor: NSColor(Theme.memoAccent)
+                    lineSpacing: 17 * 0.4,
+                    textColor: NSColor(Theme.accent)
                 )
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 20)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(memoAreaBackground)
+        // Equal top & left margins for the text, 4px larger than before.
+        .padding(.leading, 16)
+        .padding(.top, 16)
+        .padding(.trailing, 16)
+        .padding(.bottom, 8)
+        // Just tall enough for the "Specimen" title + one line of input.
+        .frame(height: 68)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                // Slightly darker than the memo strip it sits on (~70% of the
+                // previous opacity, so it reads more transparent).
+                .fill(Color.black.opacity(colorScheme == .light ? 0.04 : 0.15))
+        )
     }
 
     private func memoHeader(icon: String, help: String, action: @escaping () -> Void) -> some View {
@@ -428,7 +518,7 @@ struct FontDetailView: View {
     private var weightListContent: some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(family.memberFontNames.enumerated()), id: \.offset) { index, psName in
-                WeightRow(psName: psName, sampleText: sampleText, sampleSize: CGFloat(vm.weightRowFontSize))
+                WeightRow(psName: psName, sampleText: sampleText, sampleColor: sampleColor, sampleSize: CGFloat(vm.weightRowFontSize))
                 if index < family.memberFontNames.count - 1 {
                     Divider().opacity(0.15).padding(.horizontal, 24)
                 }
@@ -491,6 +581,7 @@ private extension View {
 struct WeightRow: View {
     let psName: String
     let sampleText: String
+    var sampleColor: Color? = nil
     let sampleSize: CGFloat
 
     private var faceName: String {
@@ -510,7 +601,7 @@ struct WeightRow: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
-            WrappingPreviewLabel(text: sampleText, fontName: psName, fontSize: sampleSize)
+            WrappingPreviewLabel(text: sampleText, fontName: psName, fontSize: sampleSize, color: sampleColor)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, 24)

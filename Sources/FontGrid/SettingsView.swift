@@ -21,6 +21,8 @@ struct ExportData: Codable {
     var exportedAt: Date = Date()
     var favorites: [String]
     var memos: [String: String]
+    // Added in a later version; optional so older backups still decode.
+    var samples: [String: String]?
 }
 
 // Full-window Settings overlay: a blurred backdrop over the whole app with the
@@ -39,6 +41,7 @@ struct SettingsOverlay: View {
     @EnvironmentObject var vm: AppViewModel
     @EnvironmentObject var favorites: FavoritesStore
     @EnvironmentObject var memos: MemoStore
+    @EnvironmentObject var samples: SampleStore
     @Environment(\.colorScheme) private var colorScheme
 
     @AppStorage("previewText") private var previewText: String =
@@ -141,16 +144,30 @@ struct SettingsOverlay: View {
                     Button("Cancel", role: .cancel) {}
                 }
 
-                // Export / import favorites + memos (tags live inside memos).
+                dataRow(
+                    title: "Specimens",
+                    detail: "\(samples.samples.count) saved",
+                    disabled: samples.samples.isEmpty
+                ) { vm.confirmClearSamples = true }
+                .confirmationDialog(
+                    "Remove all custom specimens?",
+                    isPresented: $vm.confirmClearSamples,
+                    titleVisibility: .visible
+                ) {
+                    Button("Clear All Specimens", role: .destructive) { samples.clearAll() }
+                    Button("Cancel", role: .cancel) {}
+                }
+
+                // Export / import favorites + memos + specimens (tags live inside memos).
                 backupRow(
                     title: "Export",
-                    detail: "Save favorites & memos to a JSON file",
+                    detail: "Save favorites, memos & specimens to a JSON file",
                     button: "Export",
                     action: exportData
                 )
                 backupRow(
                     title: "Import",
-                    detail: "Merge favorites & memos from a JSON file",
+                    detail: "Merge favorites, memos & specimens from a JSON file",
                     button: "Import",
                     action: importData
                 )
@@ -321,7 +338,8 @@ struct SettingsOverlay: View {
     private func exportData() {
         let payload = ExportData(
             favorites: favorites.exportList,
-            memos: memos.exportMap
+            memos: memos.exportMap,
+            samples: samples.exportMap
         )
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
@@ -358,6 +376,7 @@ struct SettingsOverlay: View {
         // fonts not installed here are kept and simply stay hidden.
         favorites.merge(payload.favorites)
         memos.merge(payload.memos)
+        samples.merge(payload.samples ?? [:])
     }
 
     private func presentImportError(_ message: String) {
@@ -373,6 +392,7 @@ struct SettingsOverlay: View {
     private func resetEverything() {
         favorites.clearAll()
         memos.clearAll()
+        samples.clearAll()
         previewText = Self.defaultPreviewText
         vm.resetToDefaults()
         resetWindowSize()
