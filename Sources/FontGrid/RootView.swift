@@ -153,6 +153,12 @@ struct RootView: View {
                 vm.toggleScript(category)
             }
             return true
+        case "[":
+            withAnimation(.easeInOut(duration: 0.22)) { leftPanelOpen.toggle() }
+            return true
+        case "]":
+            withAnimation(.easeInOut(duration: 0.22)) { rightPanelOpen.toggle() }
+            return true
         default:
             return false
         }

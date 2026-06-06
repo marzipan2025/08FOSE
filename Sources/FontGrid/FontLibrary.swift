@@ -39,6 +39,51 @@ struct FontFamily: Identifiable, Hashable {
     var id: String { name }
 }
 
+extension FontFamily {
+    /// PostScript name to use for compact list previews (e.g. the favorites
+    /// panel), so the weight is deterministic instead of whatever Core Text
+    /// resolves from a bare family name. Rule:
+    ///   1. a member whose face is literally named "Regular"
+    ///   2. else a member whose OS/2 usWeightClass is 400, then 500
+    ///   3. else nil — caller falls back to the family name (previous behavior)
+    var previewFontName: String? {
+        if let cached = FontFamily.previewCache[name] { return cached }
+        let resolved = FontFamily.resolvePreviewName(memberFontNames)
+        FontFamily.previewCache[name] = resolved
+        return resolved
+    }
+
+    // Resolved once per family; the inputs (installed faces) don't change during
+    // a run. Value is Optional so a nil result is cached too.
+    private static var previewCache: [String: String?] = [:]
+
+    private static func resolvePreviewName(_ members: [String]) -> String? {
+        // 1. A face named exactly "Regular".
+        for ps in members {
+            if let font = NSFont(name: ps, size: 12),
+               let face = font.fontDescriptor.object(forKey: .face) as? String,
+               face.trimmingCharacters(in: .whitespaces).caseInsensitiveCompare("Regular") == .orderedSame {
+                return ps
+            }
+        }
+        // 2. First member at usWeightClass 400, else 500.
+        var byWeight: [Int: String] = [:]
+        for ps in members {
+            if let w = usWeightClass(ps), byWeight[w] == nil { byWeight[w] = ps }
+        }
+        return byWeight[400] ?? byWeight[500]
+    }
+
+    // OS/2 usWeightClass (uint16 big-endian at byte offset 4 of the OS/2 table).
+    private static func usWeightClass(_ psName: String) -> Int? {
+        let font = CTFontCreateWithName(psName as CFString, 12, nil)
+        guard let data = CTFontCopyTable(font, CTFontTableTag(kCTFontTableOS2), []) as Data?,
+              data.count >= 6 else { return nil }
+        let base = data.startIndex
+        return Int(data[base + 4]) << 8 | Int(data[base + 5])
+    }
+}
+
 struct FontLibraryStats {
     var total: Int = 0
     var counts: [ScriptCategory: Int] = [:]

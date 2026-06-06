@@ -193,11 +193,17 @@ struct RightPanel: View {
         vm.favoritesByRecent ? favorites.byRecency : favorites.sorted
     }
 
+    // Resolve the deterministic preview face per the weight rule, falling back
+    // to the family name when no Regular / 400 / 500 member exists.
+    private func previewFontName(for name: String) -> String {
+        (vm.library.families.first { $0.name == name }?.previewFontName) ?? name
+    }
+
     private var favoritesList: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 2) {
                 ForEach(displayedFavorites, id: \.self) { name in
-                    FavoriteRow(name: name, tooltipSuppressed: vm.showSettings) {
+                    FavoriteRow(name: name, previewFontName: previewFontName(for: name), tooltipSuppressed: vm.showSettings) {
                         if let family = vm.library.families.first(where: { $0.name == name }) {
                             vm.detailSource = .favorites
                             if vm.selectedFamily == nil {
@@ -260,6 +266,9 @@ struct TagCapsule: View {
 
 struct FavoriteRow: View {
     let name: String
+    // PostScript face used to render the sample (deterministic weight); falls
+    // back to the family name upstream when no preferred member exists.
+    var previewFontName: String
     var tooltipSuppressed: Bool = false
     let onSelect: () -> Void
     @EnvironmentObject var favorites: FavoritesStore
@@ -295,7 +304,7 @@ struct FavoriteRow: View {
                     .offset(y: -2)
 
                 Text(sampleText)
-                    .font(.custom(name, size: 20))
+                    .font(.custom(previewFontName, size: 20))
                     .foregroundStyle(Color.primary.opacity(0.8))
                     .lineLimit(1)
                     .truncationMode(.tail)

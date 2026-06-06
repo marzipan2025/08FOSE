@@ -250,6 +250,7 @@ struct SettingsOverlay: View {
                 shortcutRow("M", "Memos filter")
                 shortcutRow("0–4", "Wallpaper (0 = none)")
                 shortcutRow("K J C L S O", "Toggle script bucket")
+                shortcutRow("[ ]", "Collapse / expand left · right panel")
                 shortcutRow("⌘ ↑ ↓", "Font size")
                 shortcutRow("⌘ ← →", "Columns")
                 shortcutRow("Esc", "Close overlay / detail")
