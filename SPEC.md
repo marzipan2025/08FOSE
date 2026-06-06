@@ -2,7 +2,7 @@
 
 macOS에 설치된 폰트를 그리드로 훑어보고, 미리보기·즐겨찾기·메모·태그·세부 정보 확인을 빠르게 할 수 있는 macOS 네이티브 앱 (SwiftUI + AppKit, macOS 13+).
 
-이 문서는 **현행 구현(v0.2.0) 기준 동작 사양**이다. 색·간격 등 디자인 토큰의 실제 값은 `Theme.swift`를 단일 출처로 한다.
+이 문서는 **현행 구현(v0.3.6) 기준 동작 사양**이다. 색·간격 등 디자인 토큰의 실제 값은 `Theme.swift`를 단일 출처로 한다.
 
 ---
 
@@ -75,11 +75,14 @@ NSFontManager는 한글 등 비-ASCII family 이름을 `/B9CC/B144/C124/CCB4` �
 └─────────┴─────────────────────────┴─────────┘
 ```
 
-- 좌/우 사이드바: **드래그로 폭 조절** (기본 240, 최소 240, 최대 440pt)
-- 기본 윈도우 크기: 1280×860
+- 좌/우 사이드바: **드래그로 폭 조절** (기본 좌 240·우 256, 최소 240, 최대 440pt), 폭은 **영구 저장되어 재시작 시 복원**
+- 기본 윈도우 크기: 1280×860 (최소 880×640). 윈도우 프레임(크기·위치)은 `setFrameAutosaveName("MainWindow")`로 **영구 저장·복원**
 - 윈도우 스타일: `.titleBar` + `.fullSizeContentView` (시스템 타이틀바 위로 콘텐츠 확장)
 - **라이트/다크 모드 전환 지원** (기본 다크)
 - 선택 가능한 배경 "Wallpaper" 오버레이 (모드별 개별 기억)
+
+### 세션 상태 복원 (재시작 시)
+앱을 껐다 켜면 마지막 상태를 재현한다 — 윈도우 크기·위치, 좌/우 패널 폭, 좌측 패널의 모든 선택(검색어·Weights·Favorites/Memo only·Script 버킷·Tag·Columns·Font Size), 그리고 **중앙 그리드의 스크롤 위치**. 스크롤은 픽셀 Y로 저장하되 위 항목들이 동일하게 복원되어 레이아웃이 결정적이므로 같은 행에 안착한다(`NSScrollView` introspect, 콘텐츠 높이가 자랄 때까지 재시도). 저장된 폰트 수가 줄어 목표 Y에 못 미치면 가능한 최대 위치로 클램프.
 
 ---
 
@@ -129,7 +132,9 @@ NSFontManager는 한글 등 비-ASCII family 이름을 `/B9CC/B144/C124/CCB4` �
 - **← / → 로 이전·다음 폰트 연속 탐색** (상세 유지). 순회 대상은 연 출처 기준 — 그리드에서 열면 현재 필터·정렬된 그리드, 즐겨찾기에서 열면 즐겨찾기 목록(현재 정렬). 양 끝 clamp, 전환 시 메모 접고 정보 펼침 초기화. 텍스트 입력 중(프리뷰 바·메모 입력)에는 좌우키를 가로채지 않음(커서 이동), 상세가 열릴 때 입력 포커스는 해제
 - 상세가 열린 동안(전체화면 제외) 중앙 상단 바는 `08FOSE·통계` 대신 **이전/다음 폰트명**(좌/다음 우)을 표기 — 비클릭, 좌우키 이동과 동일한 목록 기준
 - 셀↔상세는 `matchedGeometryEffect` 전환
-- **상단 헤더 (전체 폭)**: family 이름(~23pt bold) + "N weight(s)" + 액션 3종
+- **상단 헤더 (전체 폭, 높이 고정)**: family 이름(~23pt bold) + "N weight(s)" + 액션 3종
+  - 이름이 길면 **축소하지 않고 tail 말줄임(…)**, 우측 닫기 버튼과 **16px 간격** 유지
+  - 헤더 영역은 세로 압축 불가(`fixedSize(vertical:)`) — 메모가 자라도 헤더가 눌리지 않음
   - 한글 지원 폰트는 이름 오른쪽에 커스텀 **KR 배지**(squircle 실선 + 대문자 KR, 타이틀의 ~72% 높이, 중앙보다 살짝 위)
   - **Favorite** 토글 / **Copy name**(1.5초 "Copied") / **Show in Finder**
 - **정보 섹션** (1장 FontMetadata, 반응형):
@@ -138,7 +143,14 @@ NSFontManager는 한글 등 비-ASCII family 이름을 `/B9CC/B144/C124/CCB4` �
   - Features 태그는 노트 블루 + 이탤릭, 항목 라벨은 소형 대문자
 - **weight 목록**: 각 행 = face 이름 + PostScript(모노) + 큰 샘플
   - face 이름은 `NSFont(name:size:).fontDescriptor.object(forKey: .face)`, 실패 시 PS 이름 폴백
-- **메모 영역**: 하단에 접힘(한 줄)/펼침(본문 가득) 토글, 즉시 영구화
+  - 샘플 텍스트는 전역 프리뷰 텍스트를 따르되, 해당 family에 **커스텀 specimen**이 설정돼 있으면 그것으로 대체(악센트 색)
+- **메모 영역** (하단, 꺾쇠로 접힘/펼침 토글, 즉시 영구화):
+  - **접힘**: 메모를 **한 줄 + tail 말줄임**으로 압축, specimen 숨김 → 중앙 weight 목록 공간 회복
+  - **펼침**: 메모 편집기가 **내용(줄 수)에 따라 위로 성장** + 아래에 **specimen 박스**(고정 68pt, 메모와 20px 간격)
+    - 빈 메모 = "Add a note…" 한 줄 높이만. 타이핑으로 줄이 늘거나 카드 폭을 좁혀 래핑이 늘면 높이 재계산
+    - 상한 = 메모 윗변이 **헤더 아래 구분선**에 닿는 지점(`카드높이 − 헤더 − 구분선 − specimen − 여백`). 상한 초과 시 그제야 메모 **내부 스크롤**, specimen은 바닥 고정
+    - 성장 중에는 세로 스크롤바를 숨겨 줄 추가 시 깜빡임 방지(콘텐츠가 상한을 실제로 넘을 때만 표시)
+  - **커스텀 specimen**: family별로 저장, 설정 시 그 family의 모든 weight 샘플을 대체
 
 ### 3.8 즐겨찾기 + 태그 (우측 패널)
 - **FAVORITES**: 헤더에 개수 + **A–Z / Recent** 정렬 토글
@@ -148,6 +160,17 @@ NSFontManager는 한글 등 비-ASCII family 이름을 `/B9CC/B144/C124/CCB4` �
   - 단일 토글로 중앙 그리드 필터 (기존 필터와 AND), 활성 시 악센트 강조 (같은 캡슐 재클릭으로 해제)
   - 헤더의 꺾쇠(배경 없음, 호버 시 진해짐)로 **즐겨찾기 목록 위까지 확장/축소**
 - **버전 푸터**: 패널 최하단 고정 36pt, 좌측 정렬 `© pa_st - v{버전}`
+
+### 3.9 Settings (전체 화면 모달)
+- 진입: 좌측 패널 하단 **Settings(기어)** 버튼 또는 **⌘,**. 닫기: 우상단 X 또는 **ESC**
+- 전체 윈도우 블러 위에 콘텐츠를 중앙 패널 컬럼 폭(최대 480pt)으로 표시. 아래의 테마/Wallpaper 단축키는 미리보기 위해 살아 있음
+- **Data**
+  - Favorites / Memos / Specimens 각각 **Clear All**(확인 다이얼로그, 개수 표시, 비어 있으면 비활성)
+  - **Export**: Favorites·Memos·Specimens를 JSON으로 저장 (`ExportData`, family 이름 키 기반이라 다른 Mac에서도 호환). **UI 상태(창·패널·필터·스크롤 등)는 포함하지 않음**
+  - **Import**: JSON에서 Favorites·Memos·Specimens **병합**
+- **About / Shortcuts / Licenses**: 정보·단축키 안내·라이선스
+- **Reset everything**(확인 다이얼로그): 콘텐츠(즐겨찾기·메모·specimen)와 프리뷰 텍스트 초기화 + `removePersistentDomain`으로 앱 UserDefaults 도메인 전체 삭제(필터·테마·Wallpaper·창 프레임·패널 폭·스크롤 등 모든 영속 키 포함) + 윈도우를 **1280×860 중앙**으로 즉시 복귀(`resetWindowSize`)
+  - 주의: 패널 폭은 영속 값만 지워지고 화면상 폭은 재시작 후 반영될 수 있음. `resetWindowSize`는 화면이 1280×860보다 작아도 크기를 클램프하지 않음(개선 여지)
 
 ---
 
@@ -163,13 +186,17 @@ NSFontManager는 한글 등 비-ASCII family 이름을 `/B9CC/B144/C124/CCB4` �
 
 - **0–4**: Wallpaper (`0` 없음, `1–4` Wallpaper01–04)
 - **t**: 다크 ↔ 라이트 토글
+- **w**: Weights 필터 순환 (`All → 1 → 3+ → 5+ → All`)
 - **f / m**: Favorites only / Memo only 토글
 - **k / j / c / l / s / o**: Script 버킷 토글 (Korean / Japanese / Chinese / Latin / Symbol / Other)
+- 한국어(두벌식) 입력 상태에서도 위 글자 단축키는 같은 물리 키의 라틴 글자로 매핑되어 동작
+- **⌘ ,**: Settings 모달 토글 (입력 중에도 동작)
 - **⌘ + ↑ / ↓**: Font Size 증가 / 감소
 - **⌘ + → / ←**: Columns 증가 / 감소 (→ 증가)
 - **← / →** (상세 열림, 입력 비포커스): 이전/다음 폰트
-- **ESC 캐스케이드** (한 번에 한 단계): ① 입력 포커스 아웃 → ② 상세 닫기 → ③ 전체화면 해제 → ④ 무동작
+- **ESC 캐스케이드** (한 번에 한 단계): ① 입력 포커스 아웃 → ② Settings 닫기 → ③ 상세 닫기 → ④ 전체화면 해제 → ⑤ 무동작
   - 입력 중에도 ESC는 포커스 아웃을 위해 동작 (유일한 예외)
+  - Settings 내 Clear All 확인 다이얼로그가 열려 있으면 ESC는 다이얼로그만 닫고 Settings는 유지
 
 ---
 
@@ -193,10 +220,20 @@ NSFontManager는 한글 등 비-ASCII family 이름을 `/B9CC/B144/C124/CCB4` �
 - SwiftUI 중심, AppKit/CoreText는 윈도우 크롬·NSFontManager·sfnt/name 테이블·Core Text 렌더에 한정
 
 ### 5.4 영속화 키 (UserDefaults / AppStorage)
-- `FontGrid.favorites`, `FontGrid.memos`
+**콘텐츠 데이터**
+- `FontGrid.favorites`, `FontGrid.memos`, `FontGrid.samples` (specimen)
+
+**환경/외형**
 - `previewText`, `favoritesByRecent`, `isLightMode`
 - `selectedWallpaperDark`, `selectedWallpaperLight` (구 `selectedWallpaper`는 마이그레이션용)
-- (태그 활성 상태 `activeTag`는 비영속 — 세션 한정)
+
+**세션 UI 상태 (재시작 시 복원)**
+- 좌측 패널 선택: `searchQuery`, `weightFilter`(문자열 인코딩 `all`/`exactly:N`/`atLeast:N`), `favoritesOnly`, `memoOnly`, `scriptFilter`(rawValue 배열), `activeTag`, `columnCount`, `previewSizeOffset`
+- 레이아웃: `leftPanelWidth`, `rightPanelWidth`
+- 중앙 그리드 스크롤: `centerGridScrollY`
+- 윈도우 프레임: `NSWindow Frame MainWindow` (AppKit autosave)
+
+`activeTag`를 포함한 위 세션 UI 상태는 모두 영속(과거 비영속에서 변경됨). **Reset everything**은 `removePersistentDomain`으로 이 모든 키를 한 번에 삭제한다.
 
 ---
 
@@ -204,20 +241,24 @@ NSFontManager는 한글 등 비-ASCII family 이름을 `/B9CC/B144/C124/CCB4` �
 
 ```
 Sources/FontGrid/
-├─ FontGridApp.swift        앱 진입 / 윈도우
-├─ RootView.swift           3분할 + 리사이즈 핸들 + Wallpaper 오버레이
-├─ AppViewModel.swift       검색/필터/태그/레이아웃/테마 상태
+├─ FontGridApp.swift        앱 진입 / 윈도우(프레임 autosave·신호등 보정)
+├─ RootView.swift           3분할 + 리사이즈 핸들(폭 영속) + Wallpaper 오버레이 + 전역 키 모니터
+├─ AppViewModel.swift       검색/필터/태그/레이아웃/테마 상태 + 영속화 + resetToDefaults
 ├─ Theme.swift              디자인 토큰 + appVersion
 ├─ FontLibrary.swift        FontFamily 로딩/스크립트 판정/CJK 디코딩
 ├─ FavoritesStore.swift     즐겨찾기 영속화
 ├─ MemoStore.swift          메모 + 태그 파싱
+├─ SampleStore.swift        커스텀 specimen 영속화
 ├─ FontMetadata.swift       상세 정보 sfnt/name 추출
 ├─ FlowLayout.swift         줄바꿈 래핑 레이아웃 (태그/Features)
 ├─ FontCell.swift           셀 + 호버 weight 순환 + Core Text 프리뷰
-├─ FontDetailView.swift     상세 오버레이 (정보/weight/메모)
-├─ MemoEditor.swift         메모 입력
+├─ WrappingPreviewLabel.swift  상세 weight 행 래핑 프리뷰
+├─ FontDetailView.swift     상세 오버레이 (정보/weight/메모/specimen)
+├─ MemoEditor.swift         메모/specimen 입력(NSTextView, 내용 높이 보고)
+├─ SettingsView.swift       Settings 모달 + Export/Import + Reset
+├─ PanelSection.swift       패널 섹션·구분선·리사이즈 디바이더
 ├─ NativeTooltip.swift      네이티브 툴팁
-└─ Panels/{Left,Center,Right}Panel.swift
+└─ Panels/{Left,Center,Right}Panel.swift   (CenterPanel: 그리드 + 스크롤 위치 영속)
 ```
 
 ---

@@ -7,17 +7,15 @@ struct RootView: View {
     @StateObject private var memos = MemoStore()
     @StateObject private var samples = SampleStore()
 
-    @AppStorage("leftPanelWidth") private var leftWidth: Double = Double(Theme.panelDefaultWidth)
-    @AppStorage("rightPanelWidth") private var rightWidth: Double = 256
     @State private var leftDragStart: Double? = nil
     @State private var rightDragStart: Double? = nil
 
     var body: some View {
         HStack(spacing: 0) {
             LeftPanel()
-                .frame(width: leftWidth)
+                .frame(width: vm.leftPanelWidth)
             ResizableVDivider(
-                width: $leftWidth,
+                width: $vm.leftPanelWidth,
                 dragStartWidth: $leftDragStart,
                 minWidth: Double(Theme.panelMinWidth),
                 maxWidth: Double(Theme.panelMaxWidth),
@@ -26,14 +24,14 @@ struct RootView: View {
             CenterPanel()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             ResizableVDivider(
-                width: $rightWidth,
+                width: $vm.rightPanelWidth,
                 dragStartWidth: $rightDragStart,
                 minWidth: Double(Theme.panelMinWidth),
                 maxWidth: Double(Theme.panelMaxWidth),
                 edge: .right
             )
             RightPanel()
-                .frame(width: rightWidth)
+                .frame(width: vm.rightPanelWidth)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // Wallpaper overlay: same mechanism in both dark and light mode, driven
@@ -45,7 +43,7 @@ struct RootView: View {
             if vm.showSettings {
                 // Blur is full-window, but the settings content + close button
                 // are confined to the center panel column (dividers are 1pt).
-                SettingsOverlay(leftInset: leftWidth + 1, rightInset: rightWidth + 1)
+                SettingsOverlay(leftInset: vm.leftPanelWidth + 1, rightInset: vm.rightPanelWidth + 1)
                     .transition(.opacity)
             }
         }

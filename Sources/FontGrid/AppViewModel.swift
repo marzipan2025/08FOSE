@@ -80,6 +80,27 @@ final class AppViewModel: ObservableObject {
         didSet { UserDefaults.standard.set(columnCount, forKey: Self.columnCountKey) }
     }
     @Published var maxColumns: Int = 6
+
+    // Sidebar widths. Persisted here (not via @AppStorage) so they save reliably
+    // and so resetToDefaults can restore them live, matching the rest of the
+    // persisted UI state.
+    private static let leftPanelWidthKey = "leftPanelWidth"
+    private static let rightPanelWidthKey = "rightPanelWidth"
+    static let defaultLeftPanelWidth = Double(Theme.panelDefaultWidth)
+    static let defaultRightPanelWidth: Double = 256
+
+    @Published var leftPanelWidth: Double = AppViewModel.loadWidth(AppViewModel.leftPanelWidthKey, AppViewModel.defaultLeftPanelWidth) {
+        didSet { UserDefaults.standard.set(leftPanelWidth, forKey: Self.leftPanelWidthKey) }
+    }
+    @Published var rightPanelWidth: Double = AppViewModel.loadWidth(AppViewModel.rightPanelWidthKey, AppViewModel.defaultRightPanelWidth) {
+        didSet { UserDefaults.standard.set(rightPanelWidth, forKey: Self.rightPanelWidthKey) }
+    }
+
+    // Distinguish "never set" (use default) from a stored 0, which would
+    // otherwise collapse a panel to zero width on first launch.
+    private static func loadWidth(_ key: String, _ fallback: Double) -> Double {
+        UserDefaults.standard.object(forKey: key) == nil ? fallback : UserDefaults.standard.double(forKey: key)
+    }
     @Published var previewSizeOffset: Double = UserDefaults.standard.double(forKey: AppViewModel.previewSizeOffsetKey) {
         didSet { UserDefaults.standard.set(previewSizeOffset, forKey: Self.previewSizeOffsetKey) }
     }
@@ -224,6 +245,8 @@ final class AppViewModel: ObservableObject {
         favoritesByRecent = false
         columnCount = 4
         maxColumns = 6
+        leftPanelWidth = Self.defaultLeftPanelWidth
+        rightPanelWidth = Self.defaultRightPanelWidth
         previewSizeOffset = 0
         activeTag = nil
         weightFilter = .all

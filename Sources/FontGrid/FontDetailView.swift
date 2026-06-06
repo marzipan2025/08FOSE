@@ -424,7 +424,24 @@ struct FontDetailView: View {
                     textColor: NSColor(Theme.accent)
                 )
             }
+            // Reserve room on the right so the specimen text never runs under
+            // the clear button.
+            .padding(.trailing, samples.sample(for: family.name).isEmpty ? 0 : 24)
             .frame(maxWidth: .infinity, alignment: .topLeading)
+            // Clear-all button, mirroring the preview input bar; only when
+            // non-empty. Overlaid on the input region (not the whole box) so it
+            // sits level with the orange specimen text line.
+            .overlay(alignment: .trailing) {
+                if !samples.sample(for: family.name).isEmpty {
+                    Button { sampleBinding.wrappedValue = "" } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 16))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .offset(y: -3)
+                }
+            }
         }
         // Equal top & left margins for the text, 4px larger than before.
         .padding(.leading, 16)
