@@ -58,7 +58,9 @@ struct RightPanel: View {
             .font(.system(size: Theme.smallSize))
             .foregroundStyle(.tertiary)
             .padding(.horizontal, Theme.panelHPadding)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            // Right-aligned so the bottom-inner corner is free for the floating
+            // panel-collapse button (see RootView).
+            .frame(maxWidth: .infinity, alignment: .trailing)
             // 44 = old 36 + 8: lifts the divider 8px and centers the text in the
             // taller footer region (matches the left panel's Settings footer);
             // nudged up 3px.

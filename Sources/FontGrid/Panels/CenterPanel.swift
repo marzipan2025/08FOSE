@@ -3,6 +3,10 @@ import AppKit
 import Carbon
 
 struct CenterPanel: View {
+    // True when the left panel is collapsed, so the center panel reaches the
+    // window's left edge and the top bar must clear the traffic-light buttons.
+    var leftCollapsed: Bool = false
+
     @EnvironmentObject var vm: AppViewModel
     @EnvironmentObject var favorites: FavoritesStore
     @EnvironmentObject var memos: MemoStore
@@ -21,6 +25,11 @@ struct CenterPanel: View {
     // Height of the pinned title band (top padding 4 + height 28), plus a small
     // margin. Grid cells scrolling above this overlap the title text.
     private static let titleBandHeight: CGFloat = 40
+
+    // Extra leading inset for the top bar when the left panel is collapsed, so
+    // the leading text starts ~16px to the right of the traffic-light buttons
+    // instead of running under them.
+    private static let trafficLightClearance: CGFloat = 84
 
     // The topBar is hidden only when a grid cell is actually about to overlap
     // the title band. When the detail overlay is open in WINDOWED mode, the
@@ -117,10 +126,12 @@ struct CenterPanel: View {
                     .monospacedDigit()
             }
         }
+        .padding(.leading, leftCollapsed ? Self.trafficLightClearance : 0)
         .padding(.horizontal, Theme.gridPadding)
         .frame(maxWidth: .infinity)
         .frame(height: 28)
-        .padding(.top, 4)
+        // Nudged down to sit level with the window traffic-light buttons.
+        .padding(.top, 11)
     }
 
     private var statsText: String {

@@ -9,35 +9,64 @@ struct RootView: View {
 
     @State private var leftDragStart: Double? = nil
     @State private var rightDragStart: Double? = nil
+    // Session-only panel collapse state (not persisted; both open on launch).
+    @State private var leftPanelOpen = true
+    @State private var rightPanelOpen = true
+
+    // Floating collapse/expand button geometry.
+    private static let toggleSize: CGFloat = 26
+    private static let toggleEdgeInset: CGFloat = 12
+    private static let toggleBottomInset: CGFloat = 9
 
     var body: some View {
         HStack(spacing: 0) {
-            LeftPanel()
-                .frame(width: vm.leftPanelWidth)
-            ResizableVDivider(
-                width: $vm.leftPanelWidth,
-                dragStartWidth: $leftDragStart,
-                minWidth: Double(Theme.panelMinWidth),
-                maxWidth: Double(Theme.panelMaxWidth),
-                edge: .left
-            )
-            CenterPanel()
+            if leftPanelOpen {
+                LeftPanel()
+                    .frame(width: vm.leftPanelWidth)
+                    .transition(.move(edge: .leading))
+                ResizableVDivider(
+                    width: $vm.leftPanelWidth,
+                    dragStartWidth: $leftDragStart,
+                    minWidth: Double(Theme.panelMinWidth),
+                    maxWidth: Double(Theme.panelMaxWidth),
+                    edge: .left
+                )
+            }
+            CenterPanel(leftCollapsed: !leftPanelOpen)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            ResizableVDivider(
-                width: $vm.rightPanelWidth,
-                dragStartWidth: $rightDragStart,
-                minWidth: Double(Theme.panelMinWidth),
-                maxWidth: Double(Theme.panelMaxWidth),
-                edge: .right
-            )
-            RightPanel()
-                .frame(width: vm.rightPanelWidth)
+            if rightPanelOpen {
+                ResizableVDivider(
+                    width: $vm.rightPanelWidth,
+                    dragStartWidth: $rightDragStart,
+                    minWidth: Double(Theme.panelMinWidth),
+                    maxWidth: Double(Theme.panelMaxWidth),
+                    edge: .right
+                )
+                RightPanel()
+                    .frame(width: vm.rightPanelWidth)
+                    .transition(.move(edge: .trailing))
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // Wallpaper overlay: same mechanism in both dark and light mode, driven
         // by vm.wallpaper. Image, blend mode and opacity are all picked inside
         // WallpaperOverlay based on the current colorScheme.
         .overlay { WallpaperOverlay(name: vm.wallpaper) }
+        // Floating panel collapse/expand buttons. When a panel is open the
+        // button sits at that panel's bottom-inner corner showing "−"; when
+        // collapsed it docks at the screen's bottom-outer corner showing "+".
+        .overlay(alignment: .bottomLeading) {
+            PanelToggleButton(open: leftPanelOpen) {
+                withAnimation(.easeInOut(duration: 0.22)) { leftPanelOpen.toggle() }
+            }
+            .offset(x: leftToggleX, y: -Self.toggleBottomInset)
+        }
+        .overlay(alignment: .bottomTrailing) {
+            PanelToggleButton(open: rightPanelOpen) {
+                withAnimation(.easeInOut(duration: 0.22)) { rightPanelOpen.toggle() }
+            }
+            .offset(x: rightToggleX, y: -Self.toggleBottomInset)
+        }
         // Full-window Settings modal, above everything including the wallpaper.
         .overlay {
             if vm.showSettings {
@@ -62,6 +91,23 @@ struct RootView: View {
         .environmentObject(memos)
         .environmentObject(samples)
         .preferredColorScheme(vm.isLightMode ? .light : .dark)
+    }
+
+    // Horizontal offset for the left toggle (anchored bottom-leading):
+    // open → bottom-inner corner of the left panel (near the divider);
+    // closed → docked at the left screen edge.
+    private var leftToggleX: CGFloat {
+        leftPanelOpen
+            ? CGFloat(vm.leftPanelWidth) - Self.toggleEdgeInset - Self.toggleSize + 3  // 3px further inward
+            : Self.toggleEdgeInset - 3                                                 // tucked toward the corner
+    }
+
+    // Horizontal offset for the right toggle (anchored bottom-trailing):
+    // open → bottom-inner corner of the right panel; closed → right screen edge.
+    private var rightToggleX: CGFloat {
+        rightPanelOpen
+            ? -(CGFloat(vm.rightPanelWidth) - Self.toggleEdgeInset - Self.toggleSize) - 3  // 3px further inward
+            : -(Self.toggleEdgeInset - 3)                                                  // tucked toward the corner
     }
 
     // App-wide single-key shortcuts (no modifiers, not while editing text):
@@ -301,6 +347,42 @@ private struct GlobalShortcutHandler: NSViewRepresentable {
         }
 
         deinit { uninstall() }
+    }
+}
+
+// Floating rounded-square button that collapses ("−") or expands ("+") a side
+// panel. Uses the left panel's button rounding while open; when collapsed and
+// docked in a window corner it drops to a tiny radius so its corner nests
+// concentrically inside the window's rounded corner.
+private struct PanelToggleButton: View {
+    let open: Bool
+    let action: () -> Void
+    @State private var hovering = false
+
+    // Open: same rounding as the left-panel filter buttons. Collapsed: small,
+    // for concentricity with the window corner.
+    private var radius: CGFloat { open ? Theme.pillRadius + 2 : 8 }
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: open ? "minus" : "plus")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(hovering ? Theme.accent : Color.secondary)
+                .frame(width: 26, height: 26)
+                .background(
+                    RoundedRectangle(cornerRadius: radius, style: .continuous)
+                        .fill(hovering ? Theme.surfaceFillHover : Theme.surfaceFill)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: radius, style: .continuous)
+                        .stroke(Theme.border, lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.18), radius: 4, y: 2)
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .onHover { hovering = $0 }
+        .help(open ? "Collapse panel" : "Expand panel")
     }
 }
 
