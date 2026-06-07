@@ -76,7 +76,7 @@ NSFontManager는 한글 등 비-ASCII family 이름을 `/B9CC/B144/C124/CCB4` �
 ```
 
 - 좌/우 사이드바: **드래그로 폭 조절** (기본 좌 240·우 256, 최소 240, 최대 440pt), 폭은 **영구 저장되어 재시작 시 복원**
-- 기본 윈도우 크기: 1280×860 (최소 880×640). 윈도우 프레임(크기·위치)은 `setFrameAutosaveName("MainWindow")`로 **영구 저장·복원**
+- 기본 윈도우 크기: 1280×860 (최소 880×640). 윈도우 프레임(크기·위치)은 **SwiftUI `WindowGroup`이 자동 저장·복원**(별도 autosave name 지정 금지 — 이중 autosave가 충돌해 작은 창이 화면 상단에 붙는 버그가 있었음)
 - 윈도우 스타일: `.titleBar` + `.fullSizeContentView` (시스템 타이틀바 위로 콘텐츠 확장)
 - **라이트/다크 모드 전환 지원** (기본 다크)
 - 선택 가능한 배경 "Wallpaper" 오버레이 (모드별 개별 기억)
@@ -253,7 +253,7 @@ NSFontManager는 한글 등 비-ASCII family 이름을 `/B9CC/B144/C124/CCB4` �
 - 좌측 패널 선택: `searchQuery`, `weightFilter`(문자열 인코딩 `all`/`exactly:N`/`atLeast:N`), `favoritesOnly`, `memoOnly`, `mutedFilter`(`shown`/`hidden`), `mutedOnly`, `scriptFilter`(rawValue 배열), `activeTag`, `columnCount`, `previewSizeOffset`
 - 레이아웃: `leftPanelWidth`, `rightPanelWidth`
 - 중앙 그리드 스크롤: `centerGridScrollY`
-- 윈도우 프레임: `NSWindow Frame MainWindow` (AppKit autosave)
+- 윈도우 프레임: SwiftUI `WindowGroup` 자동 저장(키 `NSWindow Frame SwiftUI.ModifiedContent…` — AppKit이 자동 관리)
 
 `activeTag`를 포함한 위 세션 UI 상태는 모두 영속(과거 비영속에서 변경됨). **Reset everything**은 `removePersistentDomain`으로 이 모든 키를 한 번에 삭제한다.
 

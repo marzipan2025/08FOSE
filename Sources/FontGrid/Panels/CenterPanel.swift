@@ -346,6 +346,9 @@ private struct FontGridScroll: View {
     // does NOT invalidate CenterPanel's body / the filter chain) and read only
     // when the column count or font size changes, to keep that family in view.
     @State private var topVisibleFamily: FontFamily.ID? = nil
+    // Bumped on each keep-in-view request so pending passes from a superseded
+    // change (e.g. mid-drag) cancel themselves instead of piling up.
+    @State private var keepTopToken = 0
 
     private var shadowScale: Double { colorScheme == .light ? 0.3 : 1.0 }
 
@@ -411,12 +414,11 @@ private struct FontGridScroll: View {
         // re-render on every scroll frame.
         .onPreferenceChange(TopVisibleKey.self) { candidates in
             guard !candidates.isEmpty else { return }
-            // The top-of-viewport cell is the lowest one whose top is still at
-            // or above the visible top region (largest minY among those ≤ 20).
-            // Fall back to the first cell when scrolled all the way up.
-            let atOrAboveTop = candidates.filter { $0.minY <= 20 }
-            let best = atOrAboveTop.max(by: { $0.minY < $1.minY })
-                ?? candidates.min(by: { $0.minY < $1.minY })
+            // The family whose top is nearest the viewport top. A fixed
+            // threshold (e.g. minY ≤ 20) misses the top row when it sits just
+            // beyond it and grabs the off-screen row above — a one-row error
+            // that the column count then multiplies into a visible drift.
+            let best = candidates.min(by: { abs($0.minY) < abs($1.minY) })
             if let id = best?.id, id != topVisibleFamily {
                 topVisibleFamily = id
             }
@@ -432,12 +434,17 @@ private struct FontGridScroll: View {
 
     private func keepTopInView(_ proxy: ScrollViewProxy) {
         guard let target = topVisibleFamily else { return }
-        // Two passes: the first realizes the target's region (it may have been
-        // recycled by the lazy grid during the relayout); the second, after that
-        // cell exists, lands its top exactly at the viewport top.
-        DispatchQueue.main.async {
-            proxy.scrollTo(target, anchor: .top)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
+        // Re-assert across several frames. A font-size change settles fast, but a
+        // column-count change restructures the LazyVGrid (and tends to reset the
+        // scroll to the top), which settles later — so a single early pass gets
+        // overridden. The later passes land the target back once the layout is
+        // stable. Debounced via a token so a rapid slider drag doesn't pile up
+        // dozens of overlapping passes — only the latest change's passes run.
+        keepTopToken += 1
+        let token = keepTopToken
+        for delay in [0.0, 0.05, 0.15, 0.3] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                guard token == keepTopToken else { return }
                 proxy.scrollTo(target, anchor: .top)
             }
         }

@@ -120,15 +120,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if let toolbar = window.toolbar {
                 toolbar.showsBaselineSeparator = false
             }
-            // Persist size/position across launches. AppKit writes the frame
-            // string to UserDefaults under "NSWindow Frame <name>".
-            if window.frameAutosaveName != Self.mainWindowAutosaveName {
-                window.setFrameAutosaveName(Self.mainWindowAutosaveName)
-            }
+            // NOTE: do NOT set a custom frameAutosaveName here. SwiftUI's
+            // WindowGroup already persists/restores the window frame on its own;
+            // adding a second autosave name fought it and restored a stale tiny
+            // frame pinned to the top of the screen.
         }
     }
-
-    static let mainWindowAutosaveName = "MainWindow"
 
     private func adjustTrafficLightsNow() {
         let offsetX: CGFloat = 10
