@@ -222,7 +222,10 @@ final class AppViewModel: ObservableObject {
     }
 
     // Favorites list order: false = alphabetical (가나다), true = most recent first.
-    @Published var favoritesByRecent: Bool = UserDefaults.standard.bool(forKey: "favoritesByRecent") {
+    // Default to Recent (most-recent-first) when unset; distinguish "never set"
+    // from a stored false.
+    @Published var favoritesByRecent: Bool =
+        UserDefaults.standard.object(forKey: "favoritesByRecent") as? Bool ?? true {
         didSet { UserDefaults.standard.set(favoritesByRecent, forKey: "favoritesByRecent") }
     }
 
@@ -296,7 +299,7 @@ final class AppViewModel: ObservableObject {
         darkWallpaper = ""
         lightWallpaper = ""
         isLightMode = false
-        favoritesByRecent = false
+        favoritesByRecent = true
         columnCount = 4
         maxColumns = 6
         leftPanelWidth = Self.defaultLeftPanelWidth
