@@ -750,9 +750,9 @@ private struct GlyphCell: View {
     var body: some View {
         Canvas { ctx, size in
             let character = GlyphReverseMap.character(ps: psName, glyph: glyph)
-            // Non-copyable glyphs (outline box) are drawn a touch more faded.
+            // Non-copyable glyphs (outline box) are drawn more faded.
             let ink = (colorScheme == .light ? NSColor.black : NSColor.white)
-                .withAlphaComponent(character != nil ? 0.85 : 0.8)
+                .withAlphaComponent(character != nil ? 0.85 : 0.5)
             ctx.withCGContext { cg in
                 // Flip to a y-up text space (Canvas is y-down, top-left origin).
                 cg.textMatrix = .identity
