@@ -693,7 +693,7 @@ private struct ScrollOffsetPersistence: NSViewRepresentable {
 
 struct PreviewInputBar: View {
     @Binding var text: String
-    @StateObject private var inputSource = InputSourceManager()
+    @EnvironmentObject var inputSource: InputSourceManager
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -718,7 +718,7 @@ struct PreviewInputBar: View {
             .buttonStyle(.plain)
             .help(inputSource.isKorean ? "Switch to English input" : "Switch to Korean input")
 
-            TextField("The quick brown fox jumps over lazy dog.", text: $text)
+            TextField(inputSource.pangram, text: $text)
                 .textFieldStyle(.plain)
                 .font(.system(size: 14))
                 .focused($focused)
@@ -798,6 +798,15 @@ struct VisualEffectBlur: NSViewRepresentable {
 @MainActor
 final class InputSourceManager: ObservableObject {
     @Published var isKorean: Bool = false
+
+    // Empty-state preview pangram, by current input source. Single source of
+    // truth for the fallback shown when the preview field is cleared.
+    var pangram: String {
+        isKorean ? "다람쥐 헌 쳇바퀴에 타고파." : "The quick brown fox jumps over lazy dog."
+    }
+
+    // The text to render: what the user typed, or the language pangram if empty.
+    func resolved(_ text: String) -> String { text.isEmpty ? pangram : text }
 
     init() {
         refresh()

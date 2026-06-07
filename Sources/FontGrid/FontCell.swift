@@ -16,6 +16,7 @@ struct FontCell: View {
     @EnvironmentObject var favorites: FavoritesStore
     @EnvironmentObject var memos: MemoStore
     @EnvironmentObject var samples: SampleStore
+    @EnvironmentObject var inputSource: InputSourceManager
     @Environment(\.colorScheme) private var colorScheme
     @State private var hovering = false
 
@@ -39,7 +40,7 @@ struct FontCell: View {
     }
 
     private var resolvedPreviewText: String {
-        effectivePreviewText.isEmpty ? "The quick brown fox jumps over lazy dog." : effectivePreviewText
+        inputSource.resolved(effectivePreviewText)
     }
 
     // Size the preview area to the glyphs' REAL line height (ascent + descent,
@@ -68,7 +69,7 @@ struct FontCell: View {
                 // cycling re-renders only the preview label, not the whole cell.
                 CyclingPreviewLabel(
                     family: family,
-                    previewText: effectivePreviewText,
+                    previewText: resolvedPreviewText,
                     fontSize: fontSize,
                     isHovering: hovering
                 )
@@ -190,12 +191,9 @@ private struct CyclingPreviewLabel: View {
         return family.memberFontNames[weightIndex % family.memberFontNames.count]
     }
 
-    private var resolvedPreviewText: String {
-        previewText.isEmpty ? "The quick brown fox jumps over lazy dog." : previewText
-    }
-
     var body: some View {
-        FontPreviewLabel(text: resolvedPreviewText, fontName: displayedFontName, fontSize: fontSize)
+        // previewText arrives already resolved (never empty) from FontCell.
+        FontPreviewLabel(text: previewText, fontName: displayedFontName, fontSize: fontSize)
             .animation(.easeInOut(duration: 0.15), value: weightIndex)
             .onChange(of: isHovering) { hovering in
                 if hovering { startCycling() } else { stopCycling() }

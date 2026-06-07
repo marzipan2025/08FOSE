@@ -11,6 +11,7 @@ struct FontDetailView: View {
     @EnvironmentObject var memos: MemoStore
     @EnvironmentObject var samples: SampleStore
     @EnvironmentObject var muted: MutedStore
+    @EnvironmentObject var inputSource: InputSourceManager
     @EnvironmentObject var vm: AppViewModel
     @Environment(\.colorScheme) private var colorScheme
     @State private var copied = false
@@ -80,7 +81,7 @@ struct FontDetailView: View {
 
     private var sampleText: String {
         if hasCustomSample { return samples.sample(for: family.name) }
-        return previewText.isEmpty ? "The quick brown fox jumps over lazy dog." : previewText
+        return inputSource.resolved(previewText)
     }
 
     // nil → default label color; accent when a custom sample is in effect.

@@ -267,6 +267,7 @@ struct FavoriteRow: View {
     @EnvironmentObject var favorites: FavoritesStore
     @EnvironmentObject var memos: MemoStore
     @EnvironmentObject var samples: SampleStore
+    @EnvironmentObject var inputSource: InputSourceManager
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("previewText") private var previewText: String = "The quick brown fox jumps over lazy dog"
     @State private var hovering = false
@@ -281,7 +282,7 @@ struct FavoriteRow: View {
     private var sampleText: String {
         // A custom specimen replaces the preview text here too (color unchanged).
         if hasSpecimen { return samples.sample(for: name) }
-        return previewText.isEmpty ? "The quick brown fox jumps over lazy dog." : previewText
+        return inputSource.resolved(previewText)
     }
 
     var body: some View {
