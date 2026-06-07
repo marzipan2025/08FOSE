@@ -205,14 +205,7 @@ struct RightPanel: View {
                 ForEach(displayedFavorites, id: \.self) { name in
                     FavoriteRow(name: name, previewFontName: previewFontName(for: name), tooltipSuppressed: vm.showSettings) {
                         if let family = vm.library.families.first(where: { $0.name == name }) {
-                            vm.detailSource = .favorites
-                            if vm.selectedFamily == nil {
-                                withAnimation(.spring(response: 0.42, dampingFraction: 0.80)) {
-                                    vm.selectedFamily = family
-                                }
-                            } else {
-                                vm.selectedFamily = family
-                            }
+                            vm.openDetail(family, source: .favorites)
                         }
                     }
                 }

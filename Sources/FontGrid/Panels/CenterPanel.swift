@@ -204,7 +204,7 @@ struct CenterPanel: View {
         guard let idx = list.firstIndex(where: { $0.id == current.id }) else { return }
         let next = idx + delta
         guard next >= 0, next < list.count else { return }
-        vm.selectedFamily = list[next]
+        vm.openDetail(list[next], source: vm.detailSource)
     }
 
     // Names of the neighbours in the navigation list, for the top-bar label
@@ -230,11 +230,7 @@ struct CenterPanel: View {
             FontDetailView(
                 family: family,
                 previewText: previewText,
-                onClose: {
-                    withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
-                        vm.selectedFamily = nil
-                    }
-                }
+                onClose: { vm.closeDetail() }
             )
             .matchedGeometryEffect(id: family.id, in: cellHero)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -470,10 +466,7 @@ private struct FontGridScroll: View {
                     }
                 },
                 onTap: {
-                    vm.detailSource = .grid
-                    withAnimation(.spring(response: 0.42, dampingFraction: 0.80)) {
-                        vm.selectedFamily = family
-                    }
+                    vm.openDetail(family, source: .grid)
                 }
             )
             .matchedGeometryEffect(id: family.id, in: cellHero)

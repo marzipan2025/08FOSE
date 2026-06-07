@@ -201,9 +201,7 @@ struct RootView: View {
     // it actually closed something (so the key is consumed for that press).
     private func closeDetailIfOpen() -> Bool {
         guard vm.selectedFamily != nil else { return false }
-        withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
-            vm.selectedFamily = nil
-        }
+        vm.closeDetail()
         return true
     }
 

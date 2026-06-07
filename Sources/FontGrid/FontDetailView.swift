@@ -178,7 +178,7 @@ struct FontDetailView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     if !metadata.isEmpty { infoColumns(width: width) }
                     weightListContent
-                    glyphsSection
+                    if vm.detailGlyphsVisible { glyphsSection }
                 }
             }
             .frame(maxHeight: .infinity)
@@ -617,7 +617,7 @@ struct FontDetailView: View {
     private var weightList: some View {
         ScrollView {
             weightListContent
-            glyphsSection
+            if vm.detailGlyphsVisible { glyphsSection }
         }
         // Fresh identity per font so ←/→ navigation starts back at the top
         // instead of keeping the previous font's scroll offset.

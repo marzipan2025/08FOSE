@@ -240,6 +240,10 @@ final class AppViewModel: ObservableObject {
 
     @Published var selectedFamily: FontFamily? = nil
 
+    // Gates the heavy Glyphs grid: false during the open/close motion, true once
+    // the detail has settled open. Keeps the expand/collapse animation smooth.
+    @Published var detailGlyphsVisible: Bool = false
+
     // Where the open detail view was launched from — decides which ordered list
     // the left/right arrow keys step through.
     enum DetailSource { case grid, favorites }
@@ -247,6 +251,34 @@ final class AppViewModel: ObservableObject {
 
     init() {
         self.library = FontLibrary()
+    }
+
+    private static let detailOpenSpring = Animation.spring(response: 0.42, dampingFraction: 0.80)
+    private static let detailCloseSpring = Animation.spring(response: 0.38, dampingFraction: 0.82)
+
+    // Open the detail for `family`; the glyph grid is shown only after the open
+    // animation settles so the expand stays smooth.
+    func openDetail(_ family: FontFamily, source: DetailSource) {
+        detailSource = source
+        detailGlyphsVisible = false
+        if selectedFamily == nil {
+            withAnimation(Self.detailOpenSpring) { selectedFamily = family }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [self] in
+                if selectedFamily != nil { detailGlyphsVisible = true }
+            }
+        } else {
+            // Already open (← / → or list switch): keep glyphs, just swap.
+            selectedFamily = family
+            detailGlyphsVisible = true
+        }
+    }
+
+    // Close synchronously so the X / ESC always lands. Removing the glyph grid
+    // (detailGlyphsVisible) and clearing selectedFamily in one transaction means
+    // the grid isn't dragged through the collapse, while staying responsive.
+    func closeDetail() {
+        detailGlyphsVisible = false
+        withAnimation(Self.detailCloseSpring) { selectedFamily = nil }
     }
 
     // Wipe ALL persisted state and return every in-memory setting to its
@@ -279,6 +311,7 @@ final class AppViewModel: ObservableObject {
         mutedOnly = false
         searchQuery = ""
         selectedFamily = nil
+        detailGlyphsVisible = false
         detailSource = .grid
     }
 }
