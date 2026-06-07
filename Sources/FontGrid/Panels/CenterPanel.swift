@@ -61,6 +61,7 @@ struct CenterPanel: View {
             .filter { vm.scriptFilter.isEmpty || vm.scriptFilter.contains($0.script) }
             .filter { vm.activeTag == nil || memos.tags(for: $0.name).contains(vm.activeTag!) }
             .filter { family in
+                if vm.mutedOnly { return muted.contains(family.name) }
                 switch vm.mutedFilter {
                 case .shown:  return true
                 case .hidden: return !muted.contains(family.name)

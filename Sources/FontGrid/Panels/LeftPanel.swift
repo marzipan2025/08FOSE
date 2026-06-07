@@ -3,6 +3,7 @@ import SwiftUI
 struct LeftPanel: View {
     @EnvironmentObject var vm: AppViewModel
     @EnvironmentObject var favorites: FavoritesStore
+    @EnvironmentObject var muted: MutedStore
     @FocusState private var searchFocused: Bool
     @State private var settingsHovering = false
 
@@ -148,8 +149,26 @@ struct LeftPanel: View {
                 favoritesOnlyToggle
                 memoOnlyToggle
             }
-            mutedToggle
+            HStack(spacing: 6) {
+                mutedToggle
+                mutedOnlyToggle
+            }
         }
+    }
+
+    // Show only muted fonts (mirrors Favorites/Memo only). Label carries the
+    // muted count; disabled when nothing is muted.
+    private var mutedOnlyToggle: some View {
+        let disabled = muted.names.isEmpty
+        return filterPill(
+            label: "Muted \(muted.names.count)",
+            icon: nil,
+            isOn: vm.mutedOnly
+        ) {
+            vm.mutedOnly.toggle()
+        }
+        .disabled(disabled)
+        .opacity(disabled ? 0.4 : 1)
     }
 
     // Full-width 3-state control for muted fonts:

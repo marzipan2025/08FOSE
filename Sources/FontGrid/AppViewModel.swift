@@ -69,6 +69,13 @@ final class AppViewModel: ObservableObject {
         mutedFilter = (mutedFilter == .shown) ? .hidden : .shown
     }
 
+    // Show only muted fonts (mirrors favoritesOnly / memoOnly). Takes precedence
+    // over mutedFilter when on.
+    private static let mutedOnlyKey = "mutedOnly"
+    @Published var mutedOnly: Bool = UserDefaults.standard.bool(forKey: AppViewModel.mutedOnlyKey) {
+        didSet { UserDefaults.standard.set(mutedOnly, forKey: Self.mutedOnlyKey) }
+    }
+
     func toggleScript(_ category: ScriptCategory) {
         if scriptFilter.contains(category) { scriptFilter.remove(category) }
         else { scriptFilter.insert(category) }
@@ -269,6 +276,7 @@ final class AppViewModel: ObservableObject {
         memoOnly = false
         scriptFilter = []
         mutedFilter = .shown
+        mutedOnly = false
         searchQuery = ""
         selectedFamily = nil
         detailSource = .grid
