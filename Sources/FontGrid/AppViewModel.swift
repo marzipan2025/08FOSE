@@ -2,17 +2,20 @@ import SwiftUI
 
 // Weight-count filter for the grid.
 // - .all: no filtering
-// - .exactly(n): families with exactly n weights (n=1 means single-weight only)
+// - .exactly(n): families with exactly n weights
+// - .range(lo, hi): families with lo…hi weights (inclusive)
 // - .atLeast(n): families with n or more weights
 enum WeightFilter: Hashable {
     case all
     case exactly(Int)
+    case range(Int, Int)
     case atLeast(Int)
 
     func matches(_ weightCount: Int) -> Bool {
         switch self {
         case .all: return true
         case .exactly(let n): return weightCount == n
+        case .range(let lo, let hi): return weightCount >= lo && weightCount <= hi
         case .atLeast(let n): return weightCount >= n
         }
     }
@@ -83,7 +86,7 @@ final class AppViewModel: ObservableObject {
 
     // Canonical order of the Weights filter chips (All → 1 → 3+ → 5+), shared
     // by the LeftPanel chips and the `w` shortcut so they stay in sync.
-    static let weightFilterCycle: [WeightFilter] = [.all, .exactly(1), .atLeast(3), .atLeast(5)]
+    static let weightFilterCycle: [WeightFilter] = [.all, .exactly(1), .range(2, 3), .range(4, 5), .atLeast(6)]
 
     // Advance the weight filter one step through weightFilterCycle, wrapping
     // back to .all. Bound to the `w` shortcut.
@@ -186,6 +189,7 @@ final class AppViewModel: ObservableObject {
         switch w {
         case .all: return "all"
         case .exactly(let n): return "exactly:\(n)"
+        case .range(let lo, let hi): return "range:\(lo)-\(hi)"
         case .atLeast(let n): return "atLeast:\(n)"
         }
     }
@@ -194,13 +198,21 @@ final class AppViewModel: ObservableObject {
         guard let s = UserDefaults.standard.string(forKey: weightFilterKey) else { return .all }
         if s == "all" { return .all }
         let parts = s.split(separator: ":")
-        if parts.count == 2, let n = Int(parts[1]) {
+        var decoded: WeightFilter? = nil
+        if parts.count == 2 {
+            let arg = String(parts[1])
             switch parts[0] {
-            case "exactly": return .exactly(n)
-            case "atLeast": return .atLeast(n)
+            case "exactly": if let n = Int(arg) { decoded = .exactly(n) }
+            case "atLeast": if let n = Int(arg) { decoded = .atLeast(n) }
+            case "range":
+                let r = arg.split(separator: "-")
+                if r.count == 2, let lo = Int(r[0]), let hi = Int(r[1]) { decoded = .range(lo, hi) }
             default: break
             }
         }
+        // Normalize: only keep values that map to a current chip; stale ones
+        // (e.g. the old 3+/5+) fall back to All so no orphaned filter sticks.
+        if let decoded, weightFilterCycle.contains(decoded) { return decoded }
         return .all
     }
 

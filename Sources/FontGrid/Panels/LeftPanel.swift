@@ -6,7 +6,7 @@ struct LeftPanel: View {
     @State private var settingsHovering = false
 
     private let weightOptions: [(label: String, value: WeightFilter)] = [
-        ("All", .all), ("1", .exactly(1)), ("3+", .atLeast(3)), ("5+", .atLeast(5))
+        ("1", .exactly(1)), ("2+", .range(2, 3)), ("4+", .range(4, 5)), ("6+", .atLeast(6))
     ]
 
     var body: some View {
@@ -129,7 +129,8 @@ struct LeftPanel: View {
             HStack(spacing: 6) {
                 ForEach(weightOptions, id: \.value) { option in
                     PillButton(label: option.label, icon: nil, isOn: vm.weightFilter == option.value) {
-                        vm.weightFilter = option.value
+                        // Toggle: re-tapping the active chip clears to All (no chip).
+                        vm.weightFilter = (vm.weightFilter == option.value) ? .all : option.value
                     }
                 }
             }

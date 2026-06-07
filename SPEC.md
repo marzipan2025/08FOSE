@@ -94,7 +94,7 @@ NSFontManager는 한글 등 비-ASCII family 이름을 `/B9CC/B144/C124/CCB4` �
 - clear 버튼 (X)은 텍스트 있을 때만 노출
 
 ### 3.2 필터 (좌측 "Filters")
-- **Weights**: `All / 1 / 3+ / 5+` — `.all` / `.exactly(1)` / `.atLeast(3)` / `.atLeast(5)`
+- **Weights**: 라벨 `1 / 2+ / 4+ / 6+`, 구간 `1` / `2–3` / `4–5` / `6+` (`.exactly(1)` / `.range(2,3)` / `.range(4,5)` / `.atLeast(6)`), 서로 배타적. All 버튼 없음 — **아무 칩도 선택 안 됨 = All**. 단일 선택(다른 칩 누르면 교체), 선택된 칩 재클릭 시 해제(All). 현재 칩에 없는 옛 저장값은 로드 시 All로 정규화
 - **Collections**: `Favorites` / `Memo` (보유 family만) + `Show/Hide muted` 토글과 `Muted`(muted만 보기) — 항목이 없어도 비활성하지 않고, 누르면 빈 결과("Nothing found")
 - **Script 버킷**: Korean / Japanese / Latin / Other (주력 스크립트 기준, 다중 선택 시 합집합). **Chinese·Symbol은 분류상 Other로 통합**(전용 버튼 없음)
 - **Tag**: 우측 태그 캡슐로 선택 (단일 토글)
