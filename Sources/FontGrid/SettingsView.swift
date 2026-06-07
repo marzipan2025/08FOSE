@@ -319,6 +319,8 @@ struct SettingsOverlay: View {
                     ) {
                         Button("Reset Everything", role: .destructive) { resetEverything() }
                         Button("Cancel", role: .cancel) {}
+                    } message: {
+                        Text("This clears all data and restarts 08FOSE.")
                     }
             }
         }
@@ -402,23 +404,26 @@ struct SettingsOverlay: View {
         samples.clearAll()
         muted.clearAll()
         previewText = Self.defaultPreviewText
-        vm.resetToDefaults()
-        resetWindowSize()
+        vm.resetToDefaults()                  // removePersistentDomain + live defaults
+        UserDefaults.standard.synchronize()   // flush before the new instance reads
+        relaunch()                            // restart into a clean first-launch state
     }
 
-    private func resetWindowSize() {
-        guard let window = NSApp.keyWindow ?? NSApp.mainWindow ?? NSApp.windows.first
-        else { return }
-        let size = NSSize(width: 1280, height: 860)   // matches .defaultSize
-        let screen = window.screen ?? NSScreen.main
-        let origin: NSPoint
-        if let visible = screen?.visibleFrame {
-            origin = NSPoint(x: visible.midX - size.width / 2,
-                             y: visible.midY - size.height / 2)
-        } else {
-            origin = window.frame.origin
-        }
-        window.setFrame(NSRect(origin: origin, size: size), display: true, animate: true)
+    // Quit and relaunch. A detached shell waits for THIS process to fully exit,
+    // then `open`s the app fresh — avoiding the race of launching a new instance
+    // while the old one is still alive. The new process reads the now-cleared
+    // defaults, so window size, panels, theme, etc. return to first-launch state.
+    // (Under Xcode/`swift run` the bundle lives in DerivedData under the
+    // debugger, so relaunch may fail there; it works for the installed .app.)
+    private func relaunch() {
+        let path = Bundle.main.bundlePath
+        let pid = ProcessInfo.processInfo.processIdentifier
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/sh")
+        task.arguments = ["-c",
+            "while /bin/kill -0 \(pid) >/dev/null 2>&1; do /bin/sleep 0.1; done; /usr/bin/open \"\(path)\""]
+        try? task.run()
+        NSApp.terminate(nil)
     }
 }
 
