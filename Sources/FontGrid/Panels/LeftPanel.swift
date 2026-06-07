@@ -159,7 +159,6 @@ struct LeftPanel: View {
             switch vm.mutedFilter {
             case .shown:  return ("Show muted", false)
             case .hidden: return ("Hide muted", true)
-            case .only:   return ("Only muted", true)
             }
         }()
         return Button {
@@ -181,7 +180,7 @@ struct LeftPanel: View {
         }
         .buttonStyle(.plain)
         .focusable(false)
-        .help("Muted fonts: \(vm.mutedFilter == .shown ? "shown (dimmed)" : vm.mutedFilter == .hidden ? "hidden" : "only these")")
+        .help("Muted fonts: \(vm.mutedFilter == .shown ? "shown (dimmed)" : "hidden")")
     }
 
     // The six script buckets, labeled "Scripts".

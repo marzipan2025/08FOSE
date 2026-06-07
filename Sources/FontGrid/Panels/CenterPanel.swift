@@ -64,7 +64,6 @@ struct CenterPanel: View {
                 switch vm.mutedFilter {
                 case .shown:  return true
                 case .hidden: return !muted.contains(family.name)
-                case .only:   return muted.contains(family.name)
                 }
             }
     }
