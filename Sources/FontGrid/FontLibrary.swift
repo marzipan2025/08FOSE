@@ -172,11 +172,11 @@ final class FontLibrary: ObservableObject {
 
         if has(0xAC00) { return .korean }                       // 가 (Hangul syllable)
         if has(0x3042) || has(0x30A2) { return .japanese }      // あ / ア (kana)
-        if has(0x4E00) { return .chinese }                      // 一 (Han, no kana/hangul)
+        if has(0x4E00) { return .other }                        // 一 (Han) — Chinese folded into Other
         if distinctiveNonLatinScripts.contains(where: { has($0) }) { return .other }
         if has(0x0041) { return .latin }                        // A
         if has(0x0391) || has(0x0410) { return .other }         // Greek / Cyrillic only
-        return .symbol                                          // no real-script letters
+        return .other                                           // no real-script letters — Symbol folded into Other
     }
 
     // CJK bucket from OS/2 ulCodePageRange1 (only present in OS/2 version ≥ 1).
@@ -195,7 +195,7 @@ final class FontLibrary: ObservableObject {
         func bit(_ n: Int) -> Bool { cp & (UInt32(1) << n) != 0 }
         if bit(19) || bit(21) { return .korean }                // Wansung / Johab
         if bit(17) { return .japanese }                         // JIS
-        if bit(18) || bit(20) { return .chinese }               // GBK / Big5
+        if bit(18) || bit(20) { return .other }                 // GBK / Big5 — Chinese folded into Other
         return nil
     }
 

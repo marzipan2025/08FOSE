@@ -733,9 +733,10 @@ struct FontDetailView: View {
     }
 }
 
-// One glyph drawn by ID, centered in its cell. Uses a SwiftUI Canvas (no
-// per-cell NSView) so even ~50k-glyph CJK fonts scroll smoothly. Outline-only
-// (CTFontDrawGlyphs), so color/bitmap fonts render monochrome or blank.
+// One glyph centered in its cell, drawn on a SwiftUI Canvas (no per-cell NSView)
+// so even ~50k-glyph CJK fonts scroll smoothly. Glyphs that map to a character
+// are drawn as TEXT (CTLine) so color fonts (emoji) render in their real color;
+// unmapped glyphs (ligatures, alternates) fall back to an outline by glyph ID.
 private struct GlyphCell: View {
     let font: CTFont
     let glyph: CGGlyph
@@ -748,34 +749,45 @@ private struct GlyphCell: View {
 
     var body: some View {
         Canvas { ctx, size in
-            var g = glyph
-            var bbox = CGRect.zero
-            CTFontGetBoundingRectsForGlyphs(font, .horizontal, &g, &bbox, 1)
-            guard bbox.width.isFinite, bbox.height.isFinite,
-                  bbox.width > 0, bbox.height > 0 else { return }
+            let character = GlyphReverseMap.character(ps: psName, glyph: glyph)
+            let ink = (colorScheme == .light ? NSColor.black : NSColor.white).withAlphaComponent(0.85)
             ctx.withCGContext { cg in
                 // Flip to a y-up text space (Canvas is y-down, top-left origin).
                 cg.textMatrix = .identity
                 cg.translateBy(x: 0, y: size.height)
                 cg.scaleBy(x: 1, y: -1)
-                cg.setFillColor((colorScheme == .light ? NSColor.black : NSColor.white)
-                    .withAlphaComponent(0.85).cgColor)
-                // Center the glyph's bounding box within the cell.
-                var pos = CGPoint(
-                    x: (size.width - bbox.width) / 2 - bbox.minX,
-                    y: (size.height - bbox.height) / 2 - bbox.minY
-                )
-                CTFontDrawGlyphs(font, &g, &pos, 1, cg)
+                if let character {
+                    // Color-aware text render — shows the font's own color glyph.
+                    let attr = NSAttributedString(string: character,
+                                                  attributes: [.font: font, .foregroundColor: ink])
+                    let line = CTLineCreateWithAttributedString(attr)
+                    let ib = CTLineGetImageBounds(line, cg)
+                    guard ib.width.isFinite, ib.height.isFinite, ib.width > 0, ib.height > 0 else { return }
+                    cg.textPosition = CGPoint(
+                        x: (size.width - ib.width) / 2 - ib.minX,
+                        y: (size.height - ib.height) / 2 - ib.minY
+                    )
+                    CTLineDraw(line, cg)
+                } else {
+                    var g = glyph
+                    var bbox = CGRect.zero
+                    CTFontGetBoundingRectsForGlyphs(font, .horizontal, &g, &bbox, 1)
+                    guard bbox.width.isFinite, bbox.height.isFinite,
+                          bbox.width > 0, bbox.height > 0 else { return }
+                    cg.setFillColor(ink.cgColor)
+                    var pos = CGPoint(
+                        x: (size.width - bbox.width) / 2 - bbox.minX,
+                        y: (size.height - bbox.height) / 2 - bbox.minY
+                    )
+                    CTFontDrawGlyphs(font, &g, &pos, 1, cg)
+                }
             }
         }
-        // Faint rounded box showing the glyph's full cell area; denser on hover.
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(hovering ? Theme.surfaceFillHover : Theme.surfaceFill)
-                .opacity(hovering ? 0.7 : 0.35)
-        )
+        // Cell box: filled when the glyph is copyable, an inner outline only
+        // when it isn't (no mapped character). Denser on hover either way.
+        .background(glyphBox)
         // Transient confirmation at the cell's bottom center: "COPIED" (normal
-        // color) on success, an accent "N/A" when the glyph has no character.
+        // color) on success, an accent "FAILED" when the glyph has no character.
         .overlay(alignment: .bottom) {
             if let flash {
                 Text(flash.text)
@@ -793,6 +805,19 @@ private struct GlyphCell: View {
         .nativeTooltip(GlyphReverseMap.character(ps: psName, glyph: glyph) ?? "")
     }
 
+    @ViewBuilder
+    private var glyphBox: some View {
+        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+        if GlyphReverseMap.character(ps: psName, glyph: glyph) != nil {
+            shape
+                .fill(hovering ? Theme.surfaceFillHover : Theme.surfaceFill)
+                .opacity(hovering ? 0.7 : 0.35)
+        } else {
+            shape
+                .strokeBorder(hovering ? Theme.borderHover : Theme.border, lineWidth: 1)
+        }
+    }
+
     private func handleTap() {
         let character = GlyphReverseMap.character(ps: psName, glyph: glyph)
         if let character {
@@ -808,12 +833,15 @@ private struct GlyphCell: View {
     }
 }
 
-// Reverse cmap (glyph → character) for click-to-copy, built lazily per font and
-// cached. BMP only — one CTFontGetGlyphsForCharacters pass over U+0000…U+FFFF;
-// astral glyphs (CJK ext, emoji) have no copyable character here.
+// Reverse cmap (glyph → character) for rendering + click-to-copy, built lazily
+// per font and cached. The BMP (U+0000…U+FFFF) is mapped in one batch pass for
+// every font; astral planes (emoji, CJK ext) are enumerated only for modest-
+// size fonts so huge CJK families don't pay the cost — this is enough to cover
+// emoji fonts, which is where it matters.
 @MainActor
 private enum GlyphReverseMap {
     private static var cache: [String: [CGGlyph: String]] = [:]
+    private static let astralGlyphCap = 8000
 
     static func character(ps: String, glyph: CGGlyph) -> String? {
         if let map = cache[ps] { return map[glyph] }
@@ -824,18 +852,54 @@ private enum GlyphReverseMap {
 
     private static func build(_ ps: String) -> [CGGlyph: String] {
         let font = CTFontCreateWithName(ps as CFString, 16, nil)
+        var map: [CGGlyph: String] = [:]
+
+        // BMP: one batch char→glyph pass, then reverse.
         let n = 0x10000
         var chars = [UniChar](repeating: 0, count: n)
         for i in 0..<n { chars[i] = UniChar(i) }
         var glyphs = [CGGlyph](repeating: 0, count: n)
         CTFontGetGlyphsForCharacters(font, &chars, &glyphs, n)
-        var map: [CGGlyph: String] = [:]
         for i in 0..<n {
             let g = glyphs[i]
             guard g != 0, map[g] == nil, let scalar = Unicode.Scalar(UInt32(i)) else { continue }
             map[g] = String(scalar)
         }
+
+        // Astral: only for small fonts (emoji etc.). Surrogate pairs aren't
+        // handled by the batch API, so resolve each covered scalar via CTLine.
+        if CTFontGetGlyphCount(font) < astralGlyphCap,
+           let charset = CTFontCopyCharacterSet(font) as CharacterSet? {
+            for plane in 1...16 where charset.hasMember(inPlane: UInt8(plane)) {
+                let base = plane << 16
+                for cp in base..<(base + 0x10000) {
+                    guard let scalar = Unicode.Scalar(UInt32(cp)), charset.contains(scalar),
+                          let g = glyph(of: scalar, in: font), map[g] == nil else { continue }
+                    map[g] = String(scalar)
+                }
+            }
+        }
         return map
+    }
+
+    // Glyph for a single scalar (handles astral), nil if the font lacks it (a
+    // fallback font was substituted).
+    private static func glyph(of scalar: Unicode.Scalar, in font: CTFont) -> CGGlyph? {
+        let attr = NSAttributedString(string: String(scalar), attributes: [.font: font])
+        let line = CTLineCreateWithAttributedString(attr)
+        guard let runs = CTLineGetGlyphRuns(line) as? [CTRun], runs.count == 1 else { return nil }
+        let run = runs[0]
+        guard CTRunGetGlyphCount(run) == 1 else { return nil }
+        let attrs = CTRunGetAttributes(run) as NSDictionary
+        if let runFont = attrs[kCTFontAttributeName as String] {
+            let used = runFont as! CTFont
+            if (CTFontCopyPostScriptName(used) as String) != (CTFontCopyPostScriptName(font) as String) {
+                return nil
+            }
+        }
+        var g = CGGlyph(0)
+        CTRunGetGlyphs(run, CFRange(location: 0, length: 1), &g)
+        return g == 0 ? nil : g
     }
 }
 

@@ -150,8 +150,10 @@ struct RootView: View {
         case "m":
             vm.memoOnly.toggle()
             return true
-        case "k", "j", "c", "l", "s", "o":
-            if let category = ScriptCategory.allCases.first(where: { $0.shortcutKey == key }) {
+        case "k", "j", "l", "o":
+            // Chinese/Symbol are folded into Other, so only the filterable
+            // buckets have live shortcuts.
+            if let category = ScriptCategory.filterable.first(where: { $0.shortcutKey == key }) {
                 vm.toggleScript(category)
             }
             return true
