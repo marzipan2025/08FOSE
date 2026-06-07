@@ -189,6 +189,8 @@ NSFontManager는 한글 등 비-ASCII family 이름을 `/B9CC/B144/C124/CCB4` �
 - **w**: Weights 필터 순환 (`All → 1 → 3+ → 5+ → All`)
 - **f / m**: Favorites only / Memo only 토글
 - **k / j / c / l / s / o**: Script 버킷 토글 (Korean / Japanese / Chinese / Latin / Symbol / Other)
+- **u**: muted 표시/숨김 토글 (Show ↔ Hide)
+- **i**: muted만 보기 토글
 - **[ / ]**: 좌측 / 우측 패널 접기·펴기 (세션 한정)
 - 한국어(두벌식) 입력 상태에서도 위 글자 단축키는 같은 물리 키의 라틴 글자로 매핑되어 동작
 - **⌘ ,**: Settings 모달 토글 (입력 중에도 동작)

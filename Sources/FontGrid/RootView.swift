@@ -161,6 +161,12 @@ struct RootView: View {
         case "]":
             withAnimation(.easeInOut(duration: 0.22)) { rightPanelOpen.toggle() }
             return true
+        case "u":
+            vm.cycleMutedFilter()
+            return true
+        case "i":
+            vm.mutedOnly.toggle()
+            return true
         default:
             return false
         }

@@ -21,8 +21,9 @@ struct ExportData: Codable {
     var exportedAt: Date = Date()
     var favorites: [String]
     var memos: [String: String]
-    // Added in a later version; optional so older backups still decode.
+    // Added in later versions; optional so older backups still decode.
     var samples: [String: String]?
+    var muted: [String]?
 }
 
 // Full-window Settings overlay: a blurred backdrop over the whole app with the
@@ -162,13 +163,13 @@ struct SettingsOverlay: View {
                 // Export / import favorites + memos + specimens (tags live inside memos).
                 backupRow(
                     title: "Export",
-                    detail: "Save favorites, memos & specimens to a JSON file",
+                    detail: "Save favorites, memos, specimens & muted to a JSON file",
                     button: "Export",
                     action: exportData
                 )
                 backupRow(
                     title: "Import",
-                    detail: "Merge favorites, memos & specimens from a JSON file",
+                    detail: "Merge favorites, memos, specimens & muted from a JSON file",
                     button: "Import",
                     action: importData
                 )
@@ -251,6 +252,8 @@ struct SettingsOverlay: View {
                 shortcutRow("M", "Memos filter")
                 shortcutRow("0–4", "Wallpaper (0 = none)")
                 shortcutRow("K J C L S O", "Toggle script bucket")
+                shortcutRow("U", "Show / hide muted")
+                shortcutRow("I", "Only muted")
                 shortcutRow("[ ]", "Collapse / expand left · right panel")
                 shortcutRow("⌘ ↑ ↓", "Font size")
                 shortcutRow("⌘ ← →", "Columns")
@@ -341,7 +344,8 @@ struct SettingsOverlay: View {
         let payload = ExportData(
             favorites: favorites.exportList,
             memos: memos.exportMap,
-            samples: samples.exportMap
+            samples: samples.exportMap,
+            muted: muted.exportList
         )
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
@@ -379,6 +383,7 @@ struct SettingsOverlay: View {
         favorites.merge(payload.favorites)
         memos.merge(payload.memos)
         samples.merge(payload.samples ?? [:])
+        muted.merge(payload.muted ?? [])
     }
 
     private func presentImportError(_ message: String) {

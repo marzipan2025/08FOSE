@@ -2,8 +2,6 @@ import SwiftUI
 
 struct LeftPanel: View {
     @EnvironmentObject var vm: AppViewModel
-    @EnvironmentObject var favorites: FavoritesStore
-    @EnvironmentObject var muted: MutedStore
     @FocusState private var searchFocused: Bool
     @State private var settingsHovering = false
 
@@ -156,19 +154,16 @@ struct LeftPanel: View {
         }
     }
 
-    // Show only muted fonts (mirrors Favorites/Memo only). Label carries the
-    // muted count; disabled when nothing is muted.
+    // Show only muted fonts (mirrors Favorites/Memo only). Always enabled — with
+    // nothing muted it just shows the "Nothing found" empty state.
     private var mutedOnlyToggle: some View {
-        let disabled = muted.names.isEmpty
-        return filterPill(
-            label: "Muted \(muted.names.count)",
+        filterPill(
+            label: "Muted",
             icon: nil,
             isOn: vm.mutedOnly
         ) {
             vm.mutedOnly.toggle()
         }
-        .disabled(disabled)
-        .opacity(disabled ? 0.4 : 1)
     }
 
     // Full-width 3-state control for muted fonts:
@@ -213,16 +208,15 @@ struct LeftPanel: View {
     }
 
     private var favoritesOnlyToggle: some View {
-        let disabled = favorites.sorted.isEmpty
-        return filterPill(
+        // Always enabled — with no favorites it just shows the empty "Nothing
+        // found" state, like any other filter.
+        filterPill(
             label: "Favorites",
             icon: nil,
             isOn: vm.favoritesOnly
         ) {
             vm.favoritesOnly.toggle()
         }
-        .disabled(disabled)
-        .opacity(disabled ? 0.4 : 1)
     }
 
     private var memoOnlyToggle: some View {

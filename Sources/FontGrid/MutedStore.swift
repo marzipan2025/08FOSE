@@ -28,6 +28,15 @@ final class MutedStore: ObservableObject {
         persist()
     }
 
+    /// Snapshot for export.
+    var exportList: [String] { Array(names) }
+
+    /// Union an imported list into the current muted set.
+    func merge(_ incoming: [String]) {
+        names.formUnion(incoming)
+        persist()
+    }
+
     private func persist() {
         UserDefaults.standard.set(Array(names), forKey: key)
     }
