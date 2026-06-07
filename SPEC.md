@@ -2,7 +2,7 @@
 
 macOS에 설치된 폰트를 그리드로 훑어보고, 미리보기·즐겨찾기·메모·태그·세부 정보 확인을 빠르게 할 수 있는 macOS 네이티브 앱 (SwiftUI + AppKit, macOS 13+).
 
-이 문서는 **현행 구현(v0.3.6) 기준 동작 사양**이다. 색·간격 등 디자인 토큰의 실제 값은 `Theme.swift`를 단일 출처로 한다.
+이 문서는 **현행 구현(v0.4.4) 기준 동작 사양**이다. 색·간격 등 디자인 토큰의 실제 값은 `Theme.swift`를 단일 출처로 한다.
 
 ---
 
@@ -80,6 +80,7 @@ NSFontManager는 한글 등 비-ASCII family 이름을 `/B9CC/B144/C124/CCB4` �
 - 윈도우 스타일: `.titleBar` + `.fullSizeContentView` (시스템 타이틀바 위로 콘텐츠 확장)
 - **라이트/다크 모드 전환 지원** (기본 다크)
 - 선택 가능한 배경 "Wallpaper" 오버레이 (모드별 개별 기억)
+- 중앙 상단: 좌측 `08FOSE`, 우측 **현재 필터 상태 라벨** — 기본 `NNN fonts`, 필터 시 `NNN favorites/Memoed/Muted`·스크립트명, 2개 이상이면 가운뎃점으로 결합하며 약어(FAV·MEM·MUT, KR·JP·LTN·ETC), 태그 활성 시 `Tag : XXX`. 좌측 패널 접힘 시 신호등과 안 겹치게 들여쓰기
 
 ### 세션 상태 복원 (재시작 시)
 앱을 껐다 켜면 마지막 상태를 재현한다 — 윈도우 크기·위치, 좌/우 패널 폭, 좌측 패널의 모든 선택(검색어·Weights·Favorites/Memo only·Script 버킷·Tag·Columns·Font Size), 그리고 **중앙 그리드의 스크롤 위치**. 스크롤은 픽셀 Y로 저장하되 위 항목들이 동일하게 복원되어 레이아웃이 결정적이므로 같은 행에 안착한다(`NSScrollView` introspect, 콘텐츠 높이가 자랄 때까지 재시도). 저장된 폰트 수가 줄어 목표 Y에 못 미치면 가능한 최대 위치로 클램프.
@@ -94,10 +95,16 @@ NSFontManager는 한글 등 비-ASCII family 이름을 `/B9CC/B144/C124/CCB4` �
 
 ### 3.2 필터 (좌측 "Filters")
 - **Weights**: `All / 1 / 3+ / 5+` — `.all` / `.exactly(1)` / `.atLeast(3)` / `.atLeast(5)`
-- **Favorites only / Memo only**: 즐겨찾기/메모 보유 family만
-- **Script 버킷**: Korean / Japanese / Chinese / Latin / Symbol / Other (주력 스크립트 기준, 다중 선택 시 합집합)
+- **Collections**: `Favorites` / `Memo` (보유 family만) + `Show/Hide muted` 토글과 `Muted`(muted만 보기) — 항목이 없어도 비활성하지 않고, 누르면 빈 결과("Nothing found")
+- **Script 버킷**: Korean / Japanese / Latin / Other (주력 스크립트 기준, 다중 선택 시 합집합). **Chinese·Symbol은 분류상 Other로 통합**(전용 버튼 없음)
 - **Tag**: 우측 태그 캡슐로 선택 (단일 토글)
-- 검색·모든 필터·태그는 **AND**로 결합
+- 검색·모든 필터·태그는 **AND**로 결합 (단 `Muted`(only)는 Show/Hide보다 우선)
+
+### 3.2a Muted (원하지 않는 폰트)
+- 상세 뷰의 **Mute** 버튼으로 토글, `FontGrid.muted`에 영구 저장
+- muted 폰트는 그리드 셀·상세(타이틀/헤더 배경/weight 샘플)가 **딤** 처리(클릭은 유지)
+- Collections의 `Show/Hide muted`로 그리드 노출 제어, `Muted`로 muted만 보기
+- Export/Import에 muted 포함
 
 ### 3.3 레이아웃 (좌측 "Layout")
 - **Columns**: 1 ~ N 슬라이더
@@ -151,10 +158,22 @@ NSFontManager는 한글 등 비-ASCII family 이름을 `/B9CC/B144/C124/CCB4` �
     - 상한 = 메모 윗변이 **헤더 아래 구분선**에 닿는 지점(`카드높이 − 헤더 − 구분선 − specimen − 여백`). 상한 초과 시 그제야 메모 **내부 스크롤**, specimen은 바닥 고정
     - 성장 중에는 세로 스크롤바를 숨겨 줄 추가 시 깜빡임 방지(콘텐츠가 상한을 실제로 넘을 때만 표시)
   - **커스텀 specimen**: family별로 저장, 설정 시 그 family의 모든 weight 샘플을 대체
+- **Mute 버튼**: 헤더 액션줄(Favorite/Copy/Show in Finder 옆)에서 muted 토글 (§3.2a)
+
+### 3.7a Glyphs 뷰어 (상세, weight 목록 아래)
+- weight 샘플 아래에 좌우 24px 여백의 구분선 → **"Glyphs"** 타이틀 + 우측 weight 풀다운(기본 Regular; 단일 weight면 메뉴 없이 이름만)
+- 폰트의 **전체 글리프(GID 0..N)** 를 샘플 텍스트 크기로 전체폭 격자 배열(컬럼은 폭 측정 후 `.flexible` 균등 분할)
+- 성능: `LazyVGrid` 고정 셀 + `Canvas` 직접 드로잉으로 가상화(보이는 셀만), 5만 글리프 CJK도 부드럽게
+- 렌더: **매핑되는 글리프는 문자를 텍스트(CTLine)로 그려 컬러 폰트의 실제 색 이모지까지 표시**, 매핑 없으면 GID 외곽선
+- 셀 박스: 복사 가능 = 연한 채움, 불가 = inner 테두리선만(글자 0.8 투명). 호버 시 진해짐
+- 클릭: 매핑 문자를 클립보드 복사(`COPIED`), 불가 시 악센트 `FAILED`. 호버 툴팁 = 그 문자
+- 역매핑(glyph→문자): BMP는 전 폰트 배치, **astral(이모지)은 글리프 8000개 미만 폰트만**(폰트별 1회 빌드·캐시, ~10–25ms). 단일 코드포인트만 — ZWJ·다중코드포인트 이모지·리거처는 매핑/복사 불가
+- ←/→ 폰트 이동 시 상세 스크롤 최상단 리셋(`.id(family.id)`)
 
 ### 3.8 즐겨찾기 + 태그 (우측 패널)
 - **FAVORITES**: 헤더에 개수 + **A–Z / Recent** 정렬 토글
-  - 각 행: family 이름(작게) + 샘플 텍스트(그 폰트로) + 메모 점 + 즐겨찾기 점
+  - 각 행: family 이름(작게) + 샘플 텍스트 + 메모 점 + 즐겨찾기 점
+  - 샘플 weight는 결정적으로 선택: **Regular 페이스 → 없으면 OS/2 400 → 500 → 그래도 없으면 패밀리 기본**(`FontFamily.previewFontName`)
   - 행 클릭 → 상세 뷰 점프, 비어 있을 때 안내 문구
 - **TAGS** (메모 태그 있을 때만 표시): 캡슐 버튼 = `태그 개수`, **빈도순**, `#` 제거
   - 단일 토글로 중앙 그리드 필터 (기존 필터와 AND), 활성 시 악센트 강조 (같은 캡슐 재클릭으로 해제)
@@ -166,8 +185,8 @@ NSFontManager는 한글 등 비-ASCII family 이름을 `/B9CC/B144/C124/CCB4` �
 - 전체 윈도우 블러 위에 콘텐츠를 중앙 패널 컬럼 폭(최대 480pt)으로 표시. 아래의 테마/Wallpaper 단축키는 미리보기 위해 살아 있음
 - **Data**
   - Favorites / Memos / Specimens 각각 **Clear All**(확인 다이얼로그, 개수 표시, 비어 있으면 비활성)
-  - **Export**: Favorites·Memos·Specimens를 JSON으로 저장 (`ExportData`, family 이름 키 기반이라 다른 Mac에서도 호환). **UI 상태(창·패널·필터·스크롤 등)는 포함하지 않음**
-  - **Import**: JSON에서 Favorites·Memos·Specimens **병합**
+  - **Export**: Favorites·Memos·Specimens·Muted를 JSON으로 저장 (`ExportData`, family 이름 키 기반이라 다른 Mac에서도 호환). **UI 상태(창·패널·필터·스크롤 등)는 포함하지 않음**
+  - **Import**: JSON에서 Favorites·Memos·Specimens·Muted **병합**
 - **About / Shortcuts / Licenses**: 정보·단축키 안내·라이선스
 - **Reset everything**(확인 다이얼로그): 콘텐츠(즐겨찾기·메모·specimen)와 프리뷰 텍스트 초기화 + `removePersistentDomain`으로 앱 UserDefaults 도메인 전체 삭제(필터·테마·Wallpaper·창 프레임·패널 폭·스크롤 등 모든 영속 키 포함) + 윈도우를 **1280×860 중앙**으로 즉시 복귀(`resetWindowSize`)
   - 주의: 패널 폭은 영속 값만 지워지고 화면상 폭은 재시작 후 반영될 수 있음. `resetWindowSize`는 화면이 1280×860보다 작아도 크기를 클램프하지 않음(개선 여지)
@@ -224,14 +243,14 @@ NSFontManager는 한글 등 비-ASCII family 이름을 `/B9CC/B144/C124/CCB4` �
 
 ### 5.4 영속화 키 (UserDefaults / AppStorage)
 **콘텐츠 데이터**
-- `FontGrid.favorites`, `FontGrid.memos`, `FontGrid.samples` (specimen)
+- `FontGrid.favorites`, `FontGrid.memos`, `FontGrid.samples` (specimen), `FontGrid.muted`
 
 **환경/외형**
 - `previewText`, `favoritesByRecent`, `isLightMode`
 - `selectedWallpaperDark`, `selectedWallpaperLight` (구 `selectedWallpaper`는 마이그레이션용)
 
 **세션 UI 상태 (재시작 시 복원)**
-- 좌측 패널 선택: `searchQuery`, `weightFilter`(문자열 인코딩 `all`/`exactly:N`/`atLeast:N`), `favoritesOnly`, `memoOnly`, `scriptFilter`(rawValue 배열), `activeTag`, `columnCount`, `previewSizeOffset`
+- 좌측 패널 선택: `searchQuery`, `weightFilter`(문자열 인코딩 `all`/`exactly:N`/`atLeast:N`), `favoritesOnly`, `memoOnly`, `mutedFilter`(`shown`/`hidden`), `mutedOnly`, `scriptFilter`(rawValue 배열), `activeTag`, `columnCount`, `previewSizeOffset`
 - 레이아웃: `leftPanelWidth`, `rightPanelWidth`
 - 중앙 그리드 스크롤: `centerGridScrollY`
 - 윈도우 프레임: `NSWindow Frame MainWindow` (AppKit autosave)
@@ -252,11 +271,12 @@ Sources/FontGrid/
 ├─ FavoritesStore.swift     즐겨찾기 영속화
 ├─ MemoStore.swift          메모 + 태그 파싱
 ├─ SampleStore.swift        커스텀 specimen 영속화
+├─ MutedStore.swift         muted(원치 않는 폰트) 영속화
 ├─ FontMetadata.swift       상세 정보 sfnt/name 추출
 ├─ FlowLayout.swift         줄바꿈 래핑 레이아웃 (태그/Features)
 ├─ FontCell.swift           셀 + 호버 weight 순환 + Core Text 프리뷰
 ├─ WrappingPreviewLabel.swift  상세 weight 행 래핑 프리뷰
-├─ FontDetailView.swift     상세 오버레이 (정보/weight/메모/specimen)
+├─ FontDetailView.swift     상세 오버레이 (정보/weight/메모/specimen/glyphs)
 ├─ MemoEditor.swift         메모/specimen 입력(NSTextView, 내용 높이 보고)
 ├─ SettingsView.swift       Settings 모달 + Export/Import + Reset
 ├─ PanelSection.swift       패널 섹션·구분선·리사이즈 디바이더
