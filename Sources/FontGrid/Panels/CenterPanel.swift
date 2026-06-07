@@ -10,6 +10,7 @@ struct CenterPanel: View {
     @EnvironmentObject var vm: AppViewModel
     @EnvironmentObject var favorites: FavoritesStore
     @EnvironmentObject var memos: MemoStore
+    @EnvironmentObject var muted: MutedStore
     @AppStorage("previewText") private var previewText = "The quick brown fox jumps over lazy dog"
     @Namespace private var cellHero
     @State private var emptyStateFontName: String? = nil
@@ -59,6 +60,13 @@ struct CenterPanel: View {
             .filter { !vm.memoOnly || memos.hasNote(for: $0.name) }
             .filter { vm.scriptFilter.isEmpty || vm.scriptFilter.contains($0.script) }
             .filter { vm.activeTag == nil || memos.tags(for: $0.name).contains(vm.activeTag!) }
+            .filter { family in
+                switch vm.mutedFilter {
+                case .shown:  return true
+                case .hidden: return !muted.contains(family.name)
+                case .only:   return muted.contains(family.name)
+                }
+            }
     }
 
     var body: some View {
@@ -316,6 +324,7 @@ private struct FontGridScroll: View {
     }
 
     @EnvironmentObject var vm: AppViewModel
+    @EnvironmentObject var muted: MutedStore
     @Environment(\.colorScheme) private var colorScheme
     @State private var hoveredFamilyID: FontFamily.ID? = nil
     // The family currently at the top of the viewport. Tracked locally (so it
@@ -432,6 +441,8 @@ private struct FontGridScroll: View {
                 // Suppress memo tooltips while the grid is covered — by the
                 // Settings blur or by the open detail card.
                 tooltipSuppressed: vm.showSettings || vm.selectedFamily != nil,
+                // Muted fonts read de-emphasized but stay fully tappable.
+                dimmed: muted.contains(family.name),
                 onHoverChange: { isHovering in
                     if isHovering {
                         hoveredFamilyID = family.id

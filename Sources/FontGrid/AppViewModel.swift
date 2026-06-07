@@ -54,6 +54,26 @@ final class AppViewModel: ObservableObject {
         }
     }
 
+    // How muted (not-wanted) fonts are treated in the grid:
+    //  .shown  → visible but dimmed (default)
+    //  .hidden → excluded from the grid
+    //  .only   → show only muted fonts
+    enum MutedFilter: String { case shown, hidden, only }
+    private static let mutedFilterKey = "mutedFilter"
+    @Published var mutedFilter: MutedFilter =
+        MutedFilter(rawValue: UserDefaults.standard.string(forKey: AppViewModel.mutedFilterKey) ?? "") ?? .shown {
+        didSet { UserDefaults.standard.set(mutedFilter.rawValue, forKey: Self.mutedFilterKey) }
+    }
+
+    // Advance the muted filter one step: shown → hidden → only → shown.
+    func cycleMutedFilter() {
+        switch mutedFilter {
+        case .shown: mutedFilter = .hidden
+        case .hidden: mutedFilter = .only
+        case .only: mutedFilter = .shown
+        }
+    }
+
     func toggleScript(_ category: ScriptCategory) {
         if scriptFilter.contains(category) { scriptFilter.remove(category) }
         else { scriptFilter.insert(category) }
@@ -253,6 +273,7 @@ final class AppViewModel: ObservableObject {
         favoritesOnly = false
         memoOnly = false
         scriptFilter = []
+        mutedFilter = .shown
         searchQuery = ""
         selectedFamily = nil
         detailSource = .grid

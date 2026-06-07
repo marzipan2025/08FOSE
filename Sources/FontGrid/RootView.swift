@@ -6,6 +6,7 @@ struct RootView: View {
     @StateObject private var favorites = FavoritesStore()
     @StateObject private var memos = MemoStore()
     @StateObject private var samples = SampleStore()
+    @StateObject private var muted = MutedStore()
 
     @State private var leftDragStart: Double? = nil
     @State private var rightDragStart: Double? = nil
@@ -90,6 +91,7 @@ struct RootView: View {
         .environmentObject(favorites)
         .environmentObject(memos)
         .environmentObject(samples)
+        .environmentObject(muted)
         .preferredColorScheme(vm.isLightMode ? .light : .dark)
     }
 

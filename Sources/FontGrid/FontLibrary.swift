@@ -7,6 +7,11 @@ import Foundation
 enum ScriptCategory: String, CaseIterable, Hashable {
     case korean, japanese, chinese, latin, symbol, other
 
+    // Buckets offered as filter buttons in the left panel. Chinese and Symbol
+    // are still used for classification, but are rarely filtered on, so they're
+    // omitted from the UI.
+    static let filterable: [ScriptCategory] = [.korean, .japanese, .latin, .other]
+
     var label: String {
         switch self {
         case .korean:   return "Korean"

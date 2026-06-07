@@ -148,7 +148,40 @@ struct LeftPanel: View {
                 favoritesOnlyToggle
                 memoOnlyToggle
             }
+            mutedToggle
         }
+    }
+
+    // Full-width 3-state control for muted fonts:
+    //   Show muted → Hide muted → Only muted → (back to Show)
+    private var mutedToggle: some View {
+        let (label, active): (String, Bool) = {
+            switch vm.mutedFilter {
+            case .shown:  return ("Show muted", false)
+            case .hidden: return ("Hide muted", true)
+            case .only:   return ("Only muted", true)
+            }
+        }()
+        return Button {
+            vm.cycleMutedFilter()
+        } label: {
+            Text(label)
+                .font(.system(size: Theme.smallSize, weight: active ? .medium : .regular))
+                .foregroundStyle(active ? Theme.accent : Color.secondary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 5)
+                .background(
+                    RoundedRectangle(cornerRadius: Theme.pillRadius)
+                        .fill(active ? Theme.accent.opacity(0.15) : Theme.surfaceFill)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: Theme.pillRadius)
+                        .stroke(active ? Theme.accent.opacity(0.6) : Theme.border, lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .help("Muted fonts: \(vm.mutedFilter == .shown ? "shown (dimmed)" : vm.mutedFilter == .hidden ? "hidden" : "only these")")
     }
 
     // The six script buckets, labeled "Scripts".
@@ -184,9 +217,10 @@ struct LeftPanel: View {
         }
     }
 
-    // Six script buckets, two per row, in ScriptCategory order.
+    // Script buckets, two per row. Chinese / Symbol are omitted (see
+    // ScriptCategory.filterable).
     private var scriptFilterRows: some View {
-        let cats = ScriptCategory.allCases
+        let cats = ScriptCategory.filterable
         return VStack(spacing: 6) {
             ForEach(Array(stride(from: 0, to: cats.count, by: 2)), id: \.self) { start in
                 HStack(spacing: 6) {

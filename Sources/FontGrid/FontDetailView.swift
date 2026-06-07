@@ -10,6 +10,7 @@ struct FontDetailView: View {
     @EnvironmentObject var favorites: FavoritesStore
     @EnvironmentObject var memos: MemoStore
     @EnvironmentObject var samples: SampleStore
+    @EnvironmentObject var muted: MutedStore
     @EnvironmentObject var vm: AppViewModel
     @Environment(\.colorScheme) private var colorScheme
     @State private var copied = false
@@ -62,6 +63,7 @@ struct FontDetailView: View {
     private var shadowScale: Double { colorScheme == .light ? 0.3 : 1.0 }
 
     private var isFavorited: Bool { favorites.contains(family.name) }
+    private var isMuted: Bool { muted.contains(family.name) }
 
     // A non-empty custom sample for this family overrides the global preview
     // text across every weight (and is drawn in the accent color).
@@ -510,6 +512,9 @@ struct FontDetailView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .unifiedGeometry()
+                // Muted fonts read as de-emphasized — dim just the identity, so
+                // the action buttons (incl. Unmute) stay fully legible.
+                .opacity(isMuted ? 0.4 : 1)
 
                 Spacer(minLength: 16)
 
@@ -551,6 +556,12 @@ struct FontDetailView: View {
                 ActionButton(icon: "folder", label: "Show in Finder", active: false) {
                     openInFinder()
                 }
+
+                ActionButton(
+                    icon: isMuted ? "moon.zzz.fill" : "moon.zzz",
+                    label: isMuted ? "Muted" : "Mute",
+                    active: isMuted
+                ) { muted.toggle(family.name) }
             }
         }
         .padding(.horizontal, 24)
@@ -563,12 +574,19 @@ struct FontDetailView: View {
         .background(
             // Subtle top-down darkening of the header, independent of the
             // wallpaper. Clipped into the card by the view's outer clipShape.
-            LinearGradient(
-                colors: [Color.black.opacity(0.10 * gradientScale),
-                         Color.black.opacity(0.30 * gradientScale)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
+            // When muted, a stronger scrim dims the whole header backdrop while
+            // the action buttons (in front) stay legible and clickable.
+            ZStack {
+                LinearGradient(
+                    colors: [Color.black.opacity(0.10 * gradientScale),
+                             Color.black.opacity(0.30 * gradientScale)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                if isMuted {
+                    Color.black.opacity(colorScheme == .light ? 0.10 : 0.45)
+                }
+            }
         )
         // Report the title-area height so the expanded memo's grow cap can stop
         // exactly at the divider just below the header.
@@ -597,6 +615,8 @@ struct FontDetailView: View {
             }
         }
         .padding(.vertical, 8)
+        // Muted fonts read de-emphasized here too, matching the title/cell.
+        .opacity(isMuted ? 0.4 : 1)
     }
 
     // MARK: - Actions

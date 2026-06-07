@@ -42,6 +42,7 @@ struct SettingsOverlay: View {
     @EnvironmentObject var favorites: FavoritesStore
     @EnvironmentObject var memos: MemoStore
     @EnvironmentObject var samples: SampleStore
+    @EnvironmentObject var muted: MutedStore
     @Environment(\.colorScheme) private var colorScheme
 
     @AppStorage("previewText") private var previewText: String =
@@ -394,6 +395,7 @@ struct SettingsOverlay: View {
         favorites.clearAll()
         memos.clearAll()
         samples.clearAll()
+        muted.clearAll()
         previewText = Self.defaultPreviewText
         vm.resetToDefaults()
         resetWindowSize()

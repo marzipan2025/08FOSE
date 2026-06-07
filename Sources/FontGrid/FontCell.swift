@@ -7,6 +7,9 @@ struct FontCell: View {
     let previewText: String
     let fontSize: Double
     var tooltipSuppressed: Bool = false
+    // Muted fonts render de-emphasized. Applied to the visuals only — the tap
+    // area below stays at full hit-testing so a muted cell still opens detail.
+    var dimmed: Bool = false
     var onHoverChange: (Bool) -> Void = { _ in }
     let onTap: () -> Void
 
@@ -82,6 +85,9 @@ struct FontCell: View {
                 RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
                     .stroke(borderColor, lineWidth: 1)
             )
+            // Dim the rendered cell, then re-assert a full-opacity hit area below
+            // so muted cells stay clickable.
+            .opacity(dimmed ? 0.4 : 1)
             .anchorPreference(key: HoveredCellAnchorKey.self, value: .bounds) {
                 hovering ? HoveredCellInfo(id: family.id, anchor: $0) : nil
             }
