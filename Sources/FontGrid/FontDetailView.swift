@@ -732,6 +732,10 @@ struct FontDetailView: View {
                     .frame(height: cell)
             }
         }
+        // Fresh layout when the cell size changes: LazyVGrid reuses cells and
+        // doesn't cleanly grow already-laid rows, clipping box tops when the
+        // font size increases. Re-id'ing on the size forces a clean relayout.
+        .id(cell)
         .frame(maxWidth: .infinity)
         .background(
             GeometryReader { geo in
