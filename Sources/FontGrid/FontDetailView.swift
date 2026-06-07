@@ -25,6 +25,11 @@ struct FontDetailView: View {
     // exactly at the header divider.
     @State private var memoContentHeight: CGFloat = 0
     @State private var titleAreaHeight: CGFloat = 0
+    // PostScript name of the weight shown in the Glyphs grid (nil → default).
+    @State private var glyphFontPS: String? = nil
+    // Measured width of the glyph grid's content area, used to pack columns
+    // edge-to-edge (adaptive grids leave the block centered with side gaps).
+    @State private var glyphAreaWidth: CGFloat = 0
 
     // At/above this card width the info section sits in the right of the middle
     // (weight-list) section; below it, the info flows as multiple columns under
@@ -130,6 +135,7 @@ struct FontDetailView: View {
             infoExpanded = false
             memoExpanded = false
             memoContentHeight = 0
+            glyphFontPS = nil
             metadata = FontMetadata.load(family: family)
         }
     }
@@ -168,9 +174,12 @@ struct FontDetailView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     if !metadata.isEmpty { infoColumns(width: width) }
                     weightListContent
+                    glyphsSection
                 }
             }
             .frame(maxHeight: .infinity)
+            // Reset scroll to top when ←/→ switches fonts.
+            .id(family.id)
             Rectangle().fill(detailDivider).frame(height: 1)
             memoArea(cardHeight: height)
         }
@@ -602,7 +611,13 @@ struct FontDetailView: View {
     // Wide layout scrolls the sample list on its own; narrow layout embeds
     // `weightListContent` in a shared scroll with the info section.
     private var weightList: some View {
-        ScrollView { weightListContent }
+        ScrollView {
+            weightListContent
+            glyphsSection
+        }
+        // Fresh identity per font so ←/→ navigation starts back at the top
+        // instead of keeping the previous font's scroll offset.
+        .id(family.id)
     }
 
     private var weightListContent: some View {
@@ -619,6 +634,95 @@ struct FontDetailView: View {
         .opacity(isMuted ? 0.4 : 1)
     }
 
+    // MARK: - Glyphs
+
+    // Point size each glyph is drawn at — the weight-row sample size.
+    private var glyphPointSize: CGFloat { CGFloat(vm.weightRowFontSize) }
+    private var glyphCellSize: CGFloat { glyphPointSize * 1.4 }
+
+    // The members offered in the weight picker (PostScript name + face label).
+    private var glyphMembers: [(ps: String, face: String)] {
+        family.memberFontNames.map { ps in
+            let face = (NSFont(name: ps, size: 12)?.fontDescriptor.object(forKey: .face) as? String) ?? ps
+            return (ps, face)
+        }
+    }
+
+    // Default to a Regular (or 400/500) face, falling back to the first member.
+    private var selectedGlyphPS: String {
+        glyphFontPS ?? family.previewFontName ?? family.memberFontNames.first ?? family.name
+    }
+
+    private var selectedGlyphFace: String {
+        glyphMembers.first { $0.ps == selectedGlyphPS }?.face ?? "Regular"
+    }
+
+    private var glyphsSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Rectangle().fill(detailDivider).frame(height: 1).padding(.horizontal, 24)
+            HStack(spacing: 8) {
+                Text("Glyphs")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.primary)
+                Spacer()
+                if family.memberFontNames.count > 1 {
+                    glyphWeightPicker
+                } else {
+                    // Single weight: show just the face name (no menu/chevron),
+                    // so multi-weight only looks like a chevron was added.
+                    Text(selectedGlyphFace)
+                        .font(.system(size: Theme.smallSize))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 24)
+            .padding(.bottom, 20)
+            glyphGrid
+                .padding(.horizontal, 24)
+                .padding(.bottom, 20)
+        }
+        .opacity(isMuted ? 0.4 : 1)
+    }
+
+    private var glyphWeightPicker: some View {
+        Menu {
+            ForEach(glyphMembers, id: \.ps) { member in
+                Button(member.face) { glyphFontPS = member.ps }
+            }
+        } label: {
+            Text(selectedGlyphFace)
+                .font(.system(size: Theme.smallSize))
+                .foregroundStyle(.secondary)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+    }
+
+    private var glyphGrid: some View {
+        let font = CTFontCreateWithName(selectedGlyphPS as CFString, glyphPointSize, nil)
+        let count = CTFontGetGlyphCount(font)
+        let cell = glyphCellSize
+        let spacing: CGFloat = 8
+        // Fixed flexible columns sized from the measured width, so the row fills
+        // the full content width (matching the divider) instead of centering.
+        let columnCount = max(1, Int((glyphAreaWidth + spacing) / (cell + spacing)))
+        let columns = Array(repeating: GridItem(.flexible(), spacing: spacing), count: columnCount)
+        return LazyVGrid(columns: columns, alignment: .leading, spacing: spacing) {
+            ForEach(0..<count, id: \.self) { index in
+                GlyphCell(font: font, glyph: CGGlyph(index), psName: selectedGlyphPS)
+                    .frame(height: cell)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(key: GlyphAreaWidthKey.self, value: geo.size.width)
+            }
+        )
+        .onPreferenceChange(GlyphAreaWidthKey.self) { glyphAreaWidth = $0 }
+    }
+
     // MARK: - Actions
 
     private func openInFinder() {
@@ -626,6 +730,120 @@ struct FontDetailView: View {
         let descriptor = CTFontDescriptorCreateWithNameAndSize(psName as CFString, 0)
         guard let url = CTFontDescriptorCopyAttribute(descriptor, kCTFontURLAttribute) as? URL else { return }
         NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+}
+
+// One glyph drawn by ID, centered in its cell. Uses a SwiftUI Canvas (no
+// per-cell NSView) so even ~50k-glyph CJK fonts scroll smoothly. Outline-only
+// (CTFontDrawGlyphs), so color/bitmap fonts render monochrome or blank.
+private struct GlyphCell: View {
+    let font: CTFont
+    let glyph: CGGlyph
+    let psName: String
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var hovering = false
+    @State private var flash: FlashState? = nil
+
+    private struct FlashState: Equatable { let text: String; let isError: Bool }
+
+    var body: some View {
+        Canvas { ctx, size in
+            var g = glyph
+            var bbox = CGRect.zero
+            CTFontGetBoundingRectsForGlyphs(font, .horizontal, &g, &bbox, 1)
+            guard bbox.width.isFinite, bbox.height.isFinite,
+                  bbox.width > 0, bbox.height > 0 else { return }
+            ctx.withCGContext { cg in
+                // Flip to a y-up text space (Canvas is y-down, top-left origin).
+                cg.textMatrix = .identity
+                cg.translateBy(x: 0, y: size.height)
+                cg.scaleBy(x: 1, y: -1)
+                cg.setFillColor((colorScheme == .light ? NSColor.black : NSColor.white)
+                    .withAlphaComponent(0.85).cgColor)
+                // Center the glyph's bounding box within the cell.
+                var pos = CGPoint(
+                    x: (size.width - bbox.width) / 2 - bbox.minX,
+                    y: (size.height - bbox.height) / 2 - bbox.minY
+                )
+                CTFontDrawGlyphs(font, &g, &pos, 1, cg)
+            }
+        }
+        // Faint rounded box showing the glyph's full cell area; denser on hover.
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(hovering ? Theme.surfaceFillHover : Theme.surfaceFill)
+                .opacity(hovering ? 0.7 : 0.35)
+        )
+        // Transient confirmation at the cell's bottom center: "COPIED" (normal
+        // color) on success, an accent "N/A" when the glyph has no character.
+        .overlay(alignment: .bottom) {
+            if let flash {
+                Text(flash.text)
+                    .font(.system(size: Theme.sectionHeaderSize, weight: .bold))
+                    .foregroundStyle(flash.isError ? Theme.accent : Color.primary)
+                    .padding(.bottom, 3)
+                    .transition(.opacity)
+            }
+        }
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+        .onTapGesture { handleTap() }
+        // Hover tooltip: the character this glyph maps to (rendered by the
+        // system font = a reference of the original glyph). Empty when unmapped.
+        .nativeTooltip(GlyphReverseMap.character(ps: psName, glyph: glyph) ?? "")
+    }
+
+    private func handleTap() {
+        let character = GlyphReverseMap.character(ps: psName, glyph: glyph)
+        if let character {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(character, forType: .string)
+            withAnimation(.easeOut(duration: 0.15)) { flash = FlashState(text: "COPIED", isError: false) }
+        } else {
+            withAnimation(.easeOut(duration: 0.15)) { flash = FlashState(text: "FAILED", isError: true) }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            withAnimation(.easeIn(duration: 0.3)) { flash = nil }
+        }
+    }
+}
+
+// Reverse cmap (glyph → character) for click-to-copy, built lazily per font and
+// cached. BMP only — one CTFontGetGlyphsForCharacters pass over U+0000…U+FFFF;
+// astral glyphs (CJK ext, emoji) have no copyable character here.
+@MainActor
+private enum GlyphReverseMap {
+    private static var cache: [String: [CGGlyph: String]] = [:]
+
+    static func character(ps: String, glyph: CGGlyph) -> String? {
+        if let map = cache[ps] { return map[glyph] }
+        let map = build(ps)
+        cache[ps] = map
+        return map[glyph]
+    }
+
+    private static func build(_ ps: String) -> [CGGlyph: String] {
+        let font = CTFontCreateWithName(ps as CFString, 16, nil)
+        let n = 0x10000
+        var chars = [UniChar](repeating: 0, count: n)
+        for i in 0..<n { chars[i] = UniChar(i) }
+        var glyphs = [CGGlyph](repeating: 0, count: n)
+        CTFontGetGlyphsForCharacters(font, &chars, &glyphs, n)
+        var map: [CGGlyph: String] = [:]
+        for i in 0..<n {
+            let g = glyphs[i]
+            guard g != 0, map[g] == nil, let scalar = Unicode.Scalar(UInt32(i)) else { continue }
+            map[g] = String(scalar)
+        }
+        return map
+    }
+}
+
+// Measured width of the glyph grid content area, so columns pack edge-to-edge.
+private struct GlyphAreaWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }
 
