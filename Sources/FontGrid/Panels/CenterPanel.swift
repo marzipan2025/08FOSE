@@ -81,7 +81,7 @@ struct CenterPanel: View {
             detailOverlay
             // Title + stats, always visible at the top. Above the detail,
             // below the input bar.
-            topBar
+            topBar(count: displayedFamilies.count)
                 .opacity(topBarHidden ? 0 : 1)
                 .animation(.easeInOut(duration: 0.15), value: topBarHidden)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -106,7 +106,7 @@ struct CenterPanel: View {
 
     // Title + font-count stats in the otherwise-empty title-bar band at the top
     // of the center panel. Uses the smallest type size in the app.
-    private var topBar: some View {
+    private func topBar(count: Int) -> some View {
         HStack(spacing: 8) {
             if vm.selectedFamily != nil {
                 // Detail open: previous font (left) / next font (right). Display
@@ -128,7 +128,7 @@ struct CenterPanel: View {
                     .font(.system(size: Theme.sectionHeaderSize + 2, weight: .bold))
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 8)
-                Text(statsText)
+                Text(statsText(count))
                     .font(.system(size: Theme.sectionHeaderSize + 2))
                     .foregroundStyle(.tertiary)
                     .monospacedDigit()
@@ -142,9 +142,28 @@ struct CenterPanel: View {
         .padding(.top, 11)
     }
 
-    private var statsText: String {
-        let stats = vm.library.stats
-        return "\(stats.total) fonts"
+    // Right-aligned stats label, reflecting the active list/filter. `count` is
+    // the number of families currently shown.
+    private func statsText(_ count: Int) -> String {
+        if let tag = vm.activeTag { return "Tag : \(tag)" }
+
+        // Collection + script filters joined by middle dots. With a single
+        // segment the full word is used; with 2+ segments (≥1 middle dot)
+        // everything abbreviates: FAV / MEM / MUT and KR / JP / LTN / ETC.
+        let scripts = ScriptCategory.allCases.filter { vm.scriptFilter.contains($0) }
+        let total = (vm.favoritesOnly ? 1 : 0) + (vm.memoOnly ? 1 : 0)
+            + (vm.mutedOnly ? 1 : 0) + scripts.count
+        if total == 0 { return "\(count) fonts" }
+        let abbr = total >= 2
+
+        var segments: [String] = []
+        if vm.favoritesOnly { segments.append(abbr ? "FAV" : "favorites") }
+        if vm.memoOnly { segments.append(abbr ? "MEM" : "Memoed") }
+        if vm.mutedOnly { segments.append(abbr ? "MUT" : "Muted") }
+        segments.append(contentsOf: scripts.map { abbr ? $0.abbreviation : $0.label })
+
+        // Thin spaces (U+2009) around the middle dot keep the separators tight.
+        return "\(count) \(segments.joined(separator: "\u{2009}·\u{2009}"))"
     }
 
     @ViewBuilder

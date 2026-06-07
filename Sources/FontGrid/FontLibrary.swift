@@ -23,6 +23,19 @@ enum ScriptCategory: String, CaseIterable, Hashable {
         }
     }
 
+    // Short form for the compact, combined stats label (used when several
+    // filters are joined by middle dots).
+    var abbreviation: String {
+        switch self {
+        case .korean:   return "KR"
+        case .japanese: return "JP"
+        case .chinese:  return "CN"
+        case .latin:    return "LTN"
+        case .symbol:   return "SYM"
+        case .other:    return "ETC"
+        }
+    }
+
     // Single-key shortcut for toggling this category's filter.
     var shortcutKey: String {
         switch self {
