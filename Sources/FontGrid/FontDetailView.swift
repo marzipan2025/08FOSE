@@ -30,6 +30,10 @@ struct FontDetailView: View {
     // Measured width of the glyph grid's content area, used to pack columns
     // edge-to-edge (adaptive grids leave the block centered with side gaps).
     @State private var glyphAreaWidth: CGFloat = 0
+    // glyph → character map for the shown weight, built off the main thread so
+    // opening the detail doesn't stutter; empty until ready (cells fall back to
+    // outline rendering meanwhile).
+    @State private var glyphMap: [CGGlyph: String] = [:]
 
     // At/above this card width the info section sits in the right of the middle
     // (weight-list) section; below it, the info flows as multiple columns under
@@ -683,6 +687,19 @@ struct FontDetailView: View {
                 .padding(.bottom, 20)
         }
         .opacity(isMuted ? 0.4 : 1)
+        // Build the glyph→character map off-main when the weight changes, so the
+        // first paint (outline) is instant and color/copy light up when ready.
+        .task(id: selectedGlyphPS) {
+            let ps = selectedGlyphPS
+            if let cached = GlyphReverseMap.cached(ps) { glyphMap = cached; return }
+            glyphMap = [:]
+            let map = await Task.detached(priority: .userInitiated) {
+                GlyphReverseMap.build(ps)
+            }.value
+            guard !Task.isCancelled else { return }
+            GlyphReverseMap.store(ps, map)
+            glyphMap = map
+        }
     }
 
     private var glyphWeightPicker: some View {
@@ -710,7 +727,7 @@ struct FontDetailView: View {
         let columns = Array(repeating: GridItem(.flexible(), spacing: spacing), count: columnCount)
         return LazyVGrid(columns: columns, alignment: .leading, spacing: spacing) {
             ForEach(0..<count, id: \.self) { index in
-                GlyphCell(font: font, glyph: CGGlyph(index), psName: selectedGlyphPS)
+                GlyphCell(font: font, glyph: CGGlyph(index), character: glyphMap[CGGlyph(index)])
                     .frame(height: cell)
             }
         }
@@ -740,16 +757,14 @@ struct FontDetailView: View {
 private struct GlyphCell: View {
     let font: CTFont
     let glyph: CGGlyph
-    let psName: String
+    // Mapped character (nil = unmapped or map not built yet → outline, no copy).
+    let character: String?
     @Environment(\.colorScheme) private var colorScheme
     @State private var hovering = false
-    @State private var flash: FlashState? = nil
-
-    private struct FlashState: Equatable { let text: String; let isError: Bool }
+    @State private var showCopied = false
 
     var body: some View {
         Canvas { ctx, size in
-            let character = GlyphReverseMap.character(ps: psName, glyph: glyph)
             // Non-copyable glyphs (outline box) are drawn more faded.
             let ink = (colorScheme == .light ? NSColor.black : NSColor.white)
                 .withAlphaComponent(character != nil ? 0.85 : 0.5)
@@ -788,13 +803,13 @@ private struct GlyphCell: View {
         // Cell box: filled when the glyph is copyable, an inner outline only
         // when it isn't (no mapped character). Denser on hover either way.
         .background(glyphBox)
-        // Transient confirmation at the cell's bottom center: "COPIED" (normal
-        // color) on success, an accent "FAILED" when the glyph has no character.
+        // Accent "COPIED" flash at the cell's bottom center on a successful copy.
+        // Non-copyable glyphs simply don't react.
         .overlay(alignment: .bottom) {
-            if let flash {
-                Text(flash.text)
+            if showCopied {
+                Text("COPIED")
                     .font(.system(size: Theme.sectionHeaderSize, weight: .bold))
-                    .foregroundStyle(flash.isError ? Theme.accent : Color.primary)
+                    .foregroundStyle(Theme.accent)
                     .padding(.bottom, 3)
                     .transition(.opacity)
             }
@@ -802,15 +817,14 @@ private struct GlyphCell: View {
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
         .onTapGesture { handleTap() }
-        // Hover tooltip: the character this glyph maps to (rendered by the
-        // system font = a reference of the original glyph). Empty when unmapped.
-        .nativeTooltip(GlyphReverseMap.character(ps: psName, glyph: glyph) ?? "")
+        // Hover tooltip: the character this glyph maps to. Empty when unmapped.
+        .nativeTooltip(character ?? "")
     }
 
     @ViewBuilder
     private var glyphBox: some View {
         let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
-        if GlyphReverseMap.character(ps: psName, glyph: glyph) != nil {
+        if character != nil {
             shape
                 .fill(hovering ? Theme.surfaceFillHover : Theme.surfaceFill)
                 .opacity(hovering ? 0.7 : 0.35)
@@ -821,16 +835,12 @@ private struct GlyphCell: View {
     }
 
     private func handleTap() {
-        let character = GlyphReverseMap.character(ps: psName, glyph: glyph)
-        if let character {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(character, forType: .string)
-            withAnimation(.easeOut(duration: 0.15)) { flash = FlashState(text: "COPIED", isError: false) }
-        } else {
-            withAnimation(.easeOut(duration: 0.15)) { flash = FlashState(text: "FAILED", isError: true) }
-        }
+        guard let character else { return }   // non-copyable: no reaction
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(character, forType: .string)
+        withAnimation(.easeOut(duration: 0.15)) { showCopied = true }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-            withAnimation(.easeIn(duration: 0.3)) { flash = nil }
+            withAnimation(.easeIn(duration: 0.3)) { showCopied = false }
         }
     }
 }
@@ -840,19 +850,15 @@ private struct GlyphCell: View {
 // every font; astral planes (emoji, CJK ext) are enumerated only for modest-
 // size fonts so huge CJK families don't pay the cost — this is enough to cover
 // emoji fonts, which is where it matters.
-@MainActor
 private enum GlyphReverseMap {
-    private static var cache: [String: [CGGlyph: String]] = [:]
+    @MainActor private static var cache: [String: [CGGlyph: String]] = [:]
     private static let astralGlyphCap = 8000
 
-    static func character(ps: String, glyph: CGGlyph) -> String? {
-        if let map = cache[ps] { return map[glyph] }
-        let map = build(ps)
-        cache[ps] = map
-        return map[glyph]
-    }
+    @MainActor static func cached(_ ps: String) -> [CGGlyph: String]? { cache[ps] }
+    @MainActor static func store(_ ps: String, _ map: [CGGlyph: String]) { cache[ps] = map }
 
-    private static func build(_ ps: String) -> [CGGlyph: String] {
+    // Pure Core Text; safe to run off the main thread.
+    nonisolated static func build(_ ps: String) -> [CGGlyph: String] {
         let font = CTFontCreateWithName(ps as CFString, 16, nil)
         var map: [CGGlyph: String] = [:]
 
