@@ -709,16 +709,9 @@ struct PreviewInputBar: View {
                 inputSource.toggle()
                 focused = true
             } label: {
-                Group {
-                    if inputSource.isKorean {
-                        Text("가")
-                            .font(.system(size: 14, weight: .medium))
-                    } else {
-                        Image(systemName: "textformat")
-                            .font(.system(size: 13))
-                    }
-                }
-                .foregroundStyle(.secondary)
+                Text(inputSource.isKorean ? "가" : "A")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.secondary)
                 .frame(width: 22, height: 18)
                 .contentShape(Rectangle())
             }
