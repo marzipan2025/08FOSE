@@ -94,7 +94,9 @@ struct SettingsOverlay: View {
                     // to sit flush with the section labels below.
                     .offset(x: -2)
                 dataSection
+                    .padding(.bottom, 6)
                 aboutSection
+                    .padding(.bottom, 6)
                 shortcutsSection
                 licensesSection
                 resetSection
@@ -163,13 +165,13 @@ struct SettingsOverlay: View {
                 // Export / import favorites + memos + specimens (tags live inside memos).
                 backupRow(
                     title: "Export",
-                    detail: "Save favorites, memos, specimens & muted to a JSON file",
+                    detail: "Back up your current app data. Saved as a JSON file.",
                     button: "Export",
                     action: exportData
                 )
                 backupRow(
                     title: "Import",
-                    detail: "Merge favorites, memos, specimens & muted from a JSON file",
+                    detail: "Upload a backup JSON file to replace your current app data. This cannot be undone.",
                     button: "Import",
                     action: importData
                 )
@@ -231,9 +233,13 @@ struct SettingsOverlay: View {
                         .foregroundStyle(.tertiary)
                         .monospacedDigit()
                 }
-                Text("A macOS font browser — preview, favorite and annotate the fonts installed on your Mac.")
+                Text("An app for browsing and managing the fonts installed on your Mac.")
                     .font(.system(size: SettingsType.small))
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("v\(Theme.appVersion) — Import now replaces your current data instead of merging it, with clearer backup wording and Settings polish.")
+                    .font(.system(size: SettingsType.small))
+                    .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
                 Text("© pa_st")
                     .font(.system(size: SettingsType.small))
@@ -380,8 +386,12 @@ struct SettingsOverlay: View {
             presentImportError("This doesn't look like an 08FOSE backup file.")
             return
         }
-        // Merge: favorites union, memos appended when they differ. Entries for
-        // fonts not installed here are kept and simply stay hidden.
+        // Replace: clear existing data, then load the backup wholesale. Entries
+        // for fonts not installed here are kept and simply stay hidden.
+        favorites.clearAll()
+        memos.clearAll()
+        samples.clearAll()
+        muted.clearAll()
         favorites.merge(payload.favorites)
         memos.merge(payload.memos)
         samples.merge(payload.samples ?? [:])
