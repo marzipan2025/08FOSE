@@ -185,7 +185,7 @@ struct SettingsOverlay: View {
         button: String,
         action: @escaping () -> Void
     ) -> some View {
-        HStack {
+        HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.system(size: SettingsType.body))
@@ -196,6 +196,7 @@ struct SettingsOverlay: View {
             }
             Spacer()
             SettingsButton(label: button, action: action)
+                .offset(y: 6)
         }
     }
 
@@ -205,7 +206,7 @@ struct SettingsOverlay: View {
         disabled: Bool,
         clear: @escaping () -> Void
     ) -> some View {
-        HStack {
+        HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.system(size: SettingsType.body))
@@ -219,31 +220,28 @@ struct SettingsOverlay: View {
             SettingsButton(label: "Clear All", action: clear)
                 .disabled(disabled)
                 .opacity(disabled ? 0.4 : 1)
+                .offset(y: 6)
         }
     }
 
     private var aboutSection: some View {
         SettingsSection("About") {
             VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
-                    Text("08FOSE")
+                (
+                    Text("08FOSE © pa_st")
                         .font(.system(size: SettingsType.body, weight: .bold))
-                    Text("v\(Theme.appVersion)")
-                        .font(.system(size: SettingsType.small))
-                        .foregroundStyle(.tertiary)
-                        .monospacedDigit()
-                }
-                Text("An app for browsing and managing the fonts installed on your Mac.")
-                    .font(.system(size: SettingsType.small))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text("v\(Theme.appVersion) — Import now replaces your current data instead of merging it, with clearer backup wording and Settings polish.")
+                        .foregroundColor(.primary)
+                    + Text(" An Application for browsing and managing the fonts installed on your Mac.")
+                        .font(.system(size: SettingsType.body))
+                        .foregroundColor(.secondary)
+                )
+                .fixedSize(horizontal: false, vertical: true)
+
+                Text("v\(Theme.appVersion) : Import now replaces your current data instead of merging it, with clearer backup wording and Settings polish.")
                     .font(.system(size: SettingsType.small))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
-                Text("© pa_st")
-                    .font(.system(size: SettingsType.small))
-                    .foregroundStyle(.tertiary)
+                    .padding(.top, 6)
             }
         }
     }
