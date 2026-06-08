@@ -11,6 +11,10 @@ enum SVGTextExporter {
     // SVG is unitless/scalable regardless.
     static let exportFontSize: CGFloat = 12.8
 
+    // Pixel-per-unit factor used when rasterizing to PNG. Starting value —
+    // tune after a real export.
+    static let pngScale: CGFloat = 20
+
     // MARK: - Availability
 
     /// True when `text` rendered in `fontName` would yield at least one vector
@@ -33,12 +37,56 @@ enum SVGTextExporter {
         return false
     }
 
-    // MARK: - SVG generation
+    // MARK: - SVG / PNG generation
 
     /// Build an SVG document for `text` rendered in `fontName`, glyphs flattened
     /// to a single filled `<path>`. Honors `\n` as line breaks. Returns nil when
     /// no outlines result (so callers can no-op gracefully).
     static func svg(text: String, fontName: String, fill: String = "#000000") -> String? {
+        guard let (path, size) = flatten(text: text, fontName: fontName) else { return nil }
+        let w = fmt(size.width), h = fmt(size.height)
+        return """
+        <svg xmlns="http://www.w3.org/2000/svg" width="\(w)" height="\(h)" viewBox="0 0 \(w) \(h)">
+          <path d="\(pathData(path))" fill="\(fill)"/>
+        </svg>
+        """
+    }
+
+    /// Rasterize the same flattened path used by `svg(...)` to a transparent
+    /// PNG, filled with `color`. Returns nil when there are no outlines.
+    static func pngData(text: String, fontName: String, color: NSColor, scale: CGFloat = pngScale) -> Data? {
+        guard let (path, size) = flatten(text: text, fontName: fontName) else { return nil }
+        let w = max(1, Int(ceil(size.width * scale)))
+        let h = max(1, Int(ceil(size.height * scale)))
+        guard let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: w, pixelsHigh: h,
+            bitsPerSample: 8, samplesPerPixel: 4,
+            hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0, bitsPerPixel: 0
+        ) else { return nil }
+        NSGraphicsContext.saveGraphicsState()
+        defer { NSGraphicsContext.restoreGraphicsState() }
+        guard let gc = NSGraphicsContext(bitmapImageRep: rep) else { return nil }
+        NSGraphicsContext.current = gc
+        let cg = gc.cgContext
+        cg.scaleBy(x: scale, y: scale)
+        // The flattened path is in SVG (y-down) space starting at (0, 0); flip
+        // vertically so it lands right-side-up in CG's y-up bitmap.
+        cg.translateBy(x: 0, y: size.height)
+        cg.scaleBy(x: 1, y: -1)
+        let rgb = color.usingColorSpace(.sRGB) ?? color
+        cg.setFillColor(rgb.cgColor)
+        cg.addPath(path)
+        cg.fillPath()
+        return rep.representation(using: .png, properties: [:])
+    }
+
+    // Flatten the rendered text to a single CGPath in SVG coords (origin at
+    // top-left, y growing down), along with its bounding-box size. Shared by
+    // the SVG and PNG paths.
+    private static func flatten(text: String, fontName: String) -> (path: CGPath, size: CGSize)? {
         let font = CTFontCreateWithName(fontName as CFString, exportFontSize, nil)
         let lineHeight = CTFontGetAscent(font) + CTFontGetDescent(font) + CTFontGetLeading(font)
 
@@ -74,15 +122,9 @@ enum SVGTextExporter {
         // Flip y-up (Core Text) → y-down (SVG) and shift the artwork to start at
         // (0, 0) so width/height == the bounding box.
         let flip = CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: -box.minX, ty: box.maxY)
-        let svgPath = CGMutablePath()
-        svgPath.addPath(combined, transform: flip)
-
-        let w = fmt(box.width), h = fmt(box.height)
-        return """
-        <svg xmlns="http://www.w3.org/2000/svg" width="\(w)" height="\(h)" viewBox="0 0 \(w) \(h)">
-          <path d="\(pathData(svgPath))" fill="\(fill)"/>
-        </svg>
-        """
+        let out = CGMutablePath()
+        out.addPath(combined, transform: flip)
+        return (out, CGSize(width: box.width, height: box.height))
     }
 
     // MARK: - Helpers

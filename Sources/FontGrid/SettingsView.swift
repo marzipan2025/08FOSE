@@ -237,7 +237,7 @@ struct SettingsOverlay: View {
                 )
                 .fixedSize(horizontal: false, vertical: true)
 
-                Text("v\(Theme.appVersion) : Export any weight's sample text as a vector SVG, and Reset now reliably quits and relaunches the app.")
+                Text("v\(Theme.appVersion) : Sample-text export now offers SVG or PNG with a black/white fill option, in a tidied-up save dialog.")
                     .font(.system(size: SettingsType.small))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
