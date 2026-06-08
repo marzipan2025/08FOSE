@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import CoreText
+import UniformTypeIdentifiers
 
 struct FontDetailView: View {
     let family: FontFamily
@@ -628,7 +629,7 @@ struct FontDetailView: View {
     private var weightListContent: some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(family.memberFontNames.enumerated()), id: \.offset) { index, psName in
-                WeightRow(psName: psName, sampleText: sampleText, sampleColor: sampleColor, sampleSize: CGFloat(vm.weightRowFontSize))
+                WeightRow(psName: psName, familyName: family.name, sampleText: sampleText, sampleColor: sampleColor, sampleSize: CGFloat(vm.weightRowFontSize))
                 if index < family.memberFontNames.count - 1 {
                     Divider().opacity(0.15).padding(.horizontal, 24)
                 }
@@ -976,6 +977,7 @@ private extension View {
 
 struct WeightRow: View {
     let psName: String
+    let familyName: String
     let sampleText: String
     var sampleColor: Color? = nil
     let sampleSize: CGFloat
@@ -985,17 +987,26 @@ struct WeightRow: View {
         return (font.fontDescriptor.object(forKey: .face) as? String) ?? psName
     }
 
+    private var canExportSVG: Bool {
+        SVGTextExporter.canExport(text: sampleText, fontName: psName)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(faceName)
-                    .font(.system(size: Theme.bodySize, weight: .medium))
-                    .foregroundStyle(.primary)
-                Text(psName)
-                    .font(.system(size: Theme.smallSize).monospaced())
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+            HStack(spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(faceName)
+                        .font(.system(size: Theme.bodySize, weight: .medium))
+                        .foregroundStyle(.primary)
+                    Text(psName)
+                        .font(.system(size: Theme.smallSize).monospaced())
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                Spacer(minLength: 8)
+                // ▶︎ pinned to the right edge of the row, centered to the line.
+                SVGExportButton(enabled: canExportSVG, action: exportSVG)
             }
             WrappingPreviewLabel(text: sampleText, fontName: psName, fontSize: sampleSize, color: sampleColor)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -1003,6 +1014,118 @@ struct WeightRow: View {
         .padding(.horizontal, 24)
         .padding(.vertical, 20)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // Flatten this weight's sample text to vector outlines and save as SVG.
+    private func exportSVG() {
+        guard let svg = SVGTextExporter.svg(text: sampleText, fontName: psName) else {
+            NSSound.beep()
+            return
+        }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.svg]
+        panel.nameFieldStringValue = svgFileName
+        panel.canCreateDirectories = true
+        if panel.runModal() == .OK, let url = panel.url {
+            try? svg.data(using: .utf8)?.write(to: url)
+        }
+    }
+
+    // e.g. "08FOSE) SDMapssi_Regular.svg"  ("/" sanitized for the filesystem).
+    private var svgFileName: String {
+        func clean(_ s: String) -> String { s.replacingOccurrences(of: "/", with: "-") }
+        return "08FOSE) \(clean(familyName))_\(clean(faceName)).svg"
+    }
+}
+
+// Small ▶︎ button on a weight row: exports that weight's sample text as an SVG
+// of vector outlines. A bare rounded-corner triangle (no chrome). The glyph is
+// drawn at 84% of the text height with subtly rounded vertices, while the hit
+// area stays at the full text height. Disabled (and dimmed) when there are no
+// outlines to export — empty text, or a bitmap/color font.
+private struct SVGExportButton: View {
+    let enabled: Bool
+    let action: () -> Void
+    @State private var hovering = false
+
+    private var ink: Color { hovering ? Theme.accent : .secondary }
+
+    var body: some View {
+        let triH = Theme.bodySize * 0.588 + 3   // 3px larger than before
+        let triW = triH * 0.82                  // play-button proportions
+        let hit = triH + 5                       // click target a bit past the glyph
+        let rounding = triH * 0.4            // corner rounding (offset along edges)
+
+        return Button(action: action) {
+            Group {
+                if enabled {
+                    PlayTriangle(rounding: rounding)
+                        .fill(ink)
+                        .opacity(0.5)
+                } else {
+                    // Disabled: thin outline only, no fill.
+                    PlayTriangle(rounding: rounding)
+                        .stroke(ink, style: StrokeStyle(lineWidth: 0.5, lineJoin: .round))
+                }
+            }
+            .frame(width: triW, height: triH)
+            .offset(y: 1)                    // nudge down 1px to sit on the line
+            .frame(width: hit, height: hit)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .onHover { hovering = enabled && $0 }
+        .help(enabled ? "Export this weight's sample text as SVG"
+                      : "No vector outlines to export")
+    }
+}
+
+// Right-pointing triangle (play-button shape) with rounded corners. `rounding`
+// is how far each corner is cut back along its two edges; the vertex itself
+// becomes the control point of a quadratic curve, so the corner reads as a true
+// arc (clamped to half the shorter adjacent edge so it never self-overlaps).
+private struct PlayTriangle: Shape {
+    var rounding: CGFloat = 0
+
+    func path(in rect: CGRect) -> Path {
+        let pts = [
+            CGPoint(x: rect.minX, y: rect.minY),
+            CGPoint(x: rect.maxX, y: rect.midY),
+            CGPoint(x: rect.minX, y: rect.maxY)
+        ]
+        var path = Path()
+        guard rounding > 0 else {
+            path.addLines(pts)
+            path.closeSubpath()
+            return path
+        }
+        let n = pts.count
+        for i in 0..<n {
+            let cur = pts[i]
+            let prev = pts[(i + n - 1) % n]
+            let next = pts[(i + 1) % n]
+            let toPrev = unit(from: cur, to: prev)
+            let toNext = unit(from: cur, to: next)
+            let rPrev = min(rounding, dist(cur, prev) * 0.5)
+            let rNext = min(rounding, dist(cur, next) * 0.5)
+            let start = CGPoint(x: cur.x + toPrev.dx * rPrev, y: cur.y + toPrev.dy * rPrev)
+            let end = CGPoint(x: cur.x + toNext.dx * rNext, y: cur.y + toNext.dy * rNext)
+            if i == 0 { path.move(to: start) } else { path.addLine(to: start) }
+            path.addQuadCurve(to: end, control: cur)
+        }
+        path.closeSubpath()
+        return path
+    }
+
+    private func unit(from a: CGPoint, to b: CGPoint) -> CGVector {
+        let dx = b.x - a.x, dy = b.y - a.y
+        let len = max(0.0001, (dx * dx + dy * dy).squareRoot())
+        return CGVector(dx: dx / len, dy: dy / len)
+    }
+
+    private func dist(_ a: CGPoint, _ b: CGPoint) -> CGFloat {
+        ((b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y)).squareRoot()
     }
 }
 

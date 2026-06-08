@@ -237,7 +237,7 @@ struct SettingsOverlay: View {
                 )
                 .fixedSize(horizontal: false, vertical: true)
 
-                Text("v\(Theme.appVersion) : Import now replaces your current data instead of merging it, with clearer backup wording and Settings polish.")
+                Text("v\(Theme.appVersion) : Export any weight's sample text as a vector SVG, and Reset now reliably quits and relaunches the app.")
                     .font(.system(size: SettingsType.small))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
