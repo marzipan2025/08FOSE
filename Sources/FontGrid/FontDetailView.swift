@@ -1071,9 +1071,13 @@ private final class ExportOptionsAccessory: NSView {
     var onFormatChange: ((Format) -> Void)?
 
     private let formatPopUp = NSPopUpButton()
-    private let palette = SwatchPalette()
+    private let palette: SwatchPalette
 
     init() {
+        // System (not app-override) appearance decides which fill comes first
+        // and starts selected: black in system Dark mode, white in Light mode.
+        let isSystemDark = UserDefaults.standard.string(forKey: "AppleInterfaceStyle") == "Dark"
+        self.palette = SwatchPalette(blackFirst: isSystemDark)
         super.init(frame: NSRect(x: 0, y: 0, width: 420, height: 60))
 
         formatPopUp.addItems(withTitles: ["SVG", "PNG"])
@@ -1169,10 +1173,11 @@ private final class ExportOptionsAccessory: NSView {
 }
 
 // Two inline swatches — black and white. Click to select; the active swatch
-// gets an accent ring. No popover, no NSColorPanel.
+// gets an accent ring. No popover, no NSColorPanel. Order is set at init —
+// whichever color is at index 0 sits on the left and is selected by default.
 private final class SwatchPalette: NSView {
-    static let swatches: [NSColor] = [.black, .white]
-    static let hexValues: [String] = ["#000000", "#ffffff"]
+    let swatches: [NSColor]
+    let hexValues: [String]
 
     private let cell: CGFloat = 14
     private let gap: CGFloat = 6
@@ -1180,11 +1185,24 @@ private final class SwatchPalette: NSView {
     private let ringWidth: CGFloat = 1.5
 
     private(set) var selected: Int = 0
-    var color: NSColor { Self.swatches[selected] }
-    var colorHex: String { Self.hexValues[selected] }
+    var color: NSColor { swatches[selected] }
+    var colorHex: String { hexValues[selected] }
+
+    init(blackFirst: Bool) {
+        if blackFirst {
+            self.swatches = [.black, .white]
+            self.hexValues = ["#000000", "#ffffff"]
+        } else {
+            self.swatches = [.white, .black]
+            self.hexValues = ["#ffffff", "#000000"]
+        }
+        super.init(frame: .zero)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) not supported") }
 
     override var intrinsicContentSize: NSSize {
-        let count = CGFloat(Self.swatches.count)
+        let count = CGFloat(swatches.count)
         // Include the ring margin on every side so the trailing constraint
         // lands flush with the visible ring edge instead of clipping it.
         return NSSize(
@@ -1194,7 +1212,7 @@ private final class SwatchPalette: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        for (i, c) in Self.swatches.enumerated() {
+        for (i, c) in swatches.enumerated() {
             let r = rect(for: i)
             let path = NSBezierPath(roundedRect: r, xRadius: 3, yRadius: 3)
             c.setFill()
@@ -1223,7 +1241,7 @@ private final class SwatchPalette: NSView {
 
     override func mouseDown(with event: NSEvent) {
         let p = convert(event.locationInWindow, from: nil)
-        for i in 0..<Self.swatches.count where rect(for: i).contains(p) {
+        for i in 0..<swatches.count where rect(for: i).contains(p) {
             selected = i
             needsDisplay = true
             break
