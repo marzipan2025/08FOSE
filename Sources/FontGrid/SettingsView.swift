@@ -428,8 +428,13 @@ struct SettingsOverlay: View {
         let pid = ProcessInfo.processInfo.processIdentifier
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/bin/sh")
+        // Wait for THIS process to fully exit, give LaunchServices a moment to
+        // clear the old registration, then force a brand-new instance with -n.
+        // Without -n (and without the grace delay) `open` can race the just-quit
+        // app — finding it still briefly registered — and no-op, so nothing
+        // relaunches.
         task.arguments = ["-c",
-            "while /bin/kill -0 \(pid) >/dev/null 2>&1; do /bin/sleep 0.1; done; /usr/bin/open \"\(path)\""]
+            "while /bin/kill -0 \(pid) >/dev/null 2>&1; do /bin/sleep 0.1; done; /bin/sleep 0.5; /usr/bin/open -n \"\(path)\""]
         try? task.run()
         NSApp.terminate(nil)
     }
