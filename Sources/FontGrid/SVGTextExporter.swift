@@ -17,12 +17,14 @@ enum SVGTextExporter {
 
     // MARK: - Availability
 
-    /// True when `text` rendered in `fontName` would yield at least one vector
-    /// outline — i.e. SVG export is meaningful. False for empty/whitespace text
-    /// and for bitmap/color fonts (e.g. Apple Color Emoji) whose glyphs carry no
-    /// path. Kept cheap (BMP fast-path, capped scan) so it can drive a button's
+    /// SVG export flattens the text to vector outlines, so it needs at least one
+    /// non-whitespace character of `text` to have a non-empty outline in the
+    /// actual font (no fallback substitution). False for empty/whitespace text,
+    /// for text the font doesn't cover, and for bitmap/sbix or COLR color fonts
+    /// (e.g. Toss Face Font, Apple Color Emoji) whose glyphs carry no outline.
+    /// Kept cheap (BMP fast-path, capped scan) so it can drive a button's
     /// enabled state on every render.
-    static func canExport(text: String, fontName: String) -> Bool {
+    static func canExportSVG(text: String, fontName: String) -> Bool {
         let font = CTFontCreateWithName(fontName as CFString, exportFontSize, nil)
         var scanned = 0
         for scalar in text.unicodeScalars {
@@ -35,6 +37,21 @@ enum SVGTextExporter {
             }
         }
         return false
+    }
+
+    /// PNG export rasterizes the same flattened outlines as SVG, so today it has
+    /// exactly the same requirement. Kept as its own entry point so the button
+    /// can require BOTH formats explicitly (and so this can diverge later if PNG
+    /// ever gains a bitmap-rendering path).
+    static func canExportPNG(text: String, fontName: String) -> Bool {
+        canExportSVG(text: text, fontName: fontName)
+    }
+
+    /// The export button is enabled only when BOTH SVG and PNG can be produced;
+    /// if either format is unavailable the weight isn't exportable.
+    static func canExport(text: String, fontName: String) -> Bool {
+        canExportSVG(text: text, fontName: fontName)
+            && canExportPNG(text: text, fontName: fontName)
     }
 
     // MARK: - SVG / PNG generation

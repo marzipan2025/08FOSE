@@ -237,7 +237,7 @@ struct SettingsOverlay: View {
                 )
                 .fixedSize(horizontal: false, vertical: true)
 
-                Text("v\(Theme.appVersion) : Sample-text export now offers SVG or PNG with a black/white fill option, in a tidied-up save dialog.")
+                Text("v\(Theme.appVersion) : The sample-text export button now enables only when both SVG and PNG can be produced for a weight.")
                     .font(.system(size: SettingsType.small))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
