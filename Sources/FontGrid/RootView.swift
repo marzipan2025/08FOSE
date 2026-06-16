@@ -427,7 +427,7 @@ struct WallpaperOverlay: View {
     // Per-wallpaper blend mode for DARK mode. Unknown / "" falls back to
     // .normal, preserving the no-wallpaper path.
     private static let darkBlendModes: [String: BlendMode] = [
-        "Wallpaper01": .normal,
+        "Wallpaper01": .softLight,
         "Wallpaper02": .plusLighter,
         "Wallpaper03": .screen,
         "Wallpaper04": .softLight
@@ -449,6 +449,18 @@ struct WallpaperOverlay: View {
     private static let darkOpacity: Double = 0.24
     private static let lightOpacity: Double = 0.5
 
+    // Per-wallpaper light-mode opacity override. Wallpaper04 is a flat solid
+    // color, so it needs more strength than the textured assets to read as
+    // a vivid tint rather than a wash. Falls back to lightOpacity otherwise.
+    private static let lightOpacityOverrides: [String: Double] = [
+        "Wallpaper04": 1.0
+    ]
+
+    // Per-wallpaper dark-mode opacity override. Falls back to darkOpacity.
+    private static let darkOpacityOverrides: [String: Double] = [
+        "Wallpaper04": 0.75
+    ]
+
     private var resolvedImageName: String {
         // "" stays empty so the no-wallpaper branch below short-circuits.
         guard !name.isEmpty else { return "" }
@@ -467,7 +479,21 @@ struct WallpaperOverlay: View {
     }
 
     private var resolvedOpacity: Double {
-        colorScheme == .light ? Self.lightOpacity : Self.darkOpacity
+        if colorScheme == .light {
+            return Self.lightOpacityOverrides[name] ?? Self.lightOpacity
+        }
+        return Self.darkOpacityOverrides[name] ?? Self.darkOpacity
+    }
+
+    // Per-wallpaper light-mode color tint, multiplied onto the source image
+    // before blending. Lets us warm/shift a flat solid color (e.g. nudge
+    // Wallpaper04 toward a forsythia gold) without re-exporting the webp.
+    // .white is a no-op, so unlisted wallpapers are unaffected.
+    private static let lightTintOverrides: [String: Color] = [:]
+
+    private var resolvedTint: Color {
+        guard colorScheme == .light else { return .white }
+        return Self.lightTintOverrides[name] ?? .white
     }
 
     var body: some View {
@@ -478,6 +504,7 @@ struct WallpaperOverlay: View {
                 .aspectRatio(img.size.width / img.size.height, contentMode: .fill)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .clipped()
+                .colorMultiply(resolvedTint)
                 .compositingGroup()
                 .blendMode(resolvedBlendMode)
                 .opacity(resolvedOpacity)
