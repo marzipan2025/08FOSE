@@ -523,7 +523,7 @@ struct WallpaperOverlay: View {
         // collide if the resolver ever drops the L_ prefix.
         let key = "\(name).\(ext)"
         if let cached = imageCache[key] { return cached }
-        guard let url = Bundle.module.url(
+        guard let url = AppResources.bundle.url(
             forResource: name,
             withExtension: ext,
             subdirectory: "Wallpapers"

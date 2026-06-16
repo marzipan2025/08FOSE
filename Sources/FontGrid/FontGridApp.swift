@@ -54,8 +54,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // - Packaged .app: load the rounded PNG generated beside the .icns so the
     //   running Dock tile has the same silhouette Finder shows.
     // - Dev (`swift run`): there is no app bundle, so fall back to the PNG
-    //   carried in the SwiftPM resource bundle (Bundle.module). Checked second
-    //   so the packaged path never evaluates Bundle.module.
+    //   carried in the SwiftPM resource bundle (via AppResources.bundle, our
+    //   crash-safe replacement for the generated Bundle.module accessor).
     private func applyAppIcon() {
         // Packaged .app already shows the rounded .icns via Info.plist; still set
         // it on the running tile to match.
@@ -67,7 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Dev (`swift run`): no app bundle, so the full-bleed master PNG would
         // show as a hard square. Round it to the macOS squircle at runtime so
         // the Dock tile matches the packaged app.
-        if let url = Bundle.module.url(forResource: "AppIcon", withExtension: "png"),
+        if let url = AppResources.bundle.url(forResource: "AppIcon", withExtension: "png"),
            let image = NSImage(contentsOf: url) {
             NSApp.applicationIconImage = Self.roundedIcon(image) ?? image
         }
