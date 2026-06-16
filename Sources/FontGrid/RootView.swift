@@ -515,22 +515,55 @@ struct WallpaperOverlay: View {
         }
     }
 
-    private static var imageCache: [String: NSImage] = [:]
+    // Only one wallpaper is ever on screen, so cache a single decoded image
+    // rather than an unbounded dictionary. Source art is ~3456×2234 (≈29 MB
+    // decoded each); since the wallpaper is just a low-opacity, blended,
+    // window-filling background, full resolution is wasted memory. We downscale
+    // to maxWallpaperPixel on load, which drops each cached image to a few MB
+    // and bounds total wallpaper memory to one image instead of growing every
+    // time the wallpaper or theme changes.
+    private static let maxWallpaperPixel = 2048
+    private static var cachedKey: String?
+    private static var cachedImage: NSImage?
 
     private static func image(named name: String, ext: String) -> NSImage? {
-        // Cache key includes the extension so dark .png and light .webp under
-        // the same logical name (e.g. Wallpaper01 vs L_Wallpaper01) never
-        // collide if the resolver ever drops the L_ prefix.
+        // Key includes the extension to disambiguate variants under one logical
+        // name (e.g. Wallpaper01 vs L_Wallpaper01).
         let key = "\(name).\(ext)"
-        if let cached = imageCache[key] { return cached }
+        if key == cachedKey, let cached = cachedImage { return cached }
         guard let url = AppResources.bundle.url(
             forResource: name,
             withExtension: ext,
             subdirectory: "Wallpapers"
         ),
-              let image = NSImage(contentsOf: url)
+              let raw = NSImage(contentsOf: url)
         else { return nil }
-        imageCache[key] = image
+        let image = downscaled(raw, maxPixel: maxWallpaperPixel)
+        cachedKey = key
+        cachedImage = image
         return image
+    }
+
+    /// Downscale so the longest side is at most `maxPixel`, preserving aspect.
+    /// Renders into an explicit sRGB bitmap for a deterministic pixel size
+    /// (NSImage.lockFocus would otherwise multiply by the screen backing scale).
+    /// Images already within the limit are returned unchanged.
+    private static func downscaled(_ image: NSImage, maxPixel: Int) -> NSImage {
+        guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return image }
+        let longest = max(cg.width, cg.height)
+        guard longest > maxPixel else { return image }
+        let scale = Double(maxPixel) / Double(longest)
+        let tw = max(1, Int((Double(cg.width) * scale).rounded()))
+        let th = max(1, Int((Double(cg.height) * scale).rounded()))
+        guard let cs = CGColorSpace(name: CGColorSpace.sRGB),
+              let ctx = CGContext(
+                data: nil, width: tw, height: th, bitsPerComponent: 8, bytesPerRow: 0,
+                space: cs, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+              )
+        else { return image }
+        ctx.interpolationQuality = .high
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: tw, height: th))
+        guard let out = ctx.makeImage() else { return image }
+        return NSImage(cgImage: out, size: NSSize(width: tw, height: th))
     }
 }
