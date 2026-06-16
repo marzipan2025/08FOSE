@@ -52,6 +52,29 @@ cp "$WORK/AppIcon.icns" "$RES/AppIcon.icns"
 cp "$SHAPED" "$RES/DockIcon.png"
 if [ -d "$BIN_DIR/${PRODUCT}_${PRODUCT}.bundle" ]; then
   cp -R "$BIN_DIR/${PRODUCT}_${PRODUCT}.bundle" "$RES/"
+  # SwiftPM emits a flat resource bundle with NO Info.plist. Without it the
+  # bundle is "unrecognized": codesign --deep skips it, and on a quarantined
+  # copy (i.e. any OTHER Mac) Bundle(url:) rejects it as invalid, so the
+  # generated Bundle.module accessor hits its fatalError. Injecting a minimal
+  # flat-bundle Info.plist makes it a valid, signable bundle that loads
+  # everywhere. See crash: Bundle.module -> WallpaperOverlay.image(named:ext:).
+  RES_BUNDLE="$RES/${PRODUCT}_${PRODUCT}.bundle"
+  if [ ! -f "$RES_BUNDLE/Info.plist" ]; then
+    cat > "$RES_BUNDLE/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>            <string>${BUNDLE_ID}.resources</string>
+    <key>CFBundleInfoDictionaryVersion</key> <string>6.0</string>
+    <key>CFBundleName</key>                  <string>${PRODUCT}_${PRODUCT}</string>
+    <key>CFBundlePackageType</key>           <string>BNDL</string>
+    <key>CFBundleShortVersionString</key>    <string>${VERSION}</string>
+    <key>CFBundleVersion</key>               <string>${VERSION}</string>
+</dict>
+</plist>
+PLIST
+  fi
 fi
 
 cat > "$CONTENTS/Info.plist" <<PLIST
@@ -75,7 +98,15 @@ cat > "$CONTENTS/Info.plist" <<PLIST
 PLIST
 
 echo "▸ Ad-hoc code-signing…"
-codesign --force --deep --sign - "$APP" >/dev/null 2>&1 || echo "  (codesign skipped)"
+# Sign inside-out: the nested resource bundle first, then the app. A failure
+# here must NOT be swallowed — an unsigned nested bundle is exactly what makes
+# the app crash on other Macs (Bundle.module fatalError).
+if [ -d "$RES/${PRODUCT}_${PRODUCT}.bundle" ]; then
+  codesign --force --sign - "$RES/${PRODUCT}_${PRODUCT}.bundle"
+fi
+codesign --force --deep --sign - "$APP"
+echo "▸ Verifying signature…"
+codesign --verify --deep --strict "$APP"
 
 rm -rf "$WORK"
 echo "✓ Built ${APP}  (v${VERSION})"
