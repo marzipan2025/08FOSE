@@ -1,0 +1,316 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		29F8B7C13C5768C52E0219E6 /* AppResources.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD47A40231ED8024328E4236 /* AppResources.swift */; };
+		659E47845C84DD37D4C59F42 /* AppViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FA3C53134652D3A68ECA556 /* AppViewModel.swift */; };
+		F734C2E59D90500EC380781B /* FavoritesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F2D03923373CBFF708B62B8 /* FavoritesStore.swift */; };
+		158BFB5A783EF810D345FEA2 /* FlowLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DDC309430396472FFF1060D /* FlowLayout.swift */; };
+		0A8176EB25AC9A0BB6339549 /* FontCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20405B1D021124DD0E8B7C2F /* FontCell.swift */; };
+		A981248BC4490675062E2F0D /* FontDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20312C4AD482430ACF74A5E /* FontDetailView.swift */; };
+		415E585D5E6D4D276CF07CF1 /* FontGridApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DBB6930328649E00329D215 /* FontGridApp.swift */; };
+		0035DC51F301DDD0F0A9EBB6 /* FontLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C033697FF96070E9358BF37 /* FontLibrary.swift */; };
+		DA1C7E3716F779DB677858C9 /* FontMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D3A608E596B42E5AB1B078F /* FontMetadata.swift */; };
+		DCCD8757B966CCDF8B86FEF3 /* MemoEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 421171AFB36BB3BF3CDAD1D1 /* MemoEditor.swift */; };
+		002B5DA3F8792475B49C7A89 /* MemoStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5782AE78D7A8412BEC9CFA4 /* MemoStore.swift */; };
+		B9775AC1C07B642A3E64F064 /* MutedStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A322FCB8E2C4B48EFD1A234F /* MutedStore.swift */; };
+		044B0F5A951063D56440F285 /* NativeTooltip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91E7958F5B4E3F0476F98065 /* NativeTooltip.swift */; };
+		8A4B0197F5928B36B6E255EF /* PanelSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A648CF8D34910DBBF3F6DA0 /* PanelSection.swift */; };
+		E0B97F8069EB3A63FF513B1A /* CenterPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBC099FA7B276FAC70DB00A8 /* CenterPanel.swift */; };
+		888E43483EFDA13FDDFAB9C7 /* LeftPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A08D8E39858934585906D674 /* LeftPanel.swift */; };
+		E19C3DE20FC9A278169940DF /* RightPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF6E153E09E049BE61FE25AD /* RightPanel.swift */; };
+		21DDA4D85818289DCEDCED22 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F26D72E773B8944F898ADEE5 /* RootView.swift */; };
+		EDC400EEAF63963C5EA60478 /* SVGTextExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB8E081B271AA51B673BCD03 /* SVGTextExporter.swift */; };
+		90C3C2E638C1D8F566678B17 /* SampleStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7D152E87F58AF51A3004CBD /* SampleStore.swift */; };
+		D6703A7EF5AC167C4F3242B7 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50753F0B5228D3B14DA0FCD9 /* SettingsView.swift */; };
+		7DCBB0A68D246F0F0A7E5C1F /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CE506718DF36C489EFC5E64 /* Theme.swift */; };
+		12B48AA6C64E33662C64595A /* WrappingPreviewLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2811AC70E34C621964FDBA2F /* WrappingPreviewLabel.swift */; };
+		AA00000000000000000000E2 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA00000000000000000000E1 /* Assets.xcassets */; };
+		AA00000000000000000000E4 /* Wallpapers in Resources */ = {isa = PBXBuildFile; fileRef = AA00000000000000000000E3 /* Wallpapers */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		AA00000000000000000000F6 /* 08FOSE.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = 08FOSE.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BD47A40231ED8024328E4236 /* AppResources.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppResources.swift; path = Sources/FontGrid/AppResources.swift; sourceTree = SOURCE_ROOT; };
+		3FA3C53134652D3A68ECA556 /* AppViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppViewModel.swift; path = Sources/FontGrid/AppViewModel.swift; sourceTree = SOURCE_ROOT; };
+		6F2D03923373CBFF708B62B8 /* FavoritesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = FavoritesStore.swift; path = Sources/FontGrid/FavoritesStore.swift; sourceTree = SOURCE_ROOT; };
+		5DDC309430396472FFF1060D /* FlowLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = FlowLayout.swift; path = Sources/FontGrid/FlowLayout.swift; sourceTree = SOURCE_ROOT; };
+		20405B1D021124DD0E8B7C2F /* FontCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = FontCell.swift; path = Sources/FontGrid/FontCell.swift; sourceTree = SOURCE_ROOT; };
+		C20312C4AD482430ACF74A5E /* FontDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = FontDetailView.swift; path = Sources/FontGrid/FontDetailView.swift; sourceTree = SOURCE_ROOT; };
+		9DBB6930328649E00329D215 /* FontGridApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = FontGridApp.swift; path = Sources/FontGrid/FontGridApp.swift; sourceTree = SOURCE_ROOT; };
+		2C033697FF96070E9358BF37 /* FontLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = FontLibrary.swift; path = Sources/FontGrid/FontLibrary.swift; sourceTree = SOURCE_ROOT; };
+		7D3A608E596B42E5AB1B078F /* FontMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = FontMetadata.swift; path = Sources/FontGrid/FontMetadata.swift; sourceTree = SOURCE_ROOT; };
+		421171AFB36BB3BF3CDAD1D1 /* MemoEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MemoEditor.swift; path = Sources/FontGrid/MemoEditor.swift; sourceTree = SOURCE_ROOT; };
+		E5782AE78D7A8412BEC9CFA4 /* MemoStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MemoStore.swift; path = Sources/FontGrid/MemoStore.swift; sourceTree = SOURCE_ROOT; };
+		A322FCB8E2C4B48EFD1A234F /* MutedStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MutedStore.swift; path = Sources/FontGrid/MutedStore.swift; sourceTree = SOURCE_ROOT; };
+		91E7958F5B4E3F0476F98065 /* NativeTooltip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeTooltip.swift; path = Sources/FontGrid/NativeTooltip.swift; sourceTree = SOURCE_ROOT; };
+		0A648CF8D34910DBBF3F6DA0 /* PanelSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PanelSection.swift; path = Sources/FontGrid/PanelSection.swift; sourceTree = SOURCE_ROOT; };
+		DBC099FA7B276FAC70DB00A8 /* CenterPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CenterPanel.swift; path = Sources/FontGrid/Panels/CenterPanel.swift; sourceTree = SOURCE_ROOT; };
+		A08D8E39858934585906D674 /* LeftPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LeftPanel.swift; path = Sources/FontGrid/Panels/LeftPanel.swift; sourceTree = SOURCE_ROOT; };
+		BF6E153E09E049BE61FE25AD /* RightPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RightPanel.swift; path = Sources/FontGrid/Panels/RightPanel.swift; sourceTree = SOURCE_ROOT; };
+		F26D72E773B8944F898ADEE5 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RootView.swift; path = Sources/FontGrid/RootView.swift; sourceTree = SOURCE_ROOT; };
+		FB8E081B271AA51B673BCD03 /* SVGTextExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SVGTextExporter.swift; path = Sources/FontGrid/SVGTextExporter.swift; sourceTree = SOURCE_ROOT; };
+		D7D152E87F58AF51A3004CBD /* SampleStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SampleStore.swift; path = Sources/FontGrid/SampleStore.swift; sourceTree = SOURCE_ROOT; };
+		50753F0B5228D3B14DA0FCD9 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SettingsView.swift; path = Sources/FontGrid/SettingsView.swift; sourceTree = SOURCE_ROOT; };
+		4CE506718DF36C489EFC5E64 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Theme.swift; path = Sources/FontGrid/Theme.swift; sourceTree = SOURCE_ROOT; };
+		2811AC70E34C621964FDBA2F /* WrappingPreviewLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WrappingPreviewLabel.swift; path = Sources/FontGrid/WrappingPreviewLabel.swift; sourceTree = SOURCE_ROOT; };
+		AA00000000000000000000E1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = 08FOSE/Assets.xcassets; sourceTree = SOURCE_ROOT; };
+		AA00000000000000000000E3 /* Wallpapers */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Sources/FontGrid/Resources/Wallpapers; sourceTree = SOURCE_ROOT; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		AA00000000000000000000F9 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		AA00000000000000000000F2 = {
+			isa = PBXGroup;
+			children = (
+				AA00000000000000000000F3 /* FontGrid */,
+				AA00000000000000000000E1 /* Assets.xcassets */,
+				AA00000000000000000000E3 /* Wallpapers */,
+				AA00000000000000000000F4 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		AA00000000000000000000F4 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				AA00000000000000000000F6 /* 08FOSE.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		AA00000000000000000000F3 /* FontGrid */ = {
+			isa = PBXGroup;
+			children = (
+				BD47A40231ED8024328E4236 /* AppResources.swift */,
+				3FA3C53134652D3A68ECA556 /* AppViewModel.swift */,
+				6F2D03923373CBFF708B62B8 /* FavoritesStore.swift */,
+				5DDC309430396472FFF1060D /* FlowLayout.swift */,
+				20405B1D021124DD0E8B7C2F /* FontCell.swift */,
+				C20312C4AD482430ACF74A5E /* FontDetailView.swift */,
+				9DBB6930328649E00329D215 /* FontGridApp.swift */,
+				2C033697FF96070E9358BF37 /* FontLibrary.swift */,
+				7D3A608E596B42E5AB1B078F /* FontMetadata.swift */,
+				421171AFB36BB3BF3CDAD1D1 /* MemoEditor.swift */,
+				E5782AE78D7A8412BEC9CFA4 /* MemoStore.swift */,
+				A322FCB8E2C4B48EFD1A234F /* MutedStore.swift */,
+				91E7958F5B4E3F0476F98065 /* NativeTooltip.swift */,
+				0A648CF8D34910DBBF3F6DA0 /* PanelSection.swift */,
+				DBC099FA7B276FAC70DB00A8 /* CenterPanel.swift */,
+				A08D8E39858934585906D674 /* LeftPanel.swift */,
+				BF6E153E09E049BE61FE25AD /* RightPanel.swift */,
+				F26D72E773B8944F898ADEE5 /* RootView.swift */,
+				FB8E081B271AA51B673BCD03 /* SVGTextExporter.swift */,
+				D7D152E87F58AF51A3004CBD /* SampleStore.swift */,
+				50753F0B5228D3B14DA0FCD9 /* SettingsView.swift */,
+				4CE506718DF36C489EFC5E64 /* Theme.swift */,
+				2811AC70E34C621964FDBA2F /* WrappingPreviewLabel.swift */,
+			);
+			name = FontGrid;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		AA00000000000000000000F5 /* 08FOSE */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AA00000000000000000000FD /* Build configuration list for PBXNativeTarget "08FOSE" */;
+			buildPhases = (
+				AA00000000000000000000F7 /* Sources */,
+				AA00000000000000000000F9 /* Frameworks */,
+				AA00000000000000000000F8 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = 08FOSE;
+			productName = 08FOSE;
+			productReference = AA00000000000000000000F6 /* 08FOSE.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		AA00000000000000000000F1 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2650;
+				LastUpgradeCheck = 2650;
+				TargetAttributes = {
+					AA00000000000000000000F5 = {
+						CreatedOnToolsVersion = 26.5;
+					};
+				};
+			};
+			buildConfigurationList = AA00000000000000000000FA /* Build configuration list for PBXProject "08FOSE" */;
+			compatibilityVersion = "Xcode 15.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = AA00000000000000000000F2;
+			productRefGroup = AA00000000000000000000F4 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				AA00000000000000000000F5 /* 08FOSE */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		AA00000000000000000000F8 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA00000000000000000000E2 /* Assets.xcassets in Resources */,
+				AA00000000000000000000E4 /* Wallpapers in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		AA00000000000000000000F7 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				29F8B7C13C5768C52E0219E6 /* AppResources.swift in Sources */,
+				659E47845C84DD37D4C59F42 /* AppViewModel.swift in Sources */,
+				F734C2E59D90500EC380781B /* FavoritesStore.swift in Sources */,
+				158BFB5A783EF810D345FEA2 /* FlowLayout.swift in Sources */,
+				0A8176EB25AC9A0BB6339549 /* FontCell.swift in Sources */,
+				A981248BC4490675062E2F0D /* FontDetailView.swift in Sources */,
+				415E585D5E6D4D276CF07CF1 /* FontGridApp.swift in Sources */,
+				0035DC51F301DDD0F0A9EBB6 /* FontLibrary.swift in Sources */,
+				DA1C7E3716F779DB677858C9 /* FontMetadata.swift in Sources */,
+				DCCD8757B966CCDF8B86FEF3 /* MemoEditor.swift in Sources */,
+				002B5DA3F8792475B49C7A89 /* MemoStore.swift in Sources */,
+				B9775AC1C07B642A3E64F064 /* MutedStore.swift in Sources */,
+				044B0F5A951063D56440F285 /* NativeTooltip.swift in Sources */,
+				8A4B0197F5928B36B6E255EF /* PanelSection.swift in Sources */,
+				E0B97F8069EB3A63FF513B1A /* CenterPanel.swift in Sources */,
+				888E43483EFDA13FDDFAB9C7 /* LeftPanel.swift in Sources */,
+				E19C3DE20FC9A278169940DF /* RightPanel.swift in Sources */,
+				21DDA4D85818289DCEDCED22 /* RootView.swift in Sources */,
+				EDC400EEAF63963C5EA60478 /* SVGTextExporter.swift in Sources */,
+				90C3C2E638C1D8F566678B17 /* SampleStore.swift in Sources */,
+				D6703A7EF5AC167C4F3242B7 /* SettingsView.swift in Sources */,
+				7DCBB0A68D246F0F0A7E5C1F /* Theme.swift in Sources */,
+				12B48AA6C64E33662C64595A /* WrappingPreviewLabel.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		AA00000000000000000000FB /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		AA00000000000000000000FC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		AA00000000000000000000FE /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 0.5.8;
+				ENABLE_HARDENED_RUNTIME = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = 08FOSE;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.graphics-design";
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				MARKETING_VERSION = 0.5.8;
+				PRODUCT_BUNDLE_IDENTIFIER = com.marzipan.fontgrid;
+				PRODUCT_NAME = 08FOSE;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		AA00000000000000000000FF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 0.5.8;
+				ENABLE_HARDENED_RUNTIME = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = 08FOSE;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.graphics-design";
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				MARKETING_VERSION = 0.5.8;
+				PRODUCT_BUNDLE_IDENTIFIER = com.marzipan.fontgrid;
+				PRODUCT_NAME = 08FOSE;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		AA00000000000000000000FA /* Build configuration list for PBXProject "08FOSE" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA00000000000000000000FB /* Debug */,
+				AA00000000000000000000FC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AA00000000000000000000FD /* Build configuration list for PBXNativeTarget "08FOSE" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA00000000000000000000FE /* Debug */,
+				AA00000000000000000000FF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = AA00000000000000000000F1 /* Project object */;
+}

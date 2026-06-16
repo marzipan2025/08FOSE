@@ -2,9 +2,11 @@
 .build/
 .swiftpm/
 Packages/
-*.xcodeproj
 *.xcworkspace/xcuserdata
 DerivedData/
+
+# 08FOSE.xcodeproj is the canonical build and IS committed; only Xcode user
+# state inside it is ignored (xcuserdata / *.xcuserstate, below).
 
 # macOS
 .DS_Store
