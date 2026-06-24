@@ -453,7 +453,7 @@ struct WallpaperOverlay: View {
     // color, so it needs more strength than the textured assets to read as
     // a vivid tint rather than a wash. Falls back to lightOpacity otherwise.
     private static let lightOpacityOverrides: [String: Double] = [
-        "Wallpaper04": 1.0
+        "Wallpaper04": 0.8
     ]
 
     // Per-wallpaper dark-mode opacity override. Falls back to darkOpacity.
@@ -496,20 +496,49 @@ struct WallpaperOverlay: View {
         return Self.lightTintOverrides[name] ?? .white
     }
 
+    // One composited pass of the wallpaper image: a blend mode plus the opacity
+    // it contributes at. Most wallpapers use a single layer (see resolvedLayers),
+    // but a few stack passes to mix two blend modes of the same image.
+    private struct BlendLayer {
+        let mode: BlendMode
+        let opacity: Double
+    }
+
+    // Per-wallpaper light-mode multi-layer overrides. When present, these stack
+    // (bottom-to-top) instead of the single resolvedBlendMode/resolvedOpacity.
+    // Wallpaper04 mixes a multiply base with a soft overlay highlight.
+    private static let lightLayerOverrides: [String: [BlendLayer]] = [
+        "Wallpaper04": [
+            BlendLayer(mode: .multiply, opacity: 0.6),
+            BlendLayer(mode: .softLight, opacity: 0.6)
+        ]
+    ]
+
+    private var resolvedLayers: [BlendLayer] {
+        if colorScheme == .light, let layers = Self.lightLayerOverrides[name] {
+            return layers
+        }
+        return [BlendLayer(mode: resolvedBlendMode, opacity: resolvedOpacity)]
+    }
+
     var body: some View {
         let imageName = resolvedImageName
         if !imageName.isEmpty, let img = Self.image(named: imageName, ext: Self.imageExtension) {
-            Image(nsImage: img)
-                .resizable()
-                .aspectRatio(img.size.width / img.size.height, contentMode: .fill)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .clipped()
-                .colorMultiply(resolvedTint)
-                .compositingGroup()
-                .blendMode(resolvedBlendMode)
-                .opacity(resolvedOpacity)
-                .ignoresSafeArea()
-                .allowsHitTesting(false)
+            ZStack {
+                ForEach(Array(resolvedLayers.enumerated()), id: \.offset) { _, layer in
+                    Image(nsImage: img)
+                        .resizable()
+                        .aspectRatio(img.size.width / img.size.height, contentMode: .fill)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                        .clipped()
+                        .colorMultiply(resolvedTint)
+                        .compositingGroup()
+                        .blendMode(layer.mode)
+                        .opacity(layer.opacity)
+                }
+            }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
         } else {
             Color.clear
         }

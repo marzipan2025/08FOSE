@@ -115,6 +115,8 @@ NSFontManager는 한글 등 비-ASCII family 이름을 `/B9CC/B144/C124/CCB4` �
 
 ### 3.4 외형 (좌측 "Appearance")
 - **Wallpaper**: `0`(없음) + 4종. 다크/라이트 모드별로 선택을 따로 기억
+  - 각 월페이퍼는 모드별로 블렌드 모드·불투명도가 개별 지정됨(`WallpaperOverlay`).
+  - **라이트 모드 4번**은 다른 월페이퍼와 달리 단일 블렌드가 아니라 **여러 레이어를 겹쳐 합성**한다(현재 `multiply 0.6` + `soft light 0.6`). `lightLayerOverrides`에 등록된 월페이퍼만 이 멀티-레이어 경로를 타고, 나머지는 기존 단일 블렌드 한 겹으로 동작.
 - **Theme**: Dark / Light 전환
 
 ### 3.5 프리뷰 텍스트
