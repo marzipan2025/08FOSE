@@ -493,15 +493,15 @@ private struct HoverShadow: View {
         ZStack {
             RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
                 .fill(Theme.cellSurface)
-                .shadow(color: .black.opacity(0.75 * shadowScale), radius: 14, x: 0, y: 16)
-                .shadow(color: .black.opacity(0.90 * shadowScale), radius: 40, x: 0, y: 70)
+                .shadow(color: .black.opacity(0.35 * shadowScale), radius: 36, x: 0, y: 32)
+                .shadow(color: .black.opacity(0.6 * shadowScale), radius: 20, x: 0, y: 20)
             RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
                 .blendMode(.destinationOut)
         }
         .compositingGroup()
         .opacity(shown ? 1 : 0)
         .onAppear {
-            withAnimation(.easeOut(duration: 0.3).delay(0.06)) { shown = true }
+            withAnimation(.easeOut(duration: 0.25).delay(0.05)) { shown = true }
         }
     }
 }
