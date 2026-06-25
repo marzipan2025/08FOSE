@@ -125,7 +125,7 @@ struct FontDetailView: View {
                 // (0.92 → 0.952, white-ward 40%) so the card lifts off the grid.
                 .fill(colorScheme == .light ? Color(white: 0.952) : Theme.panelBackground)
                 .shadow(color: .black.opacity(0.55 * shadowScale), radius: 14, x: 0, y: 10)
-                .shadow(color: .black.opacity(0.75 * shadowScale), radius: 60, x: 0, y: 38)
+                .shadow(color: .black.opacity(0.75 * shadowScale), radius: 32, x: 0, y: 38)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)

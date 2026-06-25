@@ -494,7 +494,7 @@ private struct HoverShadow: View {
             RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
                 .fill(Theme.cellSurface)
                 .shadow(color: .black.opacity(0.75 * shadowScale), radius: 14, x: 0, y: 16)
-                .shadow(color: .black.opacity(0.90 * shadowScale), radius: 80, x: 0, y: 70)
+                .shadow(color: .black.opacity(0.90 * shadowScale), radius: 40, x: 0, y: 70)
             RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
                 .blendMode(.destinationOut)
         }
