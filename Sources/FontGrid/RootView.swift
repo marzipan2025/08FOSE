@@ -453,6 +453,7 @@ struct WallpaperOverlay: View {
     // color, so it needs more strength than the textured assets to read as
     // a vivid tint rather than a wash. Falls back to lightOpacity otherwise.
     private static let lightOpacityOverrides: [String: Double] = [
+        "Wallpaper01": 0.2,
         "Wallpaper04": 0.8
     ]
 
@@ -489,7 +490,10 @@ struct WallpaperOverlay: View {
     // before blending. Lets us warm/shift a flat solid color (e.g. nudge
     // Wallpaper04 toward a forsythia gold) without re-exporting the webp.
     // .white is a no-op, so unlisted wallpapers are unaffected.
-    private static let lightTintOverrides: [String: Color] = [:]
+    private static let lightTintOverrides: [String: Color] = [
+        // 연두색을 흰색에 25% 섞어 은은하게 곱한다 (yellow-green ≈ 0.6,0.8,0.2)
+        "Wallpaper01": Color(red: 0.90, green: 0.95, blue: 0.80)
+    ]
 
     private var resolvedTint: Color {
         guard colorScheme == .light else { return .white }
