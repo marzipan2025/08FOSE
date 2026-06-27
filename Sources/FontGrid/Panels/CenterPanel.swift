@@ -86,7 +86,10 @@ struct CenterPanel: View {
                 .animation(.easeInOut(duration: 0.15), value: topBarHidden)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .ignoresSafeArea(edges: .top)
-                .allowsHitTesting(false)
+                // Interactive only while the detail is open (for the prev/next
+                // nav buttons) and the bar is actually visible; otherwise the
+                // empty band must let grid clicks/scroll pass through.
+                .allowsHitTesting(vm.selectedFamily != nil && !topBarHidden)
                 .zIndex(35)
             PreviewInputBar(text: $previewText)
                 .padding(.horizontal, Theme.gridPadding)
@@ -109,20 +112,15 @@ struct CenterPanel: View {
     private func topBar(count: Int) -> some View {
         HStack(spacing: 8) {
             if vm.selectedFamily != nil {
-                // Detail open: previous font (left) / next font (right). Display
-                // only — the bar is non-interactive (allowsHitTesting false).
-                Text(detailNeighbour(-1).map { "←  \($0)" } ?? "")
-                    .font(.system(size: Theme.sectionHeaderSize + 2))
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                Text(detailNeighbour(1).map { "\($0)  →" } ?? "")
-                    .font(.system(size: Theme.sectionHeaderSize + 2))
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
+                // Detail open: previous font (left) / next font (right). Each is a
+                // button that steps the detail, mirroring the ←/→ arrow keys. Both
+                // slots always render (disabled at a list end) so the view identity
+                // stays stable across navigation — otherwise hover/press state would
+                // reset and the button under the cursor wouldn't respond to a repeat
+                // click. The Spacer keeps each button hugging its own edge.
+                NeighbourNavButton(name: detailNeighbour(-1), delta: -1) { stepDetail(-1) }
+                Spacer(minLength: 8)
+                NeighbourNavButton(name: detailNeighbour(1), delta: 1) { stepDetail(1) }
             } else {
                 Text("08FOSE")
                     .font(.system(size: Theme.sectionHeaderSize + 2, weight: .bold))
@@ -502,6 +500,46 @@ private struct HoverShadow: View {
         .opacity(shown ? 1 : 0)
         .onAppear {
             withAnimation(.easeOut(duration: 0.25).delay(0.05)) { shown = true }
+        }
+    }
+}
+
+// Clickable previous/next-font label in the detail top bar. Same action as the
+// ←/→ arrow keys (stepDetail). The hit target is the text plus a little padding
+// (full band height, but only as wide as the label — not the half-bar), and hover
+// only deepens the text (tertiary → primary, no hue) plus a pointing-hand cursor
+// so it reads as a button. `name` is nil at a list end → the button disables but
+// stays in place, keeping a stable identity so repeat clicks register.
+private struct NeighbourNavButton: View {
+    let name: String?
+    let delta: Int                 // -1 = previous (left), +1 = next (right)
+    let action: () -> Void
+    @State private var hovering = false
+
+    private var enabled: Bool { name != nil }
+
+    var body: some View {
+        Button(action: action) {
+            Text(name.map { delta < 0 ? "←  \($0)" : "\($0)  →" } ?? "")
+                .font(.system(size: Theme.sectionHeaderSize + 2))
+                .foregroundStyle(hovering && enabled ? .primary : .tertiary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .padding(.horizontal, 8)
+                .frame(maxHeight: .infinity)   // full band height, label width only
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        // .set() (not push/pop) so a missed exit can't leak a stacked cursor.
+        .onHover { inside in
+            hovering = inside
+            (inside && enabled ? NSCursor.pointingHand : NSCursor.arrow).set()
+        }
+        // If navigation disables this slot while the cursor is still over it,
+        // the hover-exit may not fire — reset state and cursor explicitly.
+        .onChange(of: enabled) { nowEnabled in
+            if !nowEnabled { hovering = false; NSCursor.arrow.set() }
         }
     }
 }

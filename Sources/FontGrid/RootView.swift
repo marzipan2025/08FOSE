@@ -513,8 +513,8 @@ struct WallpaperOverlay: View {
     // Wallpaper04 mixes a multiply base with a soft overlay highlight.
     private static let lightLayerOverrides: [String: [BlendLayer]] = [
         "Wallpaper04": [
-            BlendLayer(mode: .multiply, opacity: 0.6),
-            BlendLayer(mode: .softLight, opacity: 0.6)
+            BlendLayer(mode: .multiply, opacity: 0.8),
+            BlendLayer(mode: .softLight, opacity: 0.4)
         ]
     ]
 
