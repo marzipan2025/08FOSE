@@ -525,22 +525,63 @@ private struct NeighbourNavButton: View {
                 .foregroundStyle(hovering && enabled ? .primary : .tertiary)
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .padding(.horizontal, 8)
-                .frame(maxHeight: .infinity)   // full band height, label width only
+                // Generous padding makes the hit target a clear region, not just
+                // the glyphs; full band height. No box — hover only deepens the
+                // text. contentShape makes the whole padded frame clickable.
+                .padding(.horizontal, 16)
+                .padding(.vertical, 5)
+                .frame(maxHeight: .infinity)
                 .contentShape(Rectangle())
+                // Hover/cursor come from an explicit NSTrackingArea, not SwiftUI's
+                // .onHover/.onContinuousHover — those drop the rollover mid-region
+                // and stick inside this frequently-rebuilt bar. Click-through, so
+                // the Button still gets the tap.
+                .background { if enabled { HoverTracker { hovering = $0 } } }
         }
         .buttonStyle(.plain)
         .disabled(!enabled)
-        // .set() (not push/pop) so a missed exit can't leak a stacked cursor.
-        .onHover { inside in
-            hovering = inside
-            (inside && enabled ? NSCursor.pointingHand : NSCursor.arrow).set()
+        // If navigation disables this slot while the cursor is still over it, the
+        // tracker is removed without an exit — clear the lingering hovered state.
+        .onChange(of: enabled) { if !$0 { hovering = false } }
+    }
+}
+
+// Reliable hover + pointing-hand cursor via an explicit NSTrackingArea. Reports
+// enter/exit through `onChange` and owns the cursor via .cursorUpdate (no
+// push/pop, so nothing leaks). hitTest returns nil so it never swallows clicks.
+private struct HoverTracker: NSViewRepresentable {
+    let onChange: (Bool) -> Void
+
+    func makeNSView(context: Context) -> TrackingView { TrackingView(onChange: onChange) }
+    func updateNSView(_ nsView: TrackingView, context: Context) { nsView.onChange = onChange }
+
+    final class TrackingView: NSView {
+        var onChange: (Bool) -> Void
+        private var area: NSTrackingArea?
+
+        init(onChange: @escaping (Bool) -> Void) {
+            self.onChange = onChange
+            super.init(frame: .zero)
         }
-        // If navigation disables this slot while the cursor is still over it,
-        // the hover-exit may not fire — reset state and cursor explicitly.
-        .onChange(of: enabled) { nowEnabled in
-            if !nowEnabled { hovering = false; NSCursor.arrow.set() }
+        required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+        override func updateTrackingAreas() {
+            super.updateTrackingAreas()
+            if let area { removeTrackingArea(area) }
+            let new = NSTrackingArea(
+                rect: bounds,
+                options: [.mouseEnteredAndExited, .cursorUpdate,
+                          .activeInActiveApp, .inVisibleRect],
+                owner: self, userInfo: nil)
+            addTrackingArea(new)
+            area = new
         }
+
+        override func mouseEntered(with event: NSEvent) { onChange(true) }
+        override func mouseExited(with event: NSEvent) { onChange(false) }
+        override func cursorUpdate(with event: NSEvent) { NSCursor.pointingHand.set() }
+        // Click-through: let the SwiftUI Button underneath receive the tap.
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
     }
 }
 
