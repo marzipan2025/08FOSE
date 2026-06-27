@@ -553,11 +553,17 @@ private struct HoverTracker: NSViewRepresentable {
     let onChange: (Bool) -> Void
 
     func makeNSView(context: Context) -> TrackingView { TrackingView(onChange: onChange) }
-    func updateNSView(_ nsView: TrackingView, context: Context) { nsView.onChange = onChange }
+    func updateNSView(_ nsView: TrackingView, context: Context) {
+        nsView.onChange = onChange
+        // The label changed (navigation) — re-sync to the real pointer position so
+        // a hovered state can't stick on after the cursor has already left.
+        nsView.syncHover()
+    }
 
     final class TrackingView: NSView {
         var onChange: (Bool) -> Void
         private var area: NSTrackingArea?
+        private var lastInside: Bool?
 
         init(onChange: @escaping (Bool) -> Void) {
             self.onChange = onChange
@@ -575,10 +581,28 @@ private struct HoverTracker: NSViewRepresentable {
                 owner: self, userInfo: nil)
             addTrackingArea(new)
             area = new
+            // A tracking area doesn't announce a pointer that's already inside (or
+            // already gone), so reconcile against the actual mouse location here —
+            // this runs on add/resize/relayout, i.e. exactly when state goes stale.
+            syncHover()
         }
 
-        override func mouseEntered(with event: NSEvent) { onChange(true) }
-        override func mouseExited(with event: NSEvent) { onChange(false) }
+        // Set the hovered state from where the pointer actually is, deduped so it
+        // doesn't thrash SwiftUI. Covers the rebuild case enter/exit can't.
+        func syncHover() {
+            guard let window, window.isVisible else { return report(false) }
+            let local = convert(window.mouseLocationOutsideOfEventStream, from: nil)
+            report(bounds.contains(local))
+        }
+
+        private func report(_ inside: Bool) {
+            guard lastInside != inside else { return }
+            lastInside = inside
+            onChange(inside)
+        }
+
+        override func mouseEntered(with event: NSEvent) { report(true) }
+        override func mouseExited(with event: NSEvent) { report(false) }
         override func cursorUpdate(with event: NSEvent) { NSCursor.pointingHand.set() }
         // Click-through: let the SwiftUI Button underneath receive the tap.
         override func hitTest(_ point: NSPoint) -> NSView? { nil }
