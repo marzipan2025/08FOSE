@@ -527,6 +527,26 @@ struct WallpaperOverlay: View {
         return [BlendLayer(mode: resolvedBlendMode, opacity: resolvedOpacity)]
     }
 
+    // A separate image composited on top of the base wallpaper layers, unlike
+    // resolvedLayers which restacks the same wallpaper image. Used to lay a
+    // shared "shine" highlight sheet over a wallpaper without baking it in.
+    private struct Overlay {
+        let imageName: String
+        let mode: BlendMode
+        let opacity: Double
+    }
+
+    // Per-wallpaper light-mode top overlay. Wallpaper04 gets an overlay-blended
+    // shine sheet. Tint is intentionally not applied to the overlay.
+    private static let lightOverlays: [String: Overlay] = [
+        "Wallpaper04": Overlay(imageName: "shine", mode: .softLight, opacity: 0.2)
+    ]
+
+    private var resolvedOverlay: Overlay? {
+        guard colorScheme == .light else { return nil }
+        return Self.lightOverlays[name]
+    }
+
     var body: some View {
         let imageName = resolvedImageName
         if !imageName.isEmpty, let img = Self.image(named: imageName, ext: Self.imageExtension) {
@@ -541,6 +561,17 @@ struct WallpaperOverlay: View {
                         .compositingGroup()
                         .blendMode(layer.mode)
                         .opacity(layer.opacity)
+                }
+                if let overlay = resolvedOverlay,
+                   let shine = Self.overlayImage(named: overlay.imageName, ext: Self.imageExtension) {
+                    Image(nsImage: shine)
+                        .resizable()
+                        .aspectRatio(shine.size.width / shine.size.height, contentMode: .fill)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                        .clipped()
+                        .compositingGroup()
+                        .blendMode(overlay.mode)
+                        .opacity(overlay.opacity)
                 }
             }
             .ignoresSafeArea()
@@ -576,6 +607,27 @@ struct WallpaperOverlay: View {
         let image = downscaled(raw, maxPixel: maxWallpaperPixel)
         cachedKey = key
         cachedImage = image
+        return image
+    }
+
+    // Overlay images get their own single slot so they don't thrash the base
+    // wallpaper cache (both are on screen at once); total stays bounded to two.
+    private static var cachedOverlayKey: String?
+    private static var cachedOverlayImage: NSImage?
+
+    private static func overlayImage(named name: String, ext: String) -> NSImage? {
+        let key = "\(name).\(ext)"
+        if key == cachedOverlayKey, let cached = cachedOverlayImage { return cached }
+        guard let url = AppResources.bundle.url(
+            forResource: name,
+            withExtension: ext,
+            subdirectory: "Wallpapers"
+        ),
+              let raw = NSImage(contentsOf: url)
+        else { return nil }
+        let image = downscaled(raw, maxPixel: maxWallpaperPixel)
+        cachedOverlayKey = key
+        cachedOverlayImage = image
         return image
     }
 
