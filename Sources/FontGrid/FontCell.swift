@@ -223,7 +223,8 @@ private struct CyclingPreviewLabel: View {
 
 // MARK: - Preview Label (Core Text)
 
-/// Single-line, tail-truncating font preview drawn with Core Text.
+/// Single-line font preview drawn with Core Text. Overflow drops whole
+/// characters that don't fit (no ellipsis, no half-cut glyphs).
 ///
 /// `NSTextField` and SwiftUI `Text` position the baseline from the PRIMARY
 /// font's ascent. So when a Latin-only font (e.g. dotty, Bandwidth BRK) draws
@@ -280,14 +281,27 @@ final class PreviewTextView: NSView {
         ]
         NSColor.labelColor.setFill()
 
-        var line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attrs))
+        // Single line, no ellipsis and no sliced glyphs: keep only the whole
+        // characters that fully fit the available width, dropping the rest
+        // instead of cutting the last glyph in half or appending a "…".
+        // CTTypesetterSuggestClusterBreak reports how many leading characters fit
+        // within maxWidth at a cluster boundary. The view already carries the
+        // cell's horizontal padding, so the break sits an even margin in.
+        let attrString = NSAttributedString(string: text, attributes: attrs)
         let maxWidth = Double(bounds.width)
-        if CTLineGetTypographicBounds(line, nil, nil, nil) > maxWidth {
-            let ellipsis = CTLineCreateWithAttributedString(NSAttributedString(string: "\u{2026}", attributes: attrs))
-            if let truncated = CTLineCreateTruncatedLine(line, maxWidth, .end, ellipsis) {
-                line = truncated
-            }
+        let full = CTLineCreateWithAttributedString(attrString)
+        let line: CTLine
+        if CTLineGetTypographicBounds(full, nil, nil, nil) > maxWidth {
+            let typesetter = CTTypesetterCreateWithAttributedString(attrString)
+            let fitCount = CTTypesetterSuggestClusterBreak(typesetter, 0, maxWidth)
+            let visible = (text as NSString).substring(to: fitCount)
+            line = CTLineCreateWithAttributedString(NSAttributedString(string: visible, attributes: attrs))
+        } else {
+            line = full
         }
+        // Safety net for the rare case of a single glyph wider than the cell:
+        // clip to bounds so it can't bleed to the card border.
+        ctx.clip(to: bounds)
 
         var ascent: CGFloat = 0, descent: CGFloat = 0, leading: CGFloat = 0
         CTLineGetTypographicBounds(line, &ascent, &descent, &leading)

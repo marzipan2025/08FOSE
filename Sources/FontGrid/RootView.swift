@@ -539,7 +539,7 @@ struct WallpaperOverlay: View {
     // Per-wallpaper light-mode top overlay. Wallpaper04 gets an overlay-blended
     // shine sheet. Tint is intentionally not applied to the overlay.
     private static let lightOverlays: [String: Overlay] = [
-        "Wallpaper04": Overlay(imageName: "shine", mode: .softLight, opacity: 0.2)
+        "Wallpaper04": Overlay(imageName: "shine", mode: .softLight, opacity: 0.3)
     ]
 
     private var resolvedOverlay: Overlay? {
