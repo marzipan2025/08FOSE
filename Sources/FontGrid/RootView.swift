@@ -437,7 +437,7 @@ struct WallpaperOverlay: View {
     // wallpaper not listed (additive/lighten modes blow out against a bright
     // background, so .multiply is the sane default).
     private static let lightBlendModes: [String: BlendMode] = [
-        "Wallpaper01": .darken,
+        "Wallpaper01": .exclusion,
         "Wallpaper02": .multiply,
         "Wallpaper03": .overlay,
         "Wallpaper04": .multiply
@@ -453,7 +453,7 @@ struct WallpaperOverlay: View {
     // color, so it needs more strength than the textured assets to read as
     // a vivid tint rather than a wash. Falls back to lightOpacity otherwise.
     private static let lightOpacityOverrides: [String: Double] = [
-        "Wallpaper01": 0.2,
+        "Wallpaper01": 0.18,
         "Wallpaper04": 0.8
     ]
 
@@ -491,8 +491,8 @@ struct WallpaperOverlay: View {
     // Wallpaper04 toward a forsythia gold) without re-exporting the webp.
     // .white is a no-op, so unlisted wallpapers are unaffected.
     private static let lightTintOverrides: [String: Color] = [
-        // 연두색을 흰색에 25% 섞어 은은하게 곱한다 (yellow-green ≈ 0.6,0.8,0.2)
-        "Wallpaper01": Color(red: 0.90, green: 0.95, blue: 0.80)
+        // 골드를 흰색에 80% 섞어 은은하게 곱한다 (gold ≈ 1.0,0.84,0.0)
+        "Wallpaper01": Color(red: 1.0, green: 0.874, blue: 0.2)
     ]
 
     private var resolvedTint: Color {
