@@ -492,7 +492,9 @@ struct WallpaperOverlay: View {
     // .white is a no-op, so unlisted wallpapers are unaffected.
     private static let lightTintOverrides: [String: Color] = [
         // 골드를 흰색에 80% 섞어 은은하게 곱한다 (gold ≈ 1.0,0.84,0.0)
-        "Wallpaper01": Color(red: 1.0, green: 0.874, blue: 0.2)
+        "Wallpaper01": Color(red: 1.0, green: 0.874, blue: 0.2),
+        // 핑크를 흰색에 50% 섞어 은은하게 곱한다 (pink ≈ 1.0,0.753,0.796)
+        "Wallpaper02": Color(red: 1.0, green: 0.877, blue: 0.898)
     ]
 
     private var resolvedTint: Color {
