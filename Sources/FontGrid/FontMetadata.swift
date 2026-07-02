@@ -27,6 +27,15 @@ struct FontMetadata {
     static let empty = FontMetadata()
     var isEmpty: Bool { entries.isEmpty }
 
+    // Loaded metadata per family name. load() parses sfnt tables (file I/O),
+    // which shouldn't be repeated on every detail open / ←→ step; installed
+    // faces don't change mid-run (parallel to FontFamily.previewCache).
+    @MainActor private static var cache: [String: FontMetadata] = [:]
+    @MainActor static func cached(_ familyName: String) -> FontMetadata? { cache[familyName] }
+    @MainActor static func store(_ metadata: FontMetadata, for familyName: String) {
+        cache[familyName] = metadata
+    }
+
     // MARK: - Loading
 
     static func load(family: FontFamily) -> FontMetadata {

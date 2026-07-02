@@ -115,9 +115,28 @@ final class FontLibrary: ObservableObject {
 
     init() { reload() }
 
+    // Persisted psName → ScriptCategory rawValue. classify() opens the font
+    // file and reads sfnt tables for EVERY family, which is ~40% of the launch
+    // path (~250ms for ~500 families, worse cold); a font's classification
+    // never changes for a given face, so pay it once per font, not per launch.
+    // The key is versioned — bump it if the classification rules change so
+    // stale verdicts don't stick. Reset everything wipes it (whole domain).
+    private static let scriptCacheKey = "FontGrid.scriptCache.v1"
+
     func reload() {
         let manager = NSFontManager.shared
         let names = manager.availableFontFamilies
+        var scriptCache = (UserDefaults.standard.dictionary(forKey: Self.scriptCacheKey) as? [String: String]) ?? [:]
+        var cacheDirty = false
+        func cachedClassify(psName: String) -> ScriptCategory {
+            if let raw = scriptCache[psName], let cached = ScriptCategory(rawValue: raw) {
+                return cached
+            }
+            let script = Self.classify(psName: psName)
+            scriptCache[psName] = script.rawValue
+            cacheDirty = true
+            return script
+        }
         let loadedFamilies = names.compactMap { family -> FontFamily? in
             guard !family.hasPrefix(".") else { return nil }
             guard let members = manager.availableMembers(ofFontFamily: family) else { return nil }
@@ -139,10 +158,14 @@ final class FontLibrary: ObservableObject {
             return FontFamily(
                 name: displayName,
                 memberFontNames: sortedNames,
-                script: Self.classify(psName: sortedNames[0])
+                script: cachedClassify(psName: sortedNames[0])
             )
         }
         .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+
+        if cacheDirty {
+            UserDefaults.standard.set(scriptCache, forKey: Self.scriptCacheKey)
+        }
 
         var counts: [ScriptCategory: Int] = [:]
         for family in loadedFamilies { counts[family.script, default: 0] += 1 }

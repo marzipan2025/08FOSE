@@ -36,6 +36,16 @@ final class WrappingPreviewView: NSView {
     private var fontSize: CGFloat = 0
     private var color: NSColor = .labelColor
 
+    // The framesetter is immutable per attributed string, but during the detail
+    // card's open/close spring this view is resized on EVERY animation frame,
+    // and both the measure and the draw used to rebuild one from scratch — the
+    // dominant per-frame cost of the transition. Build it once per content
+    // change instead. The height measure is memoized per width for the same
+    // reason (a layout pass can ask for the intrinsic size more than once).
+    private var framesetter: CTFramesetter?
+    private var measuredWidth: CGFloat = -1
+    private var measuredHeightForWidth: CGFloat = 0
+
     override var isFlipped: Bool { true }
 
     func update(text: String, fontName: String, fontSize: CGFloat, color: NSColor) {
@@ -55,6 +65,10 @@ final class WrappingPreviewView: NSView {
             kCTForegroundColorFromContextAttributeName as NSAttributedString.Key: true
         ]
         attributed = NSAttributedString(string: text, attributes: attrs)
+        framesetter = attributed.length > 0
+            ? CTFramesetterCreateWithAttributedString(attributed)
+            : nil
+        measuredWidth = -1
         invalidateIntrinsicContentSize()
         needsDisplay = true
     }
@@ -75,8 +89,8 @@ final class WrappingPreviewView: NSView {
     }
 
     private func measuredHeight(forWidth width: CGFloat) -> CGFloat {
-        guard attributed.length > 0 else { return 0 }
-        let framesetter = CTFramesetterCreateWithAttributedString(attributed)
+        guard let framesetter else { return 0 }
+        if width == measuredWidth { return measuredHeightForWidth }
         let size = CTFramesetterSuggestFrameSizeWithConstraints(
             framesetter,
             CFRange(location: 0, length: 0),
@@ -84,11 +98,13 @@ final class WrappingPreviewView: NSView {
             CGSize(width: width, height: .greatestFiniteMagnitude),
             nil
         )
+        measuredWidth = width
+        measuredHeightForWidth = size.height
         return size.height
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        guard attributed.length > 0,
+        guard let framesetter,
               let ctx = NSGraphicsContext.current?.cgContext else { return }
         color.setFill()
 
@@ -98,7 +114,6 @@ final class WrappingPreviewView: NSView {
         ctx.translateBy(x: 0, y: bounds.height)
         ctx.scaleBy(x: 1, y: -1)
 
-        let framesetter = CTFramesetterCreateWithAttributedString(attributed)
         let path = CGPath(rect: CGRect(origin: .zero, size: bounds.size), transform: nil)
         let frame = CTFramesetterCreateFrame(
             framesetter, CFRange(location: 0, length: 0), path, nil

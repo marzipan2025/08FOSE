@@ -14,10 +14,12 @@ struct CenterPanel: View {
     @AppStorage("previewText") private var previewText = "The quick brown fox jumps over lazy dog"
     @Namespace private var cellHero
     @State private var emptyStateFontName: String? = nil
-    // Top edge of the grid container, in WINDOW coordinates. Reflects the safe
-    // area (title-bar inset in windowed mode, 0 in fullscreen), so the same
-    // scroll-top position reads ~44 windowed but ~16 in fullscreen.
-    @State private var gridTopY: CGFloat = .infinity
+    // True when the grid content's top edge (window coordinates — ~44 at rest
+    // windowed, ~16 in fullscreen) has scrolled up under the pinned title band.
+    // Stored as a Bool, not the raw Y: the preference updates on every scroll
+    // frame, but state (and this whole body, incl. the filter chain) should
+    // only change at the threshold crossing.
+    @State private var gridUnderTitleBand = false
     // Mirrors the key window's .fullScreen styleMask. In fullscreen there is no
     // titlebar inset, so the topBar would sit directly on top of the detail card
     // — we keep it hidden in that case.
@@ -40,7 +42,7 @@ struct CenterPanel: View {
     // the normal "hidden when scrolled to the top" path apply.
     private var topBarHidden: Bool {
         if vm.selectedFamily != nil && !isFullscreen { return false }
-        return gridTopY < Self.titleBandHeight
+        return gridUnderTitleBand
     }
 
     private func syncFullscreenState() {
@@ -96,7 +98,10 @@ struct CenterPanel: View {
                 .padding(.vertical, 12)
                 .zIndex(40)
         }
-        .onPreferenceChange(GridTopYKey.self) { gridTopY = $0 }
+        .onPreferenceChange(GridTopYKey.self) { y in
+            let under = y < Self.titleBandHeight
+            if under != gridUnderTitleBand { gridUnderTitleBand = under }
+        }
         .onAppear { syncFullscreenState() }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { _ in
             isFullscreen = true
@@ -783,12 +788,31 @@ private struct ScrollOffsetPersistence: NSViewRepresentable {
 
         private var suppressWrites = false
 
+        // Bounds change on every scroll frame (60–120/s); writing defaults that
+        // often is pure waste. Hold the latest Y and flush once the scroll has
+        // settled (or on detach), so a session still ends with the final offset.
+        private var pendingY: Double?
+        private var writeItem: DispatchWorkItem?
+
         @objc private func boundsChanged(_ note: Notification) {
             guard !suppressWrites, let clip = note.object as? NSClipView else { return }
-            UserDefaults.standard.set(Double(clip.bounds.origin.y), forKey: key)
+            pendingY = Double(clip.bounds.origin.y)
+            writeItem?.cancel()
+            let item = DispatchWorkItem { [weak self] in self?.flushPendingWrite() }
+            writeItem = item
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: item)
+        }
+
+        private func flushPendingWrite() {
+            writeItem?.cancel()
+            writeItem = nil
+            guard let y = pendingY else { return }
+            pendingY = nil
+            UserDefaults.standard.set(y, forKey: key)
         }
 
         func detach() {
+            flushPendingWrite()
             if let clip = observedClipView {
                 NotificationCenter.default.removeObserver(self, name: NSView.boundsDidChangeNotification, object: clip)
             }

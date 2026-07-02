@@ -247,6 +247,9 @@ NSFontManager는 한글 등 비-ASCII family 이름을 `/B9CC/B144/C124/CCB4` �
 **콘텐츠 데이터**
 - `FontGrid.favorites`, `FontGrid.memos`, `FontGrid.samples` (specimen), `FontGrid.muted`
 
+**캐시**
+- `FontGrid.scriptCache.v1`: psName → 스크립트 분류 결과. 시작 시 폰트별 sfnt 판독을 재실행하지 않기 위한 캐시 — 분류 규칙을 바꾸면 키 버전을 올릴 것
+
 **환경/외형**
 - `previewText`, `favoritesByRecent`, `isLightMode`
 - `selectedWallpaperDark`, `selectedWallpaperLight` (구 `selectedWallpaper`는 마이그레이션용)

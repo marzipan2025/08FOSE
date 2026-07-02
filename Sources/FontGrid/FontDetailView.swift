@@ -142,7 +142,24 @@ struct FontDetailView: View {
             memoExpanded = false
             memoContentHeight = 0
             glyphFontPS = nil
-            metadata = FontMetadata.load(family: family)
+            // Metadata off the main thread: load() parses sfnt tables (file
+            // I/O), and running it inline here stalls the first frames of the
+            // open/navigation spring. Cached families resolve synchronously;
+            // on a first visit the previous font's info stays up while the new
+            // one loads (a few ms) so the column doesn't collapse-and-reinsert.
+            if let cached = FontMetadata.cached(family.name) {
+                metadata = cached
+                return
+            }
+            let fam = family
+            let loaded = await Task.detached(priority: .userInitiated) {
+                FontMetadata.load(family: fam)
+            }.value
+            guard !Task.isCancelled else { return }
+            FontMetadata.store(loaded, for: fam.name)
+            // Ease the info section in if the card is still mid-motion, rather
+            // than snapping the layout the moment the load lands.
+            withAnimation(.easeOut(duration: 0.15)) { metadata = loaded }
         }
     }
 
