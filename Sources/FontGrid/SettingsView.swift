@@ -237,7 +237,7 @@ struct SettingsOverlay: View {
                 )
                 .fixedSize(horizontal: false, vertical: true)
 
-                Text("v\(Theme.appVersion) : Importing a backup now asks whether to merge with or replace your existing data.")
+                Text("v\(Theme.appVersion) : Tags can be renamed — click the pencil next to the active tag label above the grid.")
                     .font(.system(size: SettingsType.small))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)

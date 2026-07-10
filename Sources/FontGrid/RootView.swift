@@ -130,6 +130,10 @@ struct RootView: View {
         if vm.showSettings && !["t", "0", "1", "2", "3", "4"].contains(key) {
             return false
         }
+        // While the rename-tag popup is open, swallow every single-key
+        // shortcut (they'd mutate filters/theme behind the modal — e.g. after
+        // ESC dropped the text-field focus but before the popup closed).
+        if vm.renamingTag != nil { return true }
         switch key {
         case "0":
             vm.wallpaper = ""
@@ -210,6 +214,12 @@ struct RootView: View {
     // ESC cascade step: close the Settings modal if it's open. Returns true
     // when it actually closed something.
     private func closeSettingsIfOpen() -> Bool {
+        // The rename-tag popup sits above everything, so it closes first —
+        // this is the head of the ESC cascade.
+        if vm.renamingTag != nil {
+            vm.renamingTag = nil
+            return true
+        }
         guard vm.showSettings else { return false }
         // A Clear All confirmation is open: let ESC fall through so it dismisses
         // only the dialog, keeping Settings open.

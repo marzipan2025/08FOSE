@@ -89,15 +89,34 @@ struct CenterPanel: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .ignoresSafeArea(edges: .top)
                 // Interactive only while the detail is open (for the prev/next
-                // nav buttons) and the bar is actually visible; otherwise the
+                // nav buttons) or a tag filter is active (for the rename
+                // pencil), and the bar is actually visible; otherwise the
                 // empty band must let grid clicks/scroll pass through.
-                .allowsHitTesting(vm.selectedFamily != nil && !topBarHidden)
+                .allowsHitTesting((vm.selectedFamily != nil || vm.activeTag != nil) && !topBarHidden)
                 .zIndex(35)
             PreviewInputBar(text: $previewText)
                 .padding(.horizontal, Theme.gridPadding)
                 .padding(.vertical, 12)
                 .zIndex(40)
+            // Rename-tag popup, above everything in the center panel. Identity
+            // keyed to the tag so reopening for another tag resets the field.
+            if let tag = vm.renamingTag {
+                RenameTagPopup(
+                    tag: tag,
+                    count: memos.tagCounts.first { $0.tag == tag }?.count ?? 0,
+                    onCancel: { vm.renamingTag = nil },
+                    onCommit: { newName in
+                        memos.renameTag(tag, to: newName)
+                        if vm.activeTag == tag { vm.activeTag = newName }
+                        vm.renamingTag = nil
+                    }
+                )
+                .id(tag)
+                .zIndex(50)
+                .transition(.opacity)
+            }
         }
+        .animation(.easeOut(duration: 0.15), value: vm.renamingTag)
         .onPreferenceChange(GridTopYKey.self) { y in
             let under = y < Self.titleBandHeight
             if under != gridUnderTitleBand { gridUnderTitleBand = under }
@@ -135,6 +154,14 @@ struct CenterPanel: View {
                     .font(.system(size: Theme.sectionHeaderSize + 2))
                     .foregroundStyle(.tertiary)
                     .monospacedDigit()
+                // Pencil next to the "Tag : x" label: renames the active tag
+                // across every memo that carries it.
+                if let tag = vm.activeTag {
+                    RenameTagButton { vm.renamingTag = tag }
+                        // Pull 3px back against the HStack's 8px spacing so
+                        // the pencil sits tighter to the tag label.
+                        .padding(.leading, -3)
+                }
             }
         }
         .padding(.leading, leftCollapsed ? Self.trafficLightClearance : 0)

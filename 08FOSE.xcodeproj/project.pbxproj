@@ -18,6 +18,7 @@
 		DA1C7E3716F779DB677858C9 /* FontMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D3A608E596B42E5AB1B078F /* FontMetadata.swift */; };
 		DCCD8757B966CCDF8B86FEF3 /* MemoEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 421171AFB36BB3BF3CDAD1D1 /* MemoEditor.swift */; };
 		002B5DA3F8792475B49C7A89 /* MemoStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5782AE78D7A8412BEC9CFA4 /* MemoStore.swift */; };
+		1234ABCD5678EF901234ABCD /* RenameTagPopup.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB12CD34EF56AB12CD34EF56 /* RenameTagPopup.swift */; };
 		B9775AC1C07B642A3E64F064 /* MutedStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A322FCB8E2C4B48EFD1A234F /* MutedStore.swift */; };
 		044B0F5A951063D56440F285 /* NativeTooltip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91E7958F5B4E3F0476F98065 /* NativeTooltip.swift */; };
 		8A4B0197F5928B36B6E255EF /* PanelSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A648CF8D34910DBBF3F6DA0 /* PanelSection.swift */; };
@@ -47,6 +48,7 @@
 		7D3A608E596B42E5AB1B078F /* FontMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = FontMetadata.swift; path = Sources/FontGrid/FontMetadata.swift; sourceTree = SOURCE_ROOT; };
 		421171AFB36BB3BF3CDAD1D1 /* MemoEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MemoEditor.swift; path = Sources/FontGrid/MemoEditor.swift; sourceTree = SOURCE_ROOT; };
 		E5782AE78D7A8412BEC9CFA4 /* MemoStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MemoStore.swift; path = Sources/FontGrid/MemoStore.swift; sourceTree = SOURCE_ROOT; };
+		AB12CD34EF56AB12CD34EF56 /* RenameTagPopup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RenameTagPopup.swift; path = Sources/FontGrid/RenameTagPopup.swift; sourceTree = SOURCE_ROOT; };
 		A322FCB8E2C4B48EFD1A234F /* MutedStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MutedStore.swift; path = Sources/FontGrid/MutedStore.swift; sourceTree = SOURCE_ROOT; };
 		91E7958F5B4E3F0476F98065 /* NativeTooltip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeTooltip.swift; path = Sources/FontGrid/NativeTooltip.swift; sourceTree = SOURCE_ROOT; };
 		0A648CF8D34910DBBF3F6DA0 /* PanelSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PanelSection.swift; path = Sources/FontGrid/PanelSection.swift; sourceTree = SOURCE_ROOT; };
@@ -106,6 +108,7 @@
 				7D3A608E596B42E5AB1B078F /* FontMetadata.swift */,
 				421171AFB36BB3BF3CDAD1D1 /* MemoEditor.swift */,
 				E5782AE78D7A8412BEC9CFA4 /* MemoStore.swift */,
+				AB12CD34EF56AB12CD34EF56 /* RenameTagPopup.swift */,
 				A322FCB8E2C4B48EFD1A234F /* MutedStore.swift */,
 				91E7958F5B4E3F0476F98065 /* NativeTooltip.swift */,
 				0A648CF8D34910DBBF3F6DA0 /* PanelSection.swift */,
@@ -203,6 +206,7 @@
 				DA1C7E3716F779DB677858C9 /* FontMetadata.swift in Sources */,
 				DCCD8757B966CCDF8B86FEF3 /* MemoEditor.swift in Sources */,
 				002B5DA3F8792475B49C7A89 /* MemoStore.swift in Sources */,
+				1234ABCD5678EF901234ABCD /* RenameTagPopup.swift in Sources */,
 				B9775AC1C07B642A3E64F064 /* MutedStore.swift in Sources */,
 				044B0F5A951063D56440F285 /* NativeTooltip.swift in Sources */,
 				8A4B0197F5928B36B6E255EF /* PanelSection.swift in Sources */,

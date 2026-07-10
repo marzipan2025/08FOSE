@@ -101,6 +101,10 @@ final class AppViewModel: ObservableObject {
         didSet { UserDefaults.standard.set(activeTag ?? "", forKey: Self.activeTagKey) }
     }
 
+    // Tag whose rename popup is open (the tag's current name). nil = closed.
+    // Not persisted — a transient UI state, unlike activeTag above.
+    @Published var renamingTag: String? = nil
+
     @Published var columnCount: Int = AppViewModel.loadColumnCount() {
         didSet { UserDefaults.standard.set(columnCount, forKey: Self.columnCountKey) }
     }
