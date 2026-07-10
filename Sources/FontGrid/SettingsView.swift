@@ -237,7 +237,7 @@ struct SettingsOverlay: View {
                 )
                 .fixedSize(horizontal: false, vertical: true)
 
-                Text("v\(Theme.appVersion) : The tag popup can now delete a tag from every font (two-step confirm), and sits under the wallpaper tint as a true full-window modal.")
+                Text("v \(Theme.appVersion) : The tag popup can delete a tag everywhere, ⌘F focuses search, and the version label gains a space after the v.")
                     .font(.system(size: SettingsType.small))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -250,6 +250,7 @@ struct SettingsOverlay: View {
         SettingsSection("Shortcuts") {
             VStack(alignment: .leading, spacing: 8) {
                 shortcutRow("⌘ ,", "Open / close Settings")
+                shortcutRow("⌘ F", "Focus search")
                 shortcutRow("T", "Toggle dark / light theme")
                 shortcutRow("W", "Cycle weights filter")
                 shortcutRow("F", "Favorites filter")

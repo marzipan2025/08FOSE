@@ -117,6 +117,7 @@ struct RootView: View {
             onCloseDetail: closeDetailIfOpen,
             onCloseSettings: closeSettingsIfOpen,
             onToggleSettings: toggleSettings,
+            onFocusSearch: focusSearch,
             onCommandArrow: handleCommandArrow
         ))
         .environmentObject(vm)
@@ -267,6 +268,49 @@ struct RootView: View {
         withAnimation(.easeOut(duration: 0.18)) { vm.showSettings.toggle() }
         return true
     }
+
+    // ⌘F focuses the search field (standard macOS Find shortcut), opening the
+    // left panel first if it's collapsed. Works even while another text field
+    // (memo, preview bar) is focused, like ⌘, does for Settings. Inert behind
+    // the Settings modal or the rename-tag popup, same as other shortcuts.
+    //
+    // Focus is claimed via AppKit (makeFirstResponder on the field itself):
+    // driving @FocusState programmatically proved unreliable here — with the
+    // panel freshly inserted and still sliding, the request silently fails
+    // and AppKit leaves focus wherever it was (e.g. the preview bar). The
+    // FocusState binding syncs from the responder change, so the accent
+    // highlight still follows.
+    private func focusSearch() -> Bool {
+        if vm.showSettings || vm.renamingTag != nil { return true }
+        if leftPanelOpen {
+            Self.makeSearchFieldFirstResponder()
+        } else {
+            withAnimation(.easeInOut(duration: 0.22)) { leftPanelOpen = true }
+            // Wait out the 0.22s slide: claiming focus mid-animation fails.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                Self.makeSearchFieldFirstResponder()
+            }
+        }
+        return true
+    }
+
+    // Locate the left panel's search NSTextField (SwiftUI's TextField backs
+    // onto one, identified by its placeholder) and hand it key focus.
+    private static func makeSearchFieldFirstResponder() {
+        guard let window = NSApp.keyWindow ?? NSApp.mainWindow else { return }
+        if let field = findTextField(in: window.contentView, placeholder: "Search") {
+            window.makeFirstResponder(field)
+        }
+    }
+
+    private static func findTextField(in view: NSView?, placeholder: String) -> NSTextField? {
+        guard let view else { return nil }
+        if let tf = view as? NSTextField, tf.placeholderString == placeholder { return tf }
+        for sub in view.subviews {
+            if let found = findTextField(in: sub, placeholder: placeholder) { return found }
+        }
+        return nil
+    }
 }
 
 // App-wide key monitor.
@@ -285,6 +329,7 @@ private struct GlobalShortcutHandler: NSViewRepresentable {
     let onCloseDetail: () -> Bool
     let onCloseSettings: () -> Bool
     let onToggleSettings: () -> Bool
+    let onFocusSearch: () -> Bool
     let onCommandArrow: (Int) -> Bool
 
     func makeNSView(context: Context) -> NSView {
@@ -298,6 +343,7 @@ private struct GlobalShortcutHandler: NSViewRepresentable {
         context.coordinator.onCloseDetail = onCloseDetail
         context.coordinator.onCloseSettings = onCloseSettings
         context.coordinator.onToggleSettings = onToggleSettings
+        context.coordinator.onFocusSearch = onFocusSearch
         context.coordinator.onCommandArrow = onCommandArrow
     }
 
@@ -310,6 +356,7 @@ private struct GlobalShortcutHandler: NSViewRepresentable {
                     onCloseDetail: onCloseDetail,
                     onCloseSettings: onCloseSettings,
                     onToggleSettings: onToggleSettings,
+                    onFocusSearch: onFocusSearch,
                     onCommandArrow: onCommandArrow)
     }
 
@@ -318,6 +365,7 @@ private struct GlobalShortcutHandler: NSViewRepresentable {
         var onCloseDetail: () -> Bool
         var onCloseSettings: () -> Bool
         var onToggleSettings: () -> Bool
+        var onFocusSearch: () -> Bool
         var onCommandArrow: (Int) -> Bool
         private var monitor: Any?
 
@@ -325,11 +373,13 @@ private struct GlobalShortcutHandler: NSViewRepresentable {
              onCloseDetail: @escaping () -> Bool,
              onCloseSettings: @escaping () -> Bool,
              onToggleSettings: @escaping () -> Bool,
+             onFocusSearch: @escaping () -> Bool,
              onCommandArrow: @escaping (Int) -> Bool) {
             self.onKey = onKey
             self.onCloseDetail = onCloseDetail
             self.onCloseSettings = onCloseSettings
             self.onToggleSettings = onToggleSettings
+            self.onFocusSearch = onFocusSearch
             self.onCommandArrow = onCommandArrow
         }
 
@@ -361,6 +411,15 @@ private struct GlobalShortcutHandler: NSViewRepresentable {
                     // while editing text, like the system Settings shortcut.
                     if event.charactersIgnoringModifiers == "," {
                         if self.onToggleSettings() { return nil }
+                    }
+                    // ⌘F focuses the search field (standard macOS Find
+                    // shortcut). Also works while editing text, so it can
+                    // steal focus away from the memo/preview field. Like the
+                    // plain-key path below, the Korean input source reports
+                    // the key as its jamo (ㄹ), so map it back first.
+                    if let raw = event.charactersIgnoringModifiers?.lowercased(),
+                       Self.latinForHangul(raw) == "f" {
+                        if self.onFocusSearch() { return nil }
                     }
                     // ⌘ + arrows: Font Size (↑/↓) and Columns (←/→). Skipped
                     // while editing text so ⌘-arrow keeps its navigation meaning.

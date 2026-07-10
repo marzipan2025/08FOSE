@@ -54,7 +54,7 @@ struct RightPanel: View {
     }
 
     private var versionFooter: some View {
-        Text("© pa_st - v\(Theme.appVersion)")
+        Text("© pa_st - v \(Theme.appVersion)")
             .font(.system(size: Theme.smallSize))
             .foregroundStyle(.tertiary)
             .padding(.horizontal, Theme.panelHPadding)
