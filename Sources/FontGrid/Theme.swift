@@ -3,7 +3,7 @@ import AppKit
 
 enum Theme {
     // App
-    static let appVersion = "0.7.2"
+    static let appVersion = "0.7.3"
 
     // Panels
     static let panelDefaultWidth: CGFloat = 240

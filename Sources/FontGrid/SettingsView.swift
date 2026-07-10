@@ -237,7 +237,7 @@ struct SettingsOverlay: View {
                 )
                 .fixedSize(horizontal: false, vertical: true)
 
-                Text("v\(Theme.appVersion) : The sample-text export button now enables only when both SVG and PNG can be produced for a weight.")
+                Text("v\(Theme.appVersion) : Importing a backup now asks whether to merge with or replace your existing data.")
                     .font(.system(size: SettingsType.small))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -384,16 +384,57 @@ struct SettingsOverlay: View {
             presentImportError("This doesn't look like an 08FOSE backup file.")
             return
         }
-        // Replace: clear existing data, then load the backup wholesale. Entries
-        // for fonts not installed here are kept and simply stay hidden.
-        favorites.clearAll()
-        memos.clearAll()
-        samples.clearAll()
-        muted.clearAll()
+
+        // If the app already holds user data, ask whether to merge the backup
+        // into it or replace it wholesale. With nothing to lose, just load.
+        let hasExistingData = !favorites.exportList.isEmpty
+            || !memos.exportMap.isEmpty
+            || !samples.exportMap.isEmpty
+            || !muted.exportList.isEmpty
+        if hasExistingData {
+            switch presentImportChoice() {
+            case .merge:
+                break
+            case .replace:
+                favorites.clearAll()
+                memos.clearAll()
+                samples.clearAll()
+                muted.clearAll()
+            case .cancel:
+                return
+            }
+        }
+        // Entries for fonts not installed here are kept and simply stay hidden.
         favorites.merge(payload.favorites)
         memos.merge(payload.memos)
         samples.merge(payload.samples ?? [:])
         muted.merge(payload.muted ?? [])
+    }
+
+    private enum ImportChoice { case merge, replace, cancel }
+
+    // Merge is the default (safe, non-destructive) button; Replace is the
+    // destructive path so it sits away from the return key.
+    private func presentImportChoice() -> ImportChoice {
+        let alert = NSAlert()
+        alert.messageText = "You already have favorites, memos, or other data in this app."
+        alert.informativeText = """
+            Merge keeps your current data and adds the backup on top \
+            (differing memos are combined). Replace erases everything \
+            first and loads only the backup.
+            """
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Merge")
+        alert.addButton(withTitle: "Replace")
+        alert.addButton(withTitle: "Cancel")
+        if #available(macOS 11.0, *) {
+            alert.buttons[1].hasDestructiveAction = true
+        }
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:  return .merge
+        case .alertSecondButtonReturn: return .replace
+        default:                       return .cancel
+        }
     }
 
     private func presentImportError(_ message: String) {

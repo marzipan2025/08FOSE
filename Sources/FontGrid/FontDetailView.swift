@@ -129,7 +129,7 @@ struct FontDetailView: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(colorScheme == .light ? Color(white: 0.56) : Color.white, lineWidth: 1)
+                .stroke(colorScheme == .light ? Color(white: 0.56) : Color.white.opacity(0.8), lineWidth: 1)
         )
         // Tapping the card's empty background drops any text-input focus (search
         // / memo / preview bar) so the ←/→ navigation works again. Buttons and
