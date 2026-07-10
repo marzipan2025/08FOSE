@@ -74,21 +74,28 @@ struct RenameTagPopup: View {
     let count: Int
     let onCancel: () -> Void
     let onCommit: (String) -> Void
+    let onDelete: () -> Void
 
     @State private var text: String
     @State private var errorMessage: String?
     @FocusState private var focused: Bool
-    @State private var cancelHovering = false
+    // Two-stage delete: first press arms the button (label flips to Confirm
+    // in place), second press deletes. No separate alert.
+    @State private var confirmingDelete = false
+    @State private var deleteHovering = false
     @State private var renameHovering = false
+    // (Cancel is the ✕ button / ESC / backdrop — no Cancel button in the row.)
     @Environment(\.colorScheme) private var colorScheme
 
     init(tag: String, count: Int,
          onCancel: @escaping () -> Void,
-         onCommit: @escaping (String) -> Void) {
+         onCommit: @escaping (String) -> Void,
+         onDelete: @escaping () -> Void) {
         self.tag = tag
         self.count = count
         self.onCancel = onCancel
         self.onCommit = onCommit
+        self.onDelete = onDelete
         _text = State(initialValue: tag)
     }
 
@@ -138,8 +145,11 @@ struct RenameTagPopup: View {
                 .padding(.top, 6)
 
             HStack(spacing: 8) {
+                textButton(confirmingDelete ? "Confirm" : "Delete Tag",
+                           hovering: $deleteHovering) {
+                    if confirmingDelete { onDelete() } else { confirmingDelete = true }
+                }
                 Spacer()
-                popupButton("Cancel", tint: Color.secondary, hovering: $cancelHovering, action: onCancel)
                 popupButton("Rename", tint: Theme.accent, hovering: $renameHovering, action: commit)
             }
             .padding(.top, 10)
@@ -208,6 +218,24 @@ struct RenameTagPopup: View {
             .accessibilityLabel("Close")
             .help("Close (Esc)")
         }
+    }
+
+    // Bare-text button (no box, no horizontal padding) for Delete Tag /
+    // Confirm. contentShape makes the whole label rect (incl. the vertical
+    // padding) clickable — without it only the glyph strokes would hit-test.
+    private func textButton(_ title: String, hovering: Binding<Bool>,
+                            action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: Theme.smallSize + 1, weight: .medium))
+                .foregroundStyle(hovering.wrappedValue ? AnyShapeStyle(.primary)
+                                                       : AnyShapeStyle(.secondary))
+                .padding(.vertical, 5)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .onHover { hovering.wrappedValue = $0 }
     }
 
     private func commit() {

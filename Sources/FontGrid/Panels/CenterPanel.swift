@@ -98,25 +98,7 @@ struct CenterPanel: View {
                 .padding(.horizontal, Theme.gridPadding)
                 .padding(.vertical, 12)
                 .zIndex(40)
-            // Rename-tag popup, above everything in the center panel. Identity
-            // keyed to the tag so reopening for another tag resets the field.
-            if let tag = vm.renamingTag {
-                RenameTagPopup(
-                    tag: tag,
-                    count: memos.tagCounts.first { $0.tag == tag }?.count ?? 0,
-                    onCancel: { vm.renamingTag = nil },
-                    onCommit: { newName in
-                        memos.renameTag(tag, to: newName)
-                        if vm.activeTag == tag { vm.activeTag = newName }
-                        vm.renamingTag = nil
-                    }
-                )
-                .id(tag)
-                .zIndex(50)
-                .transition(.opacity)
-            }
         }
-        .animation(.easeOut(duration: 0.15), value: vm.renamingTag)
         .onPreferenceChange(GridTopYKey.self) { y in
             let under = y < Self.titleBandHeight
             if under != gridUnderTitleBand { gridUnderTitleBand = under }

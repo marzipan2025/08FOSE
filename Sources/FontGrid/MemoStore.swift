@@ -141,6 +141,50 @@ final class MemoStore: ObservableObject {
         return out.trimmingCharacters(in: .whitespaces)
     }
 
+    /// Remove a tag from every memo carrying it (token-wise, case-insensitive,
+    /// same boundaries as parseTags). Notes left empty are dropped entirely.
+    func deleteTag(_ tag: String) {
+        let lower = tag.lowercased()
+        var changed = false
+        for (name, note) in notes where Self.parseTags(note).contains(lower) {
+            let stripped = Self.removingTag(in: note, tag: lower)
+            if stripped.isEmpty {
+                notes.removeValue(forKey: name)
+            } else {
+                notes[name] = stripped
+            }
+            changed = true
+        }
+        if changed { UserDefaults.standard.set(notes, forKey: key) }
+    }
+
+    /// Token-wise removal for deleteTag — the same walk as replacingTag with
+    /// nothing emitted for matching tokens (plus one following space, so the
+    /// note doesn't collect double gaps).
+    static func removingTag(in note: String, tag: String) -> String {
+        let chars = Array(note)
+        var out = ""
+        var i = 0
+        while i < chars.count {
+            guard chars[i] == "#" else { out.append(chars[i]); i += 1; continue }
+            var token = ""
+            var j = i + 1
+            while j < chars.count {
+                let c = chars[j]
+                if c == "," || c.isWhitespace { break }
+                token.append(c)
+                j += 1
+            }
+            if token.lowercased() == tag {
+                if j < chars.count, chars[j] == " " { j += 1 }
+            } else {
+                out.append(contentsOf: chars[i..<j])
+            }
+            i = j
+        }
+        return out.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     /// Every tag across all notes with the number of fonts using it, most-used
     /// first (ties broken alphabetically).
     var tagCounts: [(tag: String, count: Int)] {

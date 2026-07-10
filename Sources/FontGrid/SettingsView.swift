@@ -237,7 +237,7 @@ struct SettingsOverlay: View {
                 )
                 .fixedSize(horizontal: false, vertical: true)
 
-                Text("v\(Theme.appVersion) : Tags can be renamed — click the pencil next to the active tag label above the grid.")
+                Text("v\(Theme.appVersion) : The tag popup can now delete a tag from every font (two-step confirm), and sits under the wallpaper tint as a true full-window modal.")
                     .font(.system(size: SettingsType.small))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)

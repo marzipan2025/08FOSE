@@ -50,6 +50,33 @@ struct RootView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Rename-tag popup: a full-window modal that dims the side panels too.
+        // Placed UNDER the wallpaper overlay so the card and dim pick up the
+        // wallpaper tint like every other surface (the panel toggle buttons
+        // above it go inert while it's open). Identity keyed to the tag so
+        // reopening for another tag resets the field.
+        .overlay {
+            if let tag = vm.renamingTag {
+                RenameTagPopup(
+                    tag: tag,
+                    count: memos.tagCounts.first { $0.tag == tag }?.count ?? 0,
+                    onCancel: { vm.renamingTag = nil },
+                    onCommit: { newName in
+                        memos.renameTag(tag, to: newName)
+                        if vm.activeTag == tag { vm.activeTag = newName }
+                        vm.renamingTag = nil
+                    },
+                    onDelete: {
+                        memos.deleteTag(tag)
+                        if vm.activeTag == tag { vm.activeTag = nil }
+                        vm.renamingTag = nil
+                    }
+                )
+                .id(tag)
+                .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.15), value: vm.renamingTag)
         // Wallpaper overlay: same mechanism in both dark and light mode, driven
         // by vm.wallpaper. Image, blend mode and opacity are all picked inside
         // WallpaperOverlay based on the current colorScheme.
@@ -57,17 +84,21 @@ struct RootView: View {
         // Floating panel collapse/expand buttons. When a panel is open the
         // button sits at that panel's bottom-inner corner showing "−"; when
         // collapsed it docks at the screen's bottom-outer corner showing "+".
+        // Layered above the wallpaper (and so above the rename popup) — inert
+        // while the popup modal is open.
         .overlay(alignment: .bottomLeading) {
             PanelToggleButton(open: leftPanelOpen) {
                 withAnimation(.easeInOut(duration: 0.22)) { leftPanelOpen.toggle() }
             }
             .offset(x: leftToggleX, y: -Self.toggleBottomInset)
+            .allowsHitTesting(vm.renamingTag == nil)
         }
         .overlay(alignment: .bottomTrailing) {
             PanelToggleButton(open: rightPanelOpen) {
                 withAnimation(.easeInOut(duration: 0.22)) { rightPanelOpen.toggle() }
             }
             .offset(x: rightToggleX, y: -Self.toggleBottomInset)
+            .allowsHitTesting(vm.renamingTag == nil)
         }
         // Full-window Settings modal, above everything including the wallpaper.
         .overlay {
@@ -229,7 +260,10 @@ struct RootView: View {
     }
 
     // ⌘, toggles the Settings modal (the standard macOS settings shortcut).
+    // Inert while the rename-tag popup is open — Settings would stack above
+    // the modal and tangle the ESC cascade.
     private func toggleSettings() -> Bool {
+        if vm.renamingTag != nil { return true }
         withAnimation(.easeOut(duration: 0.18)) { vm.showSettings.toggle() }
         return true
     }
