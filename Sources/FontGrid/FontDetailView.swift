@@ -14,6 +14,7 @@ struct FontDetailView: View {
     @EnvironmentObject var muted: MutedStore
     @EnvironmentObject var inputSource: InputSourceManager
     @EnvironmentObject var vm: AppViewModel
+    @EnvironmentObject var toasts: ToastCenter
     @Environment(\.colorScheme) private var colorScheme
     @State private var copied = false
     @State private var memoExpanded: Bool = false
@@ -593,7 +594,7 @@ struct FontDetailView: View {
                     icon: isMuted ? "moon.zzz.fill" : "moon.zzz",
                     label: isMuted ? "Muted" : "Mute",
                     active: isMuted
-                ) { muted.toggle(family.name) }
+                ) { toggleMuted() }
             }
         }
         .padding(.horizontal, 24)
@@ -766,10 +767,35 @@ struct FontDetailView: View {
     // MARK: - Actions
 
     private func openInFinder() {
-        guard let psName = family.memberFontNames.first else { return }
-        let descriptor = CTFontDescriptorCreateWithNameAndSize(psName as CFString, 0)
-        guard let url = CTFontDescriptorCopyAttribute(descriptor, kCTFontURLAttribute) as? URL else { return }
+        guard let psName = family.memberFontNames.first,
+              let url = CTFontDescriptorCopyAttribute(
+                CTFontDescriptorCreateWithNameAndSize(psName as CFString, 0),
+                kCTFontURLAttribute) as? URL
+        else {
+            toasts.show(Toast(style: .error, title: "Couldn't locate the font file",
+                              detail: "\(family.name) has no resolvable file path."))
+            return
+        }
         NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+
+    // Mute toggle with feedback: when the grid hides muted fonts, the family
+    // vanishes the moment this is pressed — the toast explains where it went
+    // and offers the way back. Unmuting / dimmed-mode muting stay silent (the
+    // button state and the cell are visible proof).
+    private func toggleMuted() {
+        let name = family.name
+        let willMute = !muted.contains(name)
+        muted.toggle(name)
+        guard willMute && vm.mutedFilter == .hidden && !vm.mutedOnly else { return }
+        toasts.show(Toast(
+            style: .info,
+            title: "\(name) muted",
+            detail: "Hidden from the grid",
+            icon: "moon.zzz",
+            actionLabel: "Undo",
+            action: { muted.toggle(name) }
+        ))
     }
 }
 
@@ -999,6 +1025,8 @@ struct WeightRow: View {
     var sampleColor: Color? = nil
     let sampleSize: CGFloat
 
+    @EnvironmentObject var toasts: ToastCenter
+
     private var faceName: String {
         guard let font = NSFont(name: psName, size: 12) else { return psName }
         return (font.fontDescriptor.object(forKey: .face) as? String) ?? psName
@@ -1053,15 +1081,35 @@ struct WeightRow: View {
         panel.accessoryView = accessory
 
         guard panel.runModal() == .OK, let url = panel.url else { return }
+        // Both failure legs matter: a nil render means the save panel closed
+        // normally but NO file exists — without the error toast that's an
+        // invisible failure the user only discovers later in Finder.
+        let rendered: Data?
         switch accessory.format {
         case .svg:
-            if let svg = SVGTextExporter.svg(text: sampleText, fontName: psName, fill: accessory.colorHex) {
-                try? svg.data(using: .utf8)?.write(to: url)
-            }
+            rendered = SVGTextExporter.svg(text: sampleText, fontName: psName,
+                                           fill: accessory.colorHex)?.data(using: .utf8)
         case .png:
-            if let data = SVGTextExporter.pngData(text: sampleText, fontName: psName, color: accessory.color) {
-                try? data.write(to: url)
-            }
+            rendered = SVGTextExporter.pngData(text: sampleText, fontName: psName,
+                                               color: accessory.color)
+        }
+        let format = accessory.format == .svg ? "SVG" : "PNG"
+        guard let rendered else {
+            toasts.show(Toast(style: .error, title: "\(format) export failed",
+                              detail: "The sample couldn't be rendered — no file was written."))
+            return
+        }
+        do {
+            try rendered.write(to: url)
+            toasts.show(Toast(
+                style: .success,
+                title: "\(format) exported",
+                detail: url.lastPathComponent,
+                icon: "square.and.arrow.up"
+            ))
+        } catch {
+            toasts.show(Toast(style: .error, title: "\(format) export failed",
+                              detail: "Couldn't write to \(url.lastPathComponent). Try a different folder."))
         }
     }
 

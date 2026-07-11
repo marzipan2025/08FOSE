@@ -44,6 +44,7 @@ struct SettingsOverlay: View {
     @EnvironmentObject var memos: MemoStore
     @EnvironmentObject var samples: SampleStore
     @EnvironmentObject var muted: MutedStore
+    @EnvironmentObject var toasts: ToastCenter
     @Environment(\.colorScheme) private var colorScheme
 
     @AppStorage("previewText") private var previewText: String =
@@ -70,7 +71,21 @@ struct SettingsOverlay: View {
             centerRegion
                 .padding(.leading, leftInset)
                 .padding(.trailing, rightInset)
+
+            // Merge/Replace choice for a decoded backup, stacked above the
+            // settings content. Driven by vm.pendingImport so the ESC cascade
+            // in RootView can dismiss it without closing Settings.
+            if let payload = vm.pendingImport {
+                ImportChoicePopup(
+                    payload: payload,
+                    onCancel: { vm.pendingImport = nil },
+                    onMerge: { applyImport(payload, replace: false) },
+                    onReplace: { applyImport(payload, replace: true) }
+                )
+                .transition(.opacity)
+            }
         }
+        .animation(.easeOut(duration: 0.15), value: vm.pendingImport == nil)
         // Close button anchored to the top-right corner. ignoresSafeArea is
         // applied AFTER the overlay so the button (like the blur) ignores the
         // transparent title-bar inset too — otherwise the title bar would be
@@ -237,7 +252,7 @@ struct SettingsOverlay: View {
                 )
                 .fixedSize(horizontal: false, vertical: true)
 
-                Text("v \(Theme.appVersion) : The tag popup can delete a tag everywhere, ⌘F focuses search, and the version label gains a space after the v.")
+                Text("v \(Theme.appVersion) : Results now report back — toasts confirm imports, exports, tag edits and artwork saves, and the import Merge/Replace choice is a designed popup.")
                     .font(.system(size: SettingsType.small))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -363,8 +378,21 @@ struct SettingsOverlay: View {
         panel.allowedContentTypes = [.json]
         panel.nameFieldStringValue = "\(Self.backupFileStem()).json"
         panel.canCreateDirectories = true
-        if panel.runModal() == .OK, let url = panel.url {
-            try? data.write(to: url)
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try data.write(to: url)
+            toasts.show(Toast(
+                style: .success,
+                title: "Backup exported",
+                detail: url.lastPathComponent,
+                icon: "square.and.arrow.up"
+            ))
+        } catch {
+            toasts.show(Toast(
+                style: .error,
+                title: "Export failed",
+                detail: "Couldn't write to \(url.lastPathComponent). Try a different folder."
+            ))
         }
     }
 
@@ -376,74 +404,76 @@ struct SettingsOverlay: View {
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
         guard let data = try? Data(contentsOf: url) else {
-            presentImportError("The file could not be read.")
+            toasts.show(Toast(style: .error, title: "Import failed",
+                              detail: "The file could not be read."))
             return
         }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         guard let payload = try? decoder.decode(ExportData.self, from: data) else {
-            presentImportError("This doesn't look like an 08FOSE backup file.")
+            toasts.show(Toast(style: .error, title: "Import failed",
+                              detail: "This doesn't look like an 08FOSE backup file."))
             return
         }
 
         // If the app already holds user data, ask whether to merge the backup
-        // into it or replace it wholesale. With nothing to lose, just load.
+        // into it or replace it wholesale (ImportChoicePopup, above Settings).
+        // With nothing to lose, just load.
         let hasExistingData = !favorites.exportList.isEmpty
             || !memos.exportMap.isEmpty
             || !samples.exportMap.isEmpty
             || !muted.exportList.isEmpty
         if hasExistingData {
-            switch presentImportChoice() {
-            case .merge:
-                break
-            case .replace:
-                favorites.clearAll()
-                memos.clearAll()
-                samples.clearAll()
-                muted.clearAll()
-            case .cancel:
-                return
-            }
+            vm.pendingImport = payload
+        } else {
+            applyImport(payload, replace: false)
         }
-        // Entries for fonts not installed here are kept and simply stay hidden.
+    }
+
+    // Land the decoded backup: optionally wipe first (Replace), then merge.
+    // Entries for fonts not installed here are kept and simply stay hidden —
+    // the toast calls that out so a partial-looking result reads as intended.
+    private func applyImport(_ payload: ExportData, replace: Bool) {
+        vm.pendingImport = nil
+        if replace {
+            favorites.clearAll()
+            memos.clearAll()
+            samples.clearAll()
+            muted.clearAll()
+        }
         favorites.merge(payload.favorites)
         memos.merge(payload.memos)
         samples.merge(payload.samples ?? [:])
         muted.merge(payload.muted ?? [])
-    }
 
-    private enum ImportChoice { case merge, replace, cancel }
-
-    // Merge is the default (safe, non-destructive) button; Replace is the
-    // destructive path so it sits away from the return key.
-    private func presentImportChoice() -> ImportChoice {
-        let alert = NSAlert()
-        alert.messageText = "You already have favorites, memos, or other data in this app."
-        alert.informativeText = """
-            Merge keeps your current data and adds the backup on top \
-            (differing memos are combined). Replace erases everything \
-            first and loads only the backup.
-            """
-        alert.alertStyle = .warning
-        alert.addButton(withTitle: "Merge")
-        alert.addButton(withTitle: "Replace")
-        alert.addButton(withTitle: "Cancel")
-        if #available(macOS 11.0, *) {
-            alert.buttons[1].hasDestructiveAction = true
+        var parts: [String] = []
+        func add(_ count: Int, _ singular: String, _ plural: String) {
+            guard count > 0 else { return }
+            parts.append("\(count) \(count == 1 ? singular : plural)")
         }
-        switch alert.runModal() {
-        case .alertFirstButtonReturn:  return .merge
-        case .alertSecondButtonReturn: return .replace
-        default:                       return .cancel
-        }
-    }
+        add(payload.favorites.count, "favorite", "favorites")
+        add(payload.memos.count, "memo", "memos")
+        add((payload.samples ?? [:]).count, "specimen", "specimens")
+        add((payload.muted ?? []).count, "muted", "muted")
+        var detail = parts.isEmpty ? "The backup was empty." : parts.joined(separator: " · ")
 
-    private func presentImportError(_ message: String) {
-        let alert = NSAlert()
-        alert.messageText = "Import failed"
-        alert.informativeText = message
-        alert.alertStyle = .warning
-        alert.runModal()
+        // Names in the backup that aren't installed on this Mac — their
+        // entries persist invisibly until the font appears.
+        let installed = Set(vm.library.families.map(\.name))
+        var incoming = Set(payload.favorites)
+        incoming.formUnion(payload.memos.keys)
+        incoming.formUnion((payload.samples ?? [:]).keys)
+        incoming.formUnion(payload.muted ?? [])
+        let missing = incoming.subtracting(installed).count
+        if missing > 0 {
+            detail += " — \(missing) kept for fonts not installed here"
+        }
+
+        toasts.show(Toast(
+            style: .success,
+            title: replace ? "Backup imported (replaced)" : "Backup imported",
+            detail: detail
+        ))
     }
 
     // MARK: - Reset

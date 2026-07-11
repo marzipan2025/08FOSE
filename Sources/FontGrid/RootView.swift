@@ -8,6 +8,7 @@ struct RootView: View {
     @StateObject private var samples = SampleStore()
     @StateObject private var muted = MutedStore()
     @StateObject private var inputSource = InputSourceManager()
+    @StateObject private var toasts = ToastCenter()
 
     @State private var leftDragStart: Double? = nil
     @State private var rightDragStart: Double? = nil
@@ -62,14 +63,27 @@ struct RootView: View {
                     count: memos.tagCounts.first { $0.tag == tag }?.count ?? 0,
                     onCancel: { vm.renamingTag = nil },
                     onCommit: { newName in
+                        let count = memos.tagCounts.first { $0.tag == tag }?.count ?? 0
                         memos.renameTag(tag, to: newName)
                         if vm.activeTag == tag { vm.activeTag = newName }
                         vm.renamingTag = nil
+                        toasts.show(Toast(
+                            style: .success,
+                            title: "Tag renamed",
+                            detail: "#\(tag) → #\(newName) · \(count) font\(count == 1 ? "" : "s")"
+                        ))
                     },
                     onDelete: {
+                        let count = memos.tagCounts.first { $0.tag == tag }?.count ?? 0
                         memos.deleteTag(tag)
                         if vm.activeTag == tag { vm.activeTag = nil }
                         vm.renamingTag = nil
+                        toasts.show(Toast(
+                            style: .success,
+                            title: "Tag deleted",
+                            detail: "#\(tag) removed from \(count) font\(count == 1 ? "" : "s")",
+                            icon: "tag.slash"
+                        ))
                     }
                 )
                 .id(tag)
@@ -110,6 +124,30 @@ struct RootView: View {
             }
         }
         .animation(.easeOut(duration: 0.18), value: vm.showSettings)
+        // Toast layer: topmost (above the wallpaper tint AND the Settings
+        // overlay — import/export toasts fire while Settings is open). Aligned
+        // to the center panel column's top edge, sliding in from above.
+        // Deliberately NOT under the wallpaper: its blend modes (plusLighter /
+        // multiply / …) would tint the toast's semantic colors — the red error
+        // hairline and gold check need to read identically on every wallpaper.
+        .overlay(alignment: .top) {
+            if let toast = toasts.toast {
+                ToastView(
+                    toast: toast,
+                    onDismiss: { toasts.dismiss(toast.id) },
+                    onHover: { hovering in
+                        if hovering { toasts.pauseAutoDismiss(toast.id) }
+                        else { toasts.resumeAutoDismiss(toast.id) }
+                    }
+                )
+                .padding(.top, 12)
+                .padding(.leading, (leftPanelOpen ? vm.leftPanelWidth + 1 : 0) + 24)
+                .padding(.trailing, (rightPanelOpen ? vm.rightPanelWidth + 1 : 0) + 24)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .id(toast.id)
+            }
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: toasts.toast)
         .background(Theme.panelBackground.ignoresSafeArea())
         .background(InitialFocusClearer())
         .background(GlobalShortcutHandler(
@@ -126,6 +164,7 @@ struct RootView: View {
         .environmentObject(samples)
         .environmentObject(muted)
         .environmentObject(inputSource)
+        .environmentObject(toasts)
         .preferredColorScheme(vm.isLightMode ? .light : .dark)
     }
 
@@ -166,6 +205,9 @@ struct RootView: View {
         // shortcut (they'd mutate filters/theme behind the modal — e.g. after
         // ESC dropped the text-field focus but before the popup closed).
         if vm.renamingTag != nil { return true }
+        // Same for the import Merge/Replace popup — it's a modal card, so
+        // even the theme/wallpaper preview keys go inert underneath it.
+        if vm.pendingImport != nil { return true }
         switch key {
         case "0":
             vm.wallpaper = ""
@@ -250,6 +292,12 @@ struct RootView: View {
         // this is the head of the ESC cascade.
         if vm.renamingTag != nil {
             vm.renamingTag = nil
+            return true
+        }
+        // The import Merge/Replace popup stacks above Settings — ESC closes
+        // just the popup, keeping Settings open underneath.
+        if vm.pendingImport != nil {
+            vm.pendingImport = nil
             return true
         }
         guard vm.showSettings else { return false }

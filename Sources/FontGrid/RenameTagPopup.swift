@@ -198,28 +198,6 @@ struct RenameTagPopup: View {
         .onHover { hovering.wrappedValue = $0 }
     }
 
-    // Same look as the Settings CloseButton (circle-backed ✕), scaled down
-    // to sit inside the card corner.
-    private struct PopupCloseButton: View {
-        let action: () -> Void
-        @State private var hovering = false
-
-        var body: some View {
-            Button(action: action) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 26, height: 26)
-                    .background(Circle().fill(hovering ? Theme.surfaceFillHover : Theme.surfaceFill))
-            }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .onHover { hovering = $0 }
-            .accessibilityLabel("Close")
-            .help("Close (Esc)")
-        }
-    }
-
     // Bare-text button (no box, no horizontal padding) for Delete Tag /
     // Confirm. contentShape makes the whole label rect (incl. the vertical
     // padding) clickable — without it only the glyph strokes would hit-test.
@@ -245,5 +223,28 @@ struct RenameTagPopup: View {
         }
         if name == tag { onCancel(); return }
         onCommit(name)
+    }
+}
+
+// Same look as the Settings CloseButton (circle-backed ✕), scaled down to sit
+// inside a card corner. Shared by the in-app popup cards (rename tag, import
+// choice).
+struct PopupCloseButton: View {
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "xmark")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 26, height: 26)
+                .background(Circle().fill(hovering ? Theme.surfaceFillHover : Theme.surfaceFill))
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .onHover { hovering = $0 }
+        .accessibilityLabel("Close")
+        .help("Close (Esc)")
     }
 }

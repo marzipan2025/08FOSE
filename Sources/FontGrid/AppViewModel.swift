@@ -147,6 +147,11 @@ final class AppViewModel: ObservableObject {
         confirmClearFavorites || confirmClearMemos || confirmClearSamples || confirmReset
     }
 
+    // Decoded backup waiting on the Merge / Replace choice (ImportChoicePopup,
+    // shown above Settings). Kept here so the ESC cascade can dismiss just the
+    // popup instead of the whole Settings modal. nil = closed.
+    @Published var pendingImport: ExportData? = nil
+
     // Wallpaper "skins" — bundled under Resources/Wallpapers/. The picker writes
     // a logical name (e.g. "Wallpaper02"); WallpaperOverlay resolves the actual
     // file based on the current appearance (Wallpaper02.webp dark vs
