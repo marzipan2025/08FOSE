@@ -166,6 +166,8 @@ struct RootView: View {
         .environmentObject(inputSource)
         .environmentObject(toasts)
         .preferredColorScheme(vm.isLightMode ? .light : .dark)
+        // One update check per app launch; silent unless a newer release exists.
+        .task { UpdateCheck.checkOnLaunch(toasts: toasts) }
     }
 
     // Horizontal offset for the left toggle (anchored bottom-leading):
@@ -205,9 +207,9 @@ struct RootView: View {
         // shortcut (they'd mutate filters/theme behind the modal — e.g. after
         // ESC dropped the text-field focus but before the popup closed).
         if vm.renamingTag != nil { return true }
-        // Same for the import Merge/Replace popup — it's a modal card, so
-        // even the theme/wallpaper preview keys go inert underneath it.
-        if vm.pendingImport != nil { return true }
+        // Same for the import Merge/Replace and update-result popups — they're
+        // modal cards, so even the theme/wallpaper preview keys go inert.
+        if vm.pendingImport != nil || vm.updateStatus != nil { return true }
         switch key {
         case "0":
             vm.wallpaper = ""
@@ -294,10 +296,14 @@ struct RootView: View {
             vm.renamingTag = nil
             return true
         }
-        // The import Merge/Replace popup stacks above Settings — ESC closes
-        // just the popup, keeping Settings open underneath.
+        // The import Merge/Replace and update-result popups stack above
+        // Settings — ESC closes just the popup, keeping Settings open.
         if vm.pendingImport != nil {
             vm.pendingImport = nil
+            return true
+        }
+        if vm.updateStatus != nil {
+            vm.updateStatus = nil
             return true
         }
         guard vm.showSettings else { return false }

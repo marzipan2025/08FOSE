@@ -25,7 +25,7 @@ struct Toast: Identifiable, Equatable {
     // can actually reach the button.
     var duration: Double? {
         if style == .error { return nil }
-        return actionLabel != nil ? 5.0 : 3.0
+        return actionLabel != nil ? 4.0 : 2.0
     }
 
     var defaultIcon: String {

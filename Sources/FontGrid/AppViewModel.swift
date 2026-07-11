@@ -152,6 +152,10 @@ final class AppViewModel: ObservableObject {
     // popup instead of the whole Settings modal. nil = closed.
     @Published var pendingImport: ExportData? = nil
 
+    // Result of a manual update check (UpdateResultPopup, shown above
+    // Settings). Same ESC-cascade contract as pendingImport. nil = closed.
+    @Published var updateStatus: UpdateStatus? = nil
+
     // Wallpaper "skins" — bundled under Resources/Wallpapers/. The picker writes
     // a logical name (e.g. "Wallpaper02"); WallpaperOverlay resolves the actual
     // file based on the current appearance (Wallpaper02.webp dark vs

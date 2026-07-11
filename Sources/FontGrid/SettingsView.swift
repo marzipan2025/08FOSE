@@ -84,8 +84,15 @@ struct SettingsOverlay: View {
                 )
                 .transition(.opacity)
             }
+
+            // Manual update-check result, same modal treatment.
+            if let status = vm.updateStatus {
+                UpdateResultPopup(status: status) { vm.updateStatus = nil }
+                    .transition(.opacity)
+            }
         }
         .animation(.easeOut(duration: 0.15), value: vm.pendingImport == nil)
+        .animation(.easeOut(duration: 0.15), value: vm.updateStatus == nil)
         // Close button anchored to the top-right corner. ignoresSafeArea is
         // applied AFTER the overlay so the button (like the blur) ignores the
         // transparent title-bar inset too — otherwise the title bar would be
@@ -109,6 +116,8 @@ struct SettingsOverlay: View {
                     // to sit flush with the section labels below.
                     .offset(x: -2)
                 dataSection
+                    .padding(.bottom, 6)
+                updatesSection
                     .padding(.bottom, 6)
                 aboutSection
                     .padding(.bottom, 6)
@@ -239,6 +248,27 @@ struct SettingsOverlay: View {
         }
     }
 
+    private var updatesSection: some View {
+        SettingsSection("Updates") {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Check for updates")
+                        .font(.system(size: SettingsType.body))
+                        .foregroundStyle(.primary)
+                    Text("You're on v \(Theme.appVersion). Checks GitHub for a newer release.")
+                        .font(.system(size: SettingsType.small))
+                        .foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 12)
+                SettingsButton(label: "Check") {
+                    Task { vm.updateStatus = await UpdateCheck.fetchStatus() }
+                }
+                .offset(y: 6)
+            }
+        }
+    }
+
     private var aboutSection: some View {
         SettingsSection("About") {
             VStack(alignment: .leading, spacing: 6) {
@@ -252,7 +282,7 @@ struct SettingsOverlay: View {
                 )
                 .fixedSize(horizontal: false, vertical: true)
 
-                Text("v \(Theme.appVersion) : Results now report back — toasts confirm imports, exports, tag edits and artwork saves, and the import Merge/Replace choice is a designed popup.")
+                Text("v \(Theme.appVersion) : The app now checks GitHub for a newer release at launch and shows an update toast, and Settings gains a Check for updates button.")
                     .font(.system(size: SettingsType.small))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
