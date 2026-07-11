@@ -113,16 +113,19 @@ struct UpdateResultPopup: View {
 
     private var card: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Check for Updates")
+            // Title carries the state, so it reads at a glance.
+            Text(statusTitle)
                 .font(.system(size: 15, weight: .bold))
                 .foregroundStyle(.primary)
 
-            Text(statusLine)
-                .font(.system(size: Theme.smallSize))
-                .foregroundStyle(.secondary)
-                .padding(.top, 4)
+            // The version(s) as a single emphasized line under the title.
+            Text(versionLine)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.primary)
+                .padding(.top, 6)
 
-            Text(detailLine)
+            // Number-free explanation.
+            Text(descLine)
                 .font(.system(size: Theme.smallSize))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -142,7 +145,10 @@ struct UpdateResultPopup: View {
             }
         }
         .padding(20)
-        .frame(width: 320)
+        // leading (not the default center): the up-to-date / failed states have
+        // no width-filling child, so centering would float the text block right
+        // of the padding while the close button stays pinned to the frame edge.
+        .frame(width: 320, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(Theme.panelBackground)
@@ -156,24 +162,32 @@ struct UpdateResultPopup: View {
         .overlay(alignment: .topTrailing) {
             PopupCloseButton { onClose() }
                 .padding(.top, 18)
-                .padding(.trailing, 18)
+                .padding(.trailing, 20)   // match the content's 20 left margin
         }
     }
 
-    private var statusLine: String {
+    private var statusTitle: String {
         switch status {
         case .upToDate:  return "You're up to date."
-        case .available: return "A newer version is available."
-        case .failed:    return "The update check failed."
+        case .available: return "New Update!"
+        case .failed:    return "Error"
         }
     }
 
-    private var detailLine: String {
+    private var versionLine: String {
         switch status {
-        case .upToDate(let current):
-            return "v \(current) is the latest version on GitHub."
-        case .available(let latest, let current):
-            return "v \(latest) is out — you're on v \(current). The releases page has the download."
+        case .upToDate(let current):        return "v \(current)"
+        case .available(let latest, let current): return "v \(current) → v \(latest)"
+        case .failed:                       return "v \(Theme.appVersion)"
+        }
+    }
+
+    private var descLine: String {
+        switch status {
+        case .upToDate:
+            return "This is the latest release on GitHub — there's nothing new to download."
+        case .available:
+            return "A newer release is ready on GitHub. Open the releases page to download it."
         case .failed:
             return "GitHub couldn't be reached. Check your connection and try again."
         }
