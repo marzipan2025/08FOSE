@@ -136,16 +136,11 @@ final class AppViewModel: ObservableObject {
 
     // Drives the full-window Settings overlay (see SettingsView).
     @Published var showSettings: Bool = false
-    // Settings → Data "Clear All" confirmation dialogs. Kept here (not in the
-    // view) so the ESC key cascade can tell when a confirmation is open and let
-    // ESC dismiss only the dialog instead of closing the whole Settings modal.
-    @Published var confirmClearFavorites: Bool = false
-    @Published var confirmClearMemos: Bool = false
-    @Published var confirmClearSamples: Bool = false
+    // Settings → Data "Reset everything" confirmation dialog. Kept here (not in
+    // the view) so the ESC key cascade can tell when it's open and let ESC
+    // dismiss only the dialog instead of closing the whole Settings modal.
     @Published var confirmReset: Bool = false
-    var isPresentingConfirm: Bool {
-        confirmClearFavorites || confirmClearMemos || confirmClearSamples || confirmReset
-    }
+    var isPresentingConfirm: Bool { confirmReset }
 
     // Decoded backup waiting on the Merge / Replace choice (ImportChoicePopup,
     // shown above Settings). Kept here so the ESC cascade can dismiss just the

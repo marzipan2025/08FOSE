@@ -123,7 +123,6 @@ struct SettingsOverlay: View {
                     .padding(.bottom, 6)
                 shortcutsSection
                 licensesSection
-                resetSection
             }
             // Fixed 480pt content column (shrinks if the center panel is
             // narrower), centered within the center region.
@@ -143,48 +142,30 @@ struct SettingsOverlay: View {
 
     private var dataSection: some View {
         SettingsSection("Data") {
-            VStack(spacing: 10) {
-                dataRow(
-                    title: "Favorites",
-                    detail: "\(favorites.ordered.count) saved",
-                    disabled: favorites.ordered.isEmpty
-                ) { vm.confirmClearFavorites = true }
-                .confirmationDialog(
-                    "Remove all favorites?",
-                    isPresented: $vm.confirmClearFavorites,
-                    titleVisibility: .visible
-                ) {
-                    Button("Clear All Favorites", role: .destructive) { favorites.clearAll() }
-                    Button("Cancel", role: .cancel) {}
+            VStack(spacing: 18) {
+                // Read-only counts, label over number, three across. Clearing an
+                // individual bucket was removed — Reset everything (below) is the
+                // single destructive path now.
+                // Read-only counts in a bordered box, four across, split by thin
+                // vertical slits. Clearing an individual bucket was removed —
+                // Reset everything (below) is the single destructive path now.
+                HStack(spacing: 0) {
+                    dataMetric(title: "Favorites", count: favorites.ordered.count)
+                    metricSlit
+                    dataMetric(title: "Memos", count: memos.notes.count)
+                    metricSlit
+                    dataMetric(title: "Specimens", count: samples.samples.count)
+                    metricSlit
+                    dataMetric(title: "Tags", count: memos.tagCounts.count)
                 }
-
-                dataRow(
-                    title: "Memos",
-                    detail: "\(memos.notes.count) saved",
-                    disabled: memos.notes.isEmpty
-                ) { vm.confirmClearMemos = true }
-                .confirmationDialog(
-                    "Remove all memos?",
-                    isPresented: $vm.confirmClearMemos,
-                    titleVisibility: .visible
-                ) {
-                    Button("Clear All Memos", role: .destructive) { memos.clearAll() }
-                    Button("Cancel", role: .cancel) {}
-                }
-
-                dataRow(
-                    title: "Specimens",
-                    detail: "\(samples.samples.count) saved",
-                    disabled: samples.samples.isEmpty
-                ) { vm.confirmClearSamples = true }
-                .confirmationDialog(
-                    "Remove all custom specimens?",
-                    isPresented: $vm.confirmClearSamples,
-                    titleVisibility: .visible
-                ) {
-                    Button("Clear All Specimens", role: .destructive) { samples.clearAll() }
-                    Button("Cancel", role: .cancel) {}
-                }
+                .background(
+                    RoundedRectangle(cornerRadius: Theme.cardRadius)
+                        .fill(Color.black.opacity(0.15))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: Theme.cardRadius)
+                        .stroke(Theme.border, lineWidth: 1)
+                )
 
                 // Export / import favorites + memos + specimens (tags live inside memos).
                 backupRow(
@@ -199,8 +180,60 @@ struct SettingsOverlay: View {
                     button: "Import",
                     action: importData
                 )
+
+                // Reset lives inside Data now (its own section is gone).
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Reset everything")
+                            .font(.system(size: SettingsType.body))
+                            .foregroundStyle(.primary)
+                        Text("Clears favorites, memos, theme, wallpaper and window size — back to a fresh install.")
+                            .font(.system(size: SettingsType.small))
+                            .foregroundStyle(.tertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 12)
+                    SettingsButton(label: "Reset") { vm.confirmReset = true }
+                        .offset(y: 6)
+                        .confirmationDialog(
+                            "Reset everything to a fresh install?",
+                            isPresented: $vm.confirmReset,
+                            titleVisibility: .visible
+                        ) {
+                            Button("Reset Everything", role: .destructive) { resetEverything() }
+                            Button("Cancel", role: .cancel) {}
+                        } message: {
+                            Text("This clears all data and restarts 08FOSE.")
+                        }
+                }
             }
         }
+    }
+
+    // One count tile inside the counts box: label above, number below, both
+    // left-aligned. Equal width so the four fill the box evenly.
+    private func dataMetric(title: String, count: Int) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.system(size: SettingsType.small))
+                .foregroundStyle(.secondary)
+            Text("\(count)")
+                .font(.system(size: 26, weight: .medium))
+                .foregroundStyle(.primary)
+                .monospacedDigit()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 14)
+    }
+
+    // Thin vertical divider between count tiles, inset top and bottom so it
+    // reads as a slit rather than a full-height rule.
+    private var metricSlit: some View {
+        Rectangle()
+            .fill(Theme.border)
+            .frame(width: 1)
+            .padding(.vertical, 12)
     }
 
     private func backupRow(
@@ -220,30 +253,6 @@ struct SettingsOverlay: View {
             }
             Spacer()
             SettingsButton(label: button, action: action)
-                .offset(y: 6)
-        }
-    }
-
-    private func dataRow(
-        title: String,
-        detail: String,
-        disabled: Bool,
-        clear: @escaping () -> Void
-    ) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: SettingsType.body))
-                    .foregroundStyle(.primary)
-                Text(detail)
-                    .font(.system(size: SettingsType.small))
-                    .foregroundStyle(.tertiary)
-                    .monospacedDigit()
-            }
-            Spacer()
-            SettingsButton(label: "Clear All", action: clear)
-                .disabled(disabled)
-                .opacity(disabled ? 0.4 : 1)
                 .offset(y: 6)
         }
     }
@@ -282,7 +291,7 @@ struct SettingsOverlay: View {
                 )
                 .fixedSize(horizontal: false, vertical: true)
 
-                Text("v \(Theme.appVersion) : The app now checks GitHub for a newer release at launch and shows an update toast, and Settings gains a Check for updates button.")
+                Text("v \(Theme.appVersion) : The Data section now shows Favorites, Memos, Specimens and Tags counts in a single box, with Reset everything folded in and the per-item Clear buttons removed.")
                     .font(.system(size: SettingsType.small))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -344,34 +353,6 @@ struct SettingsOverlay: View {
                     .font(.system(size: SettingsType.small))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
-    private var resetSection: some View {
-        SettingsSection("Reset") {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Reset everything")
-                        .font(.system(size: SettingsType.body))
-                        .foregroundStyle(.primary)
-                    Text("Clears favorites, memos, theme, wallpaper and window size — back to a fresh install.")
-                        .font(.system(size: SettingsType.small))
-                        .foregroundStyle(.tertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 12)
-                SettingsButton(label: "Reset") { vm.confirmReset = true }
-                    .confirmationDialog(
-                        "Reset everything to a fresh install?",
-                        isPresented: $vm.confirmReset,
-                        titleVisibility: .visible
-                    ) {
-                        Button("Reset Everything", role: .destructive) { resetEverything() }
-                        Button("Cancel", role: .cancel) {}
-                    } message: {
-                        Text("This clears all data and restarts 08FOSE.")
-                    }
             }
         }
     }
