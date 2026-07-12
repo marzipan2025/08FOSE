@@ -160,7 +160,7 @@ struct SettingsOverlay: View {
                 }
                 .background(
                     RoundedRectangle(cornerRadius: Theme.cardRadius)
-                        .fill(Color.black.opacity(0.15))
+                        .fill(Color.white.opacity(0.2))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: Theme.cardRadius)
