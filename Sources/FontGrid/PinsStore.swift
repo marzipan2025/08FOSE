@@ -1,11 +1,13 @@
 import Foundation
 
 @MainActor
-final class FavoritesStore: ObservableObject {
+final class PinsStore: ObservableObject {
     // Insertion order, oldest → newest. Persisted so recency survives relaunch.
     @Published private(set) var ordered: [String] = []
     private var nameSet: Set<String> = []
-    private let key = "FontGrid.favorites"
+    // Pre-rename data under "FontGrid.favorites" is carried over by
+    // LegacyKeyMigration before this store is created.
+    private let key = "FontGrid.pins"
 
     init() {
         if let saved = UserDefaults.standard.array(forKey: key) as? [String] {
@@ -27,14 +29,14 @@ final class FavoritesStore: ObservableObject {
         UserDefaults.standard.set(ordered, forKey: key)
     }
 
-    /// Remove every favorite. Used by Settings → Data.
+    /// Remove every pin. Used by Settings → Data.
     func clearAll() {
         ordered.removeAll()
         nameSet.removeAll()
         UserDefaults.standard.set(ordered, forKey: key)
     }
 
-    /// Union an imported list into the current favorites, preserving existing
+    /// Union an imported list into the current pins, preserving existing
     /// order and appending only names not already present. Used by import.
     func merge(_ names: [String]) {
         for name in names where !nameSet.contains(name) {
@@ -52,6 +54,6 @@ final class FavoritesStore: ObservableObject {
         ordered.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
 
-    /// Most recently favorited first.
+    /// Most recently pinned first.
     var byRecency: [String] { ordered.reversed() }
 }

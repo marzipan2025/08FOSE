@@ -3,7 +3,7 @@ import AppKit
 
 struct RootView: View {
     @StateObject private var vm = AppViewModel()
-    @StateObject private var favorites = FavoritesStore()
+    @StateObject private var pins = PinsStore()
     @StateObject private var memos = MemoStore()
     @StateObject private var samples = SampleStore()
     @StateObject private var muted = MutedStore()
@@ -159,7 +159,7 @@ struct RootView: View {
             onCommandArrow: handleCommandArrow
         ))
         .environmentObject(vm)
-        .environmentObject(favorites)
+        .environmentObject(pins)
         .environmentObject(memos)
         .environmentObject(samples)
         .environmentObject(muted)
@@ -191,7 +191,7 @@ struct RootView: View {
     //   0–4 → wallpaper (0 = none, 1–4 = Wallpaper01–04)
     //   t   → toggle dark / light theme
     //   w   → cycle Weights filter (All → 1 → 3+ → 5+ → All)
-    //   f/m → favorites / memo filter
+    //   p/m → pinned / memo filter
     //   k/j/c/l/s/o → toggle script bucket
     //   (korean / japanese / chinese / latin / symbol / other)
     // Returns true when the key was handled (and should be consumed).
@@ -226,8 +226,8 @@ struct RootView: View {
         case "w":
             vm.cycleWeightFilter()
             return true
-        case "f":
-            vm.favoritesOnly.toggle()
+        case "p":
+            vm.pinnedOnly.toggle()
             return true
         case "m":
             vm.memoOnly.toggle()
@@ -496,7 +496,7 @@ private struct GlobalShortcutHandler: NSViewRepresentable {
 
         // Korean 2-set (두벌식) layout: each key produces a jamo. Map those jamo
         // back to the Latin letter on the same physical key so single-key
-        // shortcuts (t, w, f, m, k, j, c, l, s, o, …) still fire while the input
+        // shortcuts (t, w, p, m, k, j, c, l, s, o, …) still fire while the input
         // source is Korean.
         private static let hangulToLatin: [Character: String] = [
             "ㅂ": "q", "ㅃ": "q", "ㅈ": "w", "ㅉ": "w", "ㄷ": "e", "ㄸ": "e",

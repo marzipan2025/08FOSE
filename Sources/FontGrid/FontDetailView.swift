@@ -8,7 +8,7 @@ struct FontDetailView: View {
     let previewText: String
     let onClose: () -> Void
 
-    @EnvironmentObject var favorites: FavoritesStore
+    @EnvironmentObject var pins: PinsStore
     @EnvironmentObject var memos: MemoStore
     @EnvironmentObject var samples: SampleStore
     @EnvironmentObject var muted: MutedStore
@@ -74,7 +74,7 @@ struct FontDetailView: View {
     // Light mode uses lighter shadows (30% of the dark-mode strength).
     private var shadowScale: Double { colorScheme == .light ? 0.3 : 1.0 }
 
-    private var isFavorited: Bool { favorites.contains(family.name) }
+    private var isPinned: Bool { pins.contains(family.name) }
     private var isMuted: Bool { muted.contains(family.name) }
 
     // A non-empty custom sample for this family overrides the global preview
@@ -569,9 +569,9 @@ struct FontDetailView: View {
             HStack(spacing: 8) {
                 ActionButton(
                     icon: nil,
-                    label: isFavorited ? "Favorited" : "Favorite",
-                    active: isFavorited
-                ) { favorites.toggle(family.name) }
+                    label: isPinned ? "Pinned" : "Pin",
+                    active: isPinned
+                ) { pins.toggle(family.name) }
 
                 ActionButton(
                     icon: copied ? "checkmark" : nil,
@@ -1406,7 +1406,7 @@ private struct PlayTriangle: Shape {
     }
 }
 
-// Title-area action button (Favorite / Copy name / Show in Finder) with a
+// Title-area action button (Pin / Copy name / Show in Finder) with a
 // light hover state: the fill grows a little denser on rollover.
 private struct ActionButton: View {
     let icon: String?

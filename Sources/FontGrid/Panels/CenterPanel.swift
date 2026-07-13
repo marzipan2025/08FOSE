@@ -8,7 +8,7 @@ struct CenterPanel: View {
     var leftCollapsed: Bool = false
 
     @EnvironmentObject var vm: AppViewModel
-    @EnvironmentObject var favorites: FavoritesStore
+    @EnvironmentObject var pins: PinsStore
     @EnvironmentObject var memos: MemoStore
     @EnvironmentObject var muted: MutedStore
     @AppStorage("previewText") private var previewText = "The quick brown fox jumps over lazy dog"
@@ -58,7 +58,7 @@ struct CenterPanel: View {
                     || memos.note(for: family.name).localizedCaseInsensitiveContains(vm.searchQuery)
             }
             .filter { vm.weightFilter.matches($0.weightCount) }
-            .filter { !vm.favoritesOnly || favorites.contains($0.name) }
+            .filter { !vm.pinnedOnly || pins.contains($0.name) }
             .filter { !vm.memoOnly || memos.hasNote(for: $0.name) }
             .filter { vm.scriptFilter.isEmpty || vm.scriptFilter.contains($0.script) }
             .filter { vm.activeTag == nil || memos.tags(for: $0.name).contains(vm.activeTag!) }
@@ -161,15 +161,15 @@ struct CenterPanel: View {
 
         // Collection + script filters joined by middle dots. With a single
         // segment the full word is used; with 2+ segments (≥1 middle dot)
-        // everything abbreviates: FAV / MEM / MUT and KR / JP / LTN / ETC.
+        // everything abbreviates: PIN / MEM / MUT and KR / JP / LTN / ETC.
         let scripts = ScriptCategory.allCases.filter { vm.scriptFilter.contains($0) }
-        let total = (vm.favoritesOnly ? 1 : 0) + (vm.memoOnly ? 1 : 0)
+        let total = (vm.pinnedOnly ? 1 : 0) + (vm.memoOnly ? 1 : 0)
             + (vm.mutedOnly ? 1 : 0) + scripts.count
         if total == 0 { return "\(count) fonts" }
         let abbr = total >= 2
 
         var segments: [String] = []
-        if vm.favoritesOnly { segments.append(abbr ? "FAV" : "favorites") }
+        if vm.pinnedOnly { segments.append(abbr ? "PIN" : "Pinned") }
         if vm.memoOnly { segments.append(abbr ? "MEM" : "Memoed") }
         if vm.mutedOnly { segments.append(abbr ? "MUT" : "Muted") }
         segments.append(contentsOf: scripts.map { abbr ? $0.abbreviation : $0.label })
@@ -196,11 +196,11 @@ struct CenterPanel: View {
     }
 
     // Ordered list the arrow keys step through, matching how the detail was
-    // opened: the filtered grid, or the favorites list in its current sort.
+    // opened: the filtered grid, or the pins list in its current sort.
     private var navigationFamilies: [FontFamily] {
         switch vm.detailSource {
-        case .favorites:
-            let names = vm.favoritesByRecent ? favorites.byRecency : favorites.sorted
+        case .pins:
+            let names = vm.pinsByRecent ? pins.byRecency : pins.sorted
             return names.compactMap { name in
                 vm.library.families.first { $0.name == name }
             }

@@ -2,11 +2,11 @@ import SwiftUI
 
 struct RightPanel: View {
     @EnvironmentObject var vm: AppViewModel
-    @EnvironmentObject var favorites: FavoritesStore
+    @EnvironmentObject var pins: PinsStore
     @EnvironmentObject var memos: MemoStore
     @State private var sortHovering = false
-    // When true, the TAGS section grows up to cover the favorites list (down to
-    // just below the FAVORITES divider).
+    // When true, the TAGS section grows up to cover the pins list (down to
+    // just below the PINNED divider).
     @State private var tagsExpanded = false
     @State private var tagsChevronHovering = false
 
@@ -14,7 +14,7 @@ struct RightPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            favoritesHeader
+            pinsHeader
                 .padding(.horizontal, Theme.panelHPadding)
                 .padding(.vertical, Theme.panelVPadding)
             PanelHDivider()
@@ -24,9 +24,9 @@ struct RightPanel: View {
                     .frame(maxHeight: .infinity)
             } else {
                 Group {
-                    if favorites.ordered.isEmpty {
+                    if pins.ordered.isEmpty {
                         VStack(alignment: .leading, spacing: 0) {
-                            Text("No favorites yet.")
+                            Text("No pins yet.")
                                 .font(.system(size: Theme.smallSize))
                                 .foregroundStyle(.tertiary)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -35,7 +35,7 @@ struct RightPanel: View {
                             Spacer(minLength: 0)
                         }
                     } else {
-                        favoritesList
+                        pinsList
                     }
                 }
                 .frame(maxHeight: .infinity)
@@ -127,7 +127,7 @@ struct RightPanel: View {
                 .foregroundStyle(.tertiary)
                 .monospacedDigit()
             Spacer(minLength: 8)
-            // Expand/collapse over the favorites list. Same chevron as the memo
+            // Expand/collapse over the pins list. Same chevron as the memo
             // area's toggle, but without the filled background.
             Button {
                 withAnimation(.easeOut(duration: 0.2)) { tagsExpanded.toggle() }
@@ -145,16 +145,16 @@ struct RightPanel: View {
         }
     }
 
-    private var favoritesHeader: some View {
+    private var pinsHeader: some View {
         HStack(spacing: 8) {
-            Text("FAVORITES")
+            Text("PINNED")
                 .font(.system(size: Theme.sectionHeaderSize, weight: .bold))
                 .tracking(0.6)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
-            if !favorites.ordered.isEmpty {
-                Text("\(favorites.ordered.count)")
+            if !pins.ordered.isEmpty {
+                Text("\(pins.ordered.count)")
                     .font(.system(size: Theme.smallSize, weight: .medium))
                     .foregroundStyle(.tertiary)
                     .monospacedDigit()
@@ -162,7 +162,7 @@ struct RightPanel: View {
                     .fixedSize(horizontal: true, vertical: false)
             }
             Spacer(minLength: 8)
-            if !favorites.ordered.isEmpty {
+            if !pins.ordered.isEmpty {
                 sortToggle
             }
         }
@@ -170,9 +170,9 @@ struct RightPanel: View {
 
     private var sortToggle: some View {
         Button {
-            vm.favoritesByRecent.toggle()
+            vm.pinsByRecent.toggle()
         } label: {
-            Text(vm.favoritesByRecent ? "Recent" : "A–Z")
+            Text(vm.pinsByRecent ? "Recent" : "A–Z")
                 .font(.system(size: Theme.smallSize, weight: .medium))
                 .foregroundStyle(Theme.accent)
                 .lineLimit(1)
@@ -186,11 +186,11 @@ struct RightPanel: View {
         .buttonStyle(.plain)
         .focusable(false)
         .onHover { sortHovering = $0 }
-        .help("Sort: \(vm.favoritesByRecent ? "most recent first" : "alphabetical")")
+        .help("Sort: \(vm.pinsByRecent ? "most recent first" : "alphabetical")")
     }
 
-    private var displayedFavorites: [String] {
-        vm.favoritesByRecent ? favorites.byRecency : favorites.sorted
+    private var displayedPins: [String] {
+        vm.pinsByRecent ? pins.byRecency : pins.sorted
     }
 
     // Resolve the deterministic preview face per the weight rule, falling back
@@ -199,13 +199,13 @@ struct RightPanel: View {
         (vm.library.families.first { $0.name == name }?.previewFontName) ?? name
     }
 
-    private var favoritesList: some View {
+    private var pinsList: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 2) {
-                ForEach(displayedFavorites, id: \.self) { name in
-                    FavoriteRow(name: name, previewFontName: previewFontName(for: name), tooltipSuppressed: vm.showSettings) {
+                ForEach(displayedPins, id: \.self) { name in
+                    PinRow(name: name, previewFontName: previewFontName(for: name), tooltipSuppressed: vm.showSettings) {
                         if let family = vm.library.families.first(where: { $0.name == name }) {
-                            vm.openDetail(family, source: .favorites)
+                            vm.openDetail(family, source: .pins)
                         }
                     }
                 }
@@ -255,16 +255,16 @@ struct TagCapsule: View {
     }
 }
 
-// MARK: - Favorite Row
+// MARK: - Pin Row
 
-struct FavoriteRow: View {
+struct PinRow: View {
     let name: String
     // PostScript face used to render the sample (deterministic weight); falls
     // back to the family name upstream when no preferred member exists.
     var previewFontName: String
     var tooltipSuppressed: Bool = false
     let onSelect: () -> Void
-    @EnvironmentObject var favorites: FavoritesStore
+    @EnvironmentObject var pins: PinsStore
     @EnvironmentObject var memos: MemoStore
     @EnvironmentObject var samples: SampleStore
     @EnvironmentObject var inputSource: InputSourceManager
@@ -325,7 +325,7 @@ struct FavoriteRow: View {
                     }
                     .frame(width: 9, height: 9)
                 }
-                Button { favorites.toggle(name) } label: {
+                Button { pins.toggle(name) } label: {
                     Circle()
                         .fill(Theme.accent)
                         .frame(width: 9, height: 9)
@@ -335,7 +335,7 @@ struct FavoriteRow: View {
             .opacity(hovering ? 1 : 0.7)
         }
         .padding(.horizontal, 10)
-        // Top margin matches the horizontal margin so the favorite dot sits the
+        // Top margin matches the horizontal margin so the pin dot sits the
         // same distance from the top edge as from the right edge.
         .padding(.top, 10)
         // 65: grows with the taller sample area above.

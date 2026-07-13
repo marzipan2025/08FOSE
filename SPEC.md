@@ -29,8 +29,8 @@ NSFontManager는 한글 등 비-ASCII family 이름을 `/B9CC/B144/C124/CCB4` �
 `NSFontManager.availableMembers(ofFontFamily:)`가 반환하는 배열의 row 구조:
 `[postScriptName: String, faceName: String, weight: NSNumber, traits: NSNumber]`
 
-### FavoritesStore
-- `UserDefaults` 키: `FontGrid.favorites`
+### PinsStore
+- `UserDefaults` 키: `FontGrid.pins` (구버전의 `FontGrid.favorites`는 앱 시작 시 1회 마이그레이션)
 - family 이름을 추가 순서대로 보관 → **가나다순(`sorted`)** 과 **최근 추가순(`byRecency`)** 둘 다 제공
 - 토글 시 즉시 영구화
 
@@ -80,10 +80,10 @@ NSFontManager는 한글 등 비-ASCII family 이름을 `/B9CC/B144/C124/CCB4` �
 - 윈도우 스타일: `.titleBar` + `.fullSizeContentView` (시스템 타이틀바 위로 콘텐츠 확장)
 - **라이트/다크 모드 전환 지원** (기본 다크)
 - 선택 가능한 배경 "Wallpaper" 오버레이 (모드별 개별 기억)
-- 중앙 상단: 좌측 `08FOSE`, 우측 **현재 필터 상태 라벨** — 기본 `NNN fonts`, 필터 시 `NNN favorites/Memoed/Muted`·스크립트명, 2개 이상이면 가운뎃점으로 결합하며 약어(FAV·MEM·MUT, KR·JP·LTN·ETC), 태그 활성 시 `Tag : XXX`. 좌측 패널 접힘 시 신호등과 안 겹치게 들여쓰기
+- 중앙 상단: 좌측 `08FOSE`, 우측 **현재 필터 상태 라벨** — 기본 `NNN fonts`, 필터 시 `NNN Pinned/Memoed/Muted`·스크립트명, 2개 이상이면 가운뎃점으로 결합하며 약어(PIN·MEM·MUT, KR·JP·LTN·ETC), 태그 활성 시 `Tag : XXX`. 좌측 패널 접힘 시 신호등과 안 겹치게 들여쓰기
 
 ### 세션 상태 복원 (재시작 시)
-앱을 껐다 켜면 마지막 상태를 재현한다 — 윈도우 크기·위치, 좌/우 패널 폭, 좌측 패널의 모든 선택(검색어·Weights·Favorites/Memo only·Script 버킷·Tag·Columns·Font Size), 그리고 **중앙 그리드의 스크롤 위치**. 스크롤은 픽셀 Y로 저장하되 위 항목들이 동일하게 복원되어 레이아웃이 결정적이므로 같은 행에 안착한다(`NSScrollView` introspect, 콘텐츠 높이가 자랄 때까지 재시도). 저장된 폰트 수가 줄어 목표 Y에 못 미치면 가능한 최대 위치로 클램프.
+앱을 껐다 켜면 마지막 상태를 재현한다 — 윈도우 크기·위치, 좌/우 패널 폭, 좌측 패널의 모든 선택(검색어·Weights·Pinned/Memo only·Script 버킷·Tag·Columns·Font Size), 그리고 **중앙 그리드의 스크롤 위치**. 스크롤은 픽셀 Y로 저장하되 위 항목들이 동일하게 복원되어 레이아웃이 결정적이므로 같은 행에 안착한다(`NSScrollView` introspect, 콘텐츠 높이가 자랄 때까지 재시도). 저장된 폰트 수가 줄어 목표 Y에 못 미치면 가능한 최대 위치로 클램프.
 
 ---
 
@@ -95,7 +95,7 @@ NSFontManager는 한글 등 비-ASCII family 이름을 `/B9CC/B144/C124/CCB4` �
 
 ### 3.2 필터 (좌측 "Filters")
 - **Weights**: 라벨 `1 / 2+ / 4+ / 6+`, 구간 `1` / `2–3` / `4–5` / `6+` (`.exactly(1)` / `.range(2,3)` / `.range(4,5)` / `.atLeast(6)`), 서로 배타적. All 버튼 없음 — **아무 칩도 선택 안 됨 = All**. 단일 선택(다른 칩 누르면 교체), 선택된 칩 재클릭 시 해제(All). 현재 칩에 없는 옛 저장값은 로드 시 All로 정규화
-- **Collections**: `Favorites` / `Memo` (보유 family만) + `Show/Hide muted` 토글과 `Muted`(muted만 보기) — 항목이 없어도 비활성하지 않고, 누르면 빈 결과("Nothing found")
+- **Collections**: `Pinned` / `Memo` (보유 family만) + `Show/Hide muted` 토글과 `Muted`(muted만 보기) — 항목이 없어도 비활성하지 않고, 누르면 빈 결과("Nothing found")
 - **Script 버킷**: Korean / Japanese / Latin / Other (주력 스크립트 기준, 다중 선택 시 합집합). **Chinese·Symbol은 분류상 Other로 통합**(전용 버튼 없음)
 - **Tag**: 우측 태그 캡슐로 선택 (단일 토글)
 - 검색·모든 필터·태그는 **AND**로 결합 (단 `Muted`(only)는 Show/Hide보다 우선)
@@ -145,7 +145,7 @@ NSFontManager는 한글 등 비-ASCII family 이름을 `/B9CC/B144/C124/CCB4` �
   - 이름이 길면 **축소하지 않고 tail 말줄임(…)**, 우측 닫기 버튼과 **16px 간격** 유지
   - 헤더 영역은 세로 압축 불가(`fixedSize(vertical:)`) — 메모가 자라도 헤더가 눌리지 않음
   - 한글 지원 폰트는 이름 오른쪽에 커스텀 **KR 배지**(squircle 실선 + 대문자 KR, 타이틀의 ~72% 높이, 중앙보다 살짝 위)
-  - **Favorite** 토글 / **Copy name**(1.5초 "Copied") / **Show in Finder**
+  - **Pin** 토글 / **Copy name**(1.5초 "Copied") / **Show in Finder**
 - **정보 섹션** (1장 FontMetadata, 반응형):
   - 카드 폭 **≥ 640**: 중앙(weight 목록) 영역의 **우측 1/4**에 단일 컬럼으로 세로 나열
   - 카드 폭 **< 640**: 헤더 아래에 **여러 컬럼 그리드**(박스·구분선 없음), **2행까지** 노출 후 악센트색 **Read more/Read less**로 펼침. 마지막 줄에 한 항목만 남으면 전체 폭 사용. 정보+샘플 목록은 하나의 스크롤
@@ -160,7 +160,7 @@ NSFontManager는 한글 등 비-ASCII family 이름을 `/B9CC/B144/C124/CCB4` �
     - 상한 = 메모 윗변이 **헤더 아래 구분선**에 닿는 지점(`카드높이 − 헤더 − 구분선 − specimen − 여백`). 상한 초과 시 그제야 메모 **내부 스크롤**, specimen은 바닥 고정
     - 성장 중에는 세로 스크롤바를 숨겨 줄 추가 시 깜빡임 방지(콘텐츠가 상한을 실제로 넘을 때만 표시)
   - **커스텀 specimen**: family별로 저장, 설정 시 그 family의 모든 weight 샘플을 대체
-- **Mute 버튼**: 헤더 액션줄(Favorite/Copy/Show in Finder 옆)에서 muted 토글 (§3.2a)
+- **Mute 버튼**: 헤더 액션줄(Pin/Copy/Show in Finder 옆)에서 muted 토글 (§3.2a)
 
 ### 3.7a Glyphs 뷰어 (상세, weight 목록 아래)
 - weight 샘플 아래에 좌우 24px 여백의 구분선 → **"Glyphs"** 타이틀 + 우측 weight 풀다운(기본 Regular; 단일 weight면 메뉴 없이 이름만)
@@ -173,7 +173,7 @@ NSFontManager는 한글 등 비-ASCII family 이름을 `/B9CC/B144/C124/CCB4` �
 - ←/→ 폰트 이동 시 상세 스크롤 최상단 리셋(`.id(family.id)`)
 
 ### 3.8 즐겨찾기 + 태그 (우측 패널)
-- **FAVORITES**: 헤더에 개수 + **A–Z / Recent** 정렬 토글
+- **PINNED**: 헤더에 개수 + **A–Z / Recent** 정렬 토글
   - 각 행: family 이름(작게) + 샘플 텍스트 + 메모 점 + 즐겨찾기 점
   - 샘플 weight는 결정적으로 선택: **Regular 페이스 → 없으면 OS/2 400 → 500 → 그래도 없으면 패밀리 기본**(`FontFamily.previewFontName`)
   - 행 클릭 → 상세 뷰 점프, 비어 있을 때 안내 문구
@@ -186,9 +186,9 @@ NSFontManager는 한글 등 비-ASCII family 이름을 `/B9CC/B144/C124/CCB4` �
 - 진입: 좌측 패널 하단 **Settings(기어)** 버튼 또는 **⌘,**. 닫기: 우상단 X 또는 **ESC**
 - 전체 윈도우 블러 위에 콘텐츠를 중앙 패널 컬럼 폭(최대 480pt)으로 표시. 아래의 테마/Wallpaper 단축키는 미리보기 위해 살아 있음
 - **Data**
-  - Favorites / Memos / Specimens 각각 **Clear All**(확인 다이얼로그, 개수 표시, 비어 있으면 비활성)
-  - **Export**: Favorites·Memos·Specimens·Muted를 JSON으로 저장 (`ExportData`, family 이름 키 기반이라 다른 Mac에서도 호환). **UI 상태(창·패널·필터·스크롤 등)는 포함하지 않음**
-  - **Import**: JSON에서 Favorites·Memos·Specimens·Muted **병합**
+  - Pins / Memos / Specimens 각각 **Clear All**(확인 다이얼로그, 개수 표시, 비어 있으면 비활성)
+  - **Export**: Pins·Memos·Specimens·Muted를 JSON으로 저장 (`ExportData`, family 이름 키 기반이라 다른 Mac에서도 호환). **UI 상태(창·패널·필터·스크롤 등)는 포함하지 않음**
+  - **Import**: JSON에서 Pins·Memos·Specimens·Muted **병합** (새 내보내기는 `pins` 키, 리네임 이전 백업의 `favorites` 키도 읽기 지원)
 - **About / Shortcuts / Licenses**: 정보·단축키 안내·라이선스
 - **Reset everything**(확인 다이얼로그): 콘텐츠(즐겨찾기·메모·specimen)와 프리뷰 텍스트 초기화 + `removePersistentDomain`으로 앱 UserDefaults 도메인 전체 삭제(필터·테마·Wallpaper·창 프레임·패널 폭·스크롤 등 모든 영속 키 포함) + 윈도우를 **1280×860 중앙**으로 즉시 복귀(`resetWindowSize`)
   - 주의: 패널 폭은 영속 값만 지워지고 화면상 폭은 재시작 후 반영될 수 있음. `resetWindowSize`는 화면이 1280×860보다 작아도 크기를 클램프하지 않음(개선 여지)
@@ -208,7 +208,7 @@ NSFontManager는 한글 등 비-ASCII family 이름을 `/B9CC/B144/C124/CCB4` �
 - **0–4**: Wallpaper (`0` 없음, `1–4` Wallpaper01–04)
 - **t**: 다크 ↔ 라이트 토글
 - **w**: Weights 필터 순환 (`All → 1 → 3+ → 5+ → All`)
-- **f / m**: Favorites only / Memo only 토글
+- **p / m**: Pinned only / Memo only 토글
 - **k / j / l / o**: Script 버킷 토글 (Korean / Japanese / Latin / Other) — Chinese·Symbol은 Other로 통합
 - **u**: muted 표시/숨김 토글 (Show ↔ Hide)
 - **i**: muted만 보기 토글
@@ -245,17 +245,17 @@ NSFontManager는 한글 등 비-ASCII family 이름을 `/B9CC/B144/C124/CCB4` �
 
 ### 5.4 영속화 키 (UserDefaults / AppStorage)
 **콘텐츠 데이터**
-- `FontGrid.favorites`, `FontGrid.memos`, `FontGrid.samples` (specimen), `FontGrid.muted`
+- `FontGrid.pins`, `FontGrid.memos`, `FontGrid.samples` (specimen), `FontGrid.muted`
 
 **캐시**
 - `FontGrid.scriptCache.v1`: psName → 스크립트 분류 결과. 시작 시 폰트별 sfnt 판독을 재실행하지 않기 위한 캐시 — 분류 규칙을 바꾸면 키 버전을 올릴 것
 
 **환경/외형**
-- `previewText`, `favoritesByRecent`, `isLightMode`
+- `previewText`, `pinsByRecent`, `isLightMode`
 - `selectedWallpaperDark`, `selectedWallpaperLight` (구 `selectedWallpaper`는 마이그레이션용)
 
 **세션 UI 상태 (재시작 시 복원)**
-- 좌측 패널 선택: `searchQuery`, `weightFilter`(문자열 인코딩 `all`/`exactly:N`/`atLeast:N`), `favoritesOnly`, `memoOnly`, `mutedFilter`(`shown`/`hidden`), `mutedOnly`, `scriptFilter`(rawValue 배열), `activeTag`, `columnCount`, `previewSizeOffset`
+- 좌측 패널 선택: `searchQuery`, `weightFilter`(문자열 인코딩 `all`/`exactly:N`/`atLeast:N`), `pinnedOnly`, `memoOnly`, `mutedFilter`(`shown`/`hidden`), `mutedOnly`, `scriptFilter`(rawValue 배열), `activeTag`, `columnCount`, `previewSizeOffset`
 - 레이아웃: `leftPanelWidth`, `rightPanelWidth`
 - 중앙 그리드 스크롤: `centerGridScrollY`
 - 윈도우 프레임: SwiftUI `WindowGroup` 자동 저장(키 `NSWindow Frame SwiftUI.ModifiedContent…` — AppKit이 자동 관리)
@@ -273,7 +273,7 @@ Sources/FontGrid/
 ├─ AppViewModel.swift       검색/필터/태그/레이아웃/테마 상태 + 영속화 + resetToDefaults
 ├─ Theme.swift              디자인 토큰 + appVersion
 ├─ FontLibrary.swift        FontFamily 로딩/스크립트 판정/CJK 디코딩
-├─ FavoritesStore.swift     즐겨찾기 영속화
+├─ PinsStore.swift          핀 영속화
 ├─ MemoStore.swift          메모 + 태그 파싱
 ├─ SampleStore.swift        커스텀 specimen 영속화
 ├─ MutedStore.swift         muted(원치 않는 폰트) 영속화

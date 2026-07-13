@@ -19,11 +19,51 @@ struct ExportData: Codable {
     var format: String = "08fose-export"
     var version: Int = 1
     var exportedAt: Date = Date()
-    var favorites: [String]
+    var pins: [String]
     var memos: [String: String]
     // Added in later versions; optional so older backups still decode.
     var samples: [String: String]?
     var muted: [String]?
+
+    init(pins: [String], memos: [String: String],
+         samples: [String: String]? = nil, muted: [String]? = nil) {
+        self.pins = pins
+        self.memos = memos
+        self.samples = samples
+        self.muted = muted
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case format, version, exportedAt, pins, memos, samples, muted
+        // Pre-rename backups stored the pinned list under "favorites".
+        case legacyPins = "favorites"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        format = try c.decode(String.self, forKey: .format)
+        version = try c.decode(Int.self, forKey: .version)
+        exportedAt = try c.decode(Date.self, forKey: .exportedAt)
+        if let pins = try c.decodeIfPresent([String].self, forKey: .pins) {
+            self.pins = pins
+        } else {
+            pins = try c.decode([String].self, forKey: .legacyPins)
+        }
+        memos = try c.decode([String: String].self, forKey: .memos)
+        samples = try c.decodeIfPresent([String: String].self, forKey: .samples)
+        muted = try c.decodeIfPresent([String].self, forKey: .muted)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(format, forKey: .format)
+        try c.encode(version, forKey: .version)
+        try c.encode(exportedAt, forKey: .exportedAt)
+        try c.encode(pins, forKey: .pins)
+        try c.encode(memos, forKey: .memos)
+        try c.encodeIfPresent(samples, forKey: .samples)
+        try c.encodeIfPresent(muted, forKey: .muted)
+    }
 }
 
 // Full-window Settings overlay: a blurred backdrop over the whole app with the
@@ -40,7 +80,7 @@ struct SettingsOverlay: View {
     let rightInset: CGFloat
 
     @EnvironmentObject var vm: AppViewModel
-    @EnvironmentObject var favorites: FavoritesStore
+    @EnvironmentObject var pins: PinsStore
     @EnvironmentObject var memos: MemoStore
     @EnvironmentObject var samples: SampleStore
     @EnvironmentObject var muted: MutedStore
@@ -150,7 +190,7 @@ struct SettingsOverlay: View {
                 // vertical slits. Clearing an individual bucket was removed —
                 // Reset everything (below) is the single destructive path now.
                 HStack(spacing: 0) {
-                    dataMetric(title: "Favorites", count: favorites.ordered.count)
+                    dataMetric(title: "Pins", count: pins.ordered.count)
                     metricSlit
                     dataMetric(title: "Memos", count: memos.notes.count)
                     metricSlit
@@ -167,7 +207,7 @@ struct SettingsOverlay: View {
                         .stroke(Theme.border, lineWidth: 1)
                 )
 
-                // Export / import favorites + memos + specimens (tags live inside memos).
+                // Export / import pins + memos + specimens (tags live inside memos).
                 backupRow(
                     title: "Export",
                     detail: "Back up your current app data. Saved as a JSON file.",
@@ -187,7 +227,7 @@ struct SettingsOverlay: View {
                         Text("Reset everything")
                             .font(.system(size: SettingsType.body))
                             .foregroundStyle(.primary)
-                        Text("Clears favorites, memos, theme, wallpaper and window size — back to a fresh install.")
+                        Text("Clears pins, memos, theme, wallpaper and window size — back to a fresh install.")
                             .font(.system(size: SettingsType.small))
                             .foregroundStyle(.tertiary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -291,7 +331,7 @@ struct SettingsOverlay: View {
                 )
                 .fixedSize(horizontal: false, vertical: true)
 
-                Text("v \(Theme.appVersion) : Updating is now one click — the update toast and the Settings check popup download the new release's disk image into Downloads and open it for you, instead of sending you to the GitHub page.")
+                Text("v \(Theme.appVersion) : Favorites are now Pins — the panels, detail view, filters and backups all speak Pin, and the filter shortcut moved from F to P. Your existing data carries over automatically.")
                     .font(.system(size: SettingsType.small))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -307,7 +347,7 @@ struct SettingsOverlay: View {
                 shortcutRow("⌘ F", "Focus search")
                 shortcutRow("T", "Toggle dark / light theme")
                 shortcutRow("W", "Cycle weights filter")
-                shortcutRow("F", "Favorites filter")
+                shortcutRow("P", "Pinned filter")
                 shortcutRow("M", "Memos filter")
                 shortcutRow("0–4", "Wallpaper (0 = none)")
                 shortcutRow("K J C L S O", "Toggle script bucket")
@@ -375,7 +415,7 @@ struct SettingsOverlay: View {
 
     private func exportData() {
         let payload = ExportData(
-            favorites: favorites.exportList,
+            pins: pins.exportList,
             memos: memos.exportMap,
             samples: samples.exportMap,
             muted: muted.exportList
@@ -430,7 +470,7 @@ struct SettingsOverlay: View {
         // If the app already holds user data, ask whether to merge the backup
         // into it or replace it wholesale (ImportChoicePopup, above Settings).
         // With nothing to lose, just load.
-        let hasExistingData = !favorites.exportList.isEmpty
+        let hasExistingData = !pins.exportList.isEmpty
             || !memos.exportMap.isEmpty
             || !samples.exportMap.isEmpty
             || !muted.exportList.isEmpty
@@ -447,12 +487,12 @@ struct SettingsOverlay: View {
     private func applyImport(_ payload: ExportData, replace: Bool) {
         vm.pendingImport = nil
         if replace {
-            favorites.clearAll()
+            pins.clearAll()
             memos.clearAll()
             samples.clearAll()
             muted.clearAll()
         }
-        favorites.merge(payload.favorites)
+        pins.merge(payload.pins)
         memos.merge(payload.memos)
         samples.merge(payload.samples ?? [:])
         muted.merge(payload.muted ?? [])
@@ -462,7 +502,7 @@ struct SettingsOverlay: View {
             guard count > 0 else { return }
             parts.append("\(count) \(count == 1 ? singular : plural)")
         }
-        add(payload.favorites.count, "favorite", "favorites")
+        add(payload.pins.count, "pin", "pins")
         add(payload.memos.count, "memo", "memos")
         add((payload.samples ?? [:]).count, "specimen", "specimens")
         add((payload.muted ?? []).count, "muted", "muted")
@@ -471,7 +511,7 @@ struct SettingsOverlay: View {
         // Names in the backup that aren't installed on this Mac — their
         // entries persist invisibly until the font appears.
         let installed = Set(vm.library.families.map(\.name))
-        var incoming = Set(payload.favorites)
+        var incoming = Set(payload.pins)
         incoming.formUnion(payload.memos.keys)
         incoming.formUnion((payload.samples ?? [:]).keys)
         incoming.formUnion(payload.muted ?? [])
@@ -490,7 +530,7 @@ struct SettingsOverlay: View {
     // MARK: - Reset
 
     private func resetEverything() {
-        favorites.clearAll()
+        pins.clearAll()
         memos.clearAll()
         samples.clearAll()
         muted.clearAll()

@@ -2,7 +2,7 @@ import Foundation
 
 /// Fonts the user has marked as "muted" (not wanted). Muted families are dimmed
 /// in the grid and detail view, and the Collections muted filter can hide them,
-/// show them, or show only them. Mirrors FavoritesStore's persistence.
+/// show them, or show only them. Mirrors PinsStore's persistence.
 @MainActor
 final class MutedStore: ObservableObject {
     @Published private(set) var names: Set<String> = []

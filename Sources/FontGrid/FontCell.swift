@@ -13,7 +13,7 @@ struct FontCell: View {
     var onHoverChange: (Bool) -> Void = { _ in }
     let onTap: () -> Void
 
-    @EnvironmentObject var favorites: FavoritesStore
+    @EnvironmentObject var pins: PinsStore
     @EnvironmentObject var memos: MemoStore
     @EnvironmentObject var samples: SampleStore
     @EnvironmentObject var inputSource: InputSourceManager
@@ -23,7 +23,7 @@ struct FontCell: View {
     // Light mode uses lighter shadows (30% of the dark-mode strength).
     private var shadowScale: Double { colorScheme == .light ? 0.3 : 1.0 }
 
-    private var isFavorited: Bool { favorites.contains(family.name) }
+    private var isPinned: Bool { pins.contains(family.name) }
     private var hasMemo: Bool { memos.hasNote(for: family.name) }
     private var hasSpecimen: Bool { samples.hasSample(for: family.name) }
 
@@ -127,14 +127,14 @@ struct FontCell: View {
 
     private var borderColor: Color {
         if hasMemo { return Theme.memoAccent }
-        if isFavorited { return Theme.accent.opacity(0.45) }
+        if isPinned { return Theme.accent.opacity(0.45) }
         if hovering { return Theme.borderHover }
         return Theme.border
     }
 
     @ViewBuilder
     private var trailingBadge: some View {
-        if hovering || isFavorited || hasAnnotationDot {
+        if hovering || isPinned || hasAnnotationDot {
             HStack(spacing: 3) {
                 if hasAnnotationDot {
                     Group {
@@ -148,10 +148,10 @@ struct FontCell: View {
                     }
                     .frame(width: 9, height: 9)
                 }
-                if hovering || isFavorited {
-                    Button { favorites.toggle(family.name) } label: {
+                if hovering || isPinned {
+                    Button { pins.toggle(family.name) } label: {
                         ZStack {
-                            if isFavorited {
+                            if isPinned {
                                 Circle().fill(Theme.accent)
                             } else {
                                 Circle().fill(Color.white.opacity(0.12))

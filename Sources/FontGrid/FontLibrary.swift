@@ -58,7 +58,7 @@ struct FontFamily: Identifiable, Hashable {
 }
 
 extension FontFamily {
-    /// PostScript name to use for compact list previews (e.g. the favorites
+    /// PostScript name to use for compact list previews (e.g. the pins
     /// panel), so the weight is deterministic instead of whatever Core Text
     /// resolves from a bare family name. Rule:
     ///   1. a member whose face is literally named "Regular"

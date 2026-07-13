@@ -83,14 +83,14 @@ struct ImportChoicePopup: View {
         }
     }
 
-    // e.g. "12 favorites · 34 memos · 3 specimens · 2 muted"
+    // e.g. "12 pins · 34 memos · 3 specimens · 2 muted"
     private var payloadSummary: String {
         var parts: [String] = []
         func add(_ count: Int, _ noun: String) {
             guard count > 0 else { return }
             parts.append("\(count) \(noun)")
         }
-        add(payload.favorites.count, payload.favorites.count == 1 ? "favorite" : "favorites")
+        add(payload.pins.count, payload.pins.count == 1 ? "pin" : "pins")
         add(payload.memos.count, payload.memos.count == 1 ? "memo" : "memos")
         add((payload.samples ?? [:]).count, (payload.samples ?? [:]).count == 1 ? "specimen" : "specimens")
         add((payload.muted ?? []).count, "muted")

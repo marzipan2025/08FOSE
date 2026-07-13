@@ -137,7 +137,7 @@ struct LeftPanel: View {
         }
     }
 
-    // Favorites / Memo filters, pulled out of the old "Sortings" group into
+    // Pins / Memo filters, pulled out of the old "Sortings" group into
     // their own labeled section.
     private var collectionsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -145,7 +145,7 @@ struct LeftPanel: View {
                 .font(.system(size: Theme.smallSize))
                 .foregroundStyle(.secondary)
             HStack(spacing: 6) {
-                favoritesOnlyToggle
+                pinnedOnlyToggle
                 memoOnlyToggle
             }
             HStack(spacing: 6) {
@@ -155,7 +155,7 @@ struct LeftPanel: View {
         }
     }
 
-    // Show only muted fonts (mirrors Favorites/Memo only). Always enabled — with
+    // Show only muted fonts (mirrors Pins/Memo only). Always enabled — with
     // nothing muted it just shows the "Nothing found" empty state.
     private var mutedOnlyToggle: some View {
         filterPill(
@@ -208,15 +208,15 @@ struct LeftPanel: View {
         }
     }
 
-    private var favoritesOnlyToggle: some View {
-        // Always enabled — with no favorites it just shows the empty "Nothing
+    private var pinnedOnlyToggle: some View {
+        // Always enabled — with no pins it just shows the empty "Nothing
         // found" state, like any other filter.
         filterPill(
-            label: "Favorites",
+            label: "Pinned",
             icon: nil,
-            isOn: vm.favoritesOnly
+            isOn: vm.pinnedOnly
         ) {
-            vm.favoritesOnly.toggle()
+            vm.pinnedOnly.toggle()
         }
     }
 

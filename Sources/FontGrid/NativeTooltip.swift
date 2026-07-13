@@ -5,7 +5,7 @@ import AppKit
 ///
 /// SwiftUI's `.help()` re-registers its tooltip rectangle on every body
 /// evaluation. For views that re-render while the pointer sits still — hover
-/// state changes, the weight-cycling font preview, favorite-row shadows —
+/// state changes, the weight-cycling font preview, pin-row shadows —
 /// that re-registration restarts `NSToolTipManager`'s show sequence. Because
 /// the rect is torn down and re-added while the pointer is *already inside*
 /// it (with no fresh mouse-moved event), the manager never starts a new show

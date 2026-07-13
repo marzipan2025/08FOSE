@@ -3,7 +3,7 @@ import AppKit
 
 enum Theme {
     // App
-    static let appVersion = "0.8.0"
+    static let appVersion = "0.8.1"
 
     // Panels
     static let panelDefaultWidth: CGFloat = 240
@@ -73,7 +73,7 @@ enum Theme {
     // Hover state for buttons — a touch denser than surfaceFill.
     static let surfaceFillHover = adaptive(dark: NSColor(white: 1, alpha: 0.12),
                                            light: NSColor(white: 0, alpha: 0.07))
-    // Favorite row hover fill — brighter than the sidebar so the row lifts.
+    // Pin row hover fill — brighter than the sidebar so the row lifts.
     static let rowHoverFill = adaptive(dark: NSColor(white: 0.22, alpha: 1),
                                        light: NSColor(white: 1.0, alpha: 1))
     static let memoSurface = adaptive(dark: NSColor(white: 1, alpha: 0.05),

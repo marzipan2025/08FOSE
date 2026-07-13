@@ -30,7 +30,7 @@ final class AppViewModel: ObservableObject {
     // and rewritten on every change via didSet.
     private static let searchQueryKey = "searchQuery"
     private static let weightFilterKey = "weightFilter"
-    private static let favoritesOnlyKey = "favoritesOnly"
+    private static let pinnedOnlyKey = "pinnedOnly"
     private static let memoOnlyKey = "memoOnly"
     private static let scriptFilterKey = "scriptFilter"
     private static let activeTagKey = "activeTag"
@@ -43,8 +43,8 @@ final class AppViewModel: ObservableObject {
     @Published var weightFilter: WeightFilter = AppViewModel.loadWeightFilter() {
         didSet { UserDefaults.standard.set(Self.encodeWeightFilter(weightFilter), forKey: Self.weightFilterKey) }
     }
-    @Published var favoritesOnly: Bool = UserDefaults.standard.bool(forKey: AppViewModel.favoritesOnlyKey) {
-        didSet { UserDefaults.standard.set(favoritesOnly, forKey: Self.favoritesOnlyKey) }
+    @Published var pinnedOnly: Bool = UserDefaults.standard.bool(forKey: AppViewModel.pinnedOnlyKey) {
+        didSet { UserDefaults.standard.set(pinnedOnly, forKey: Self.pinnedOnlyKey) }
     }
     @Published var memoOnly: Bool = UserDefaults.standard.bool(forKey: AppViewModel.memoOnlyKey) {
         didSet { UserDefaults.standard.set(memoOnly, forKey: Self.memoOnlyKey) }
@@ -72,7 +72,7 @@ final class AppViewModel: ObservableObject {
         mutedFilter = (mutedFilter == .shown) ? .hidden : .shown
     }
 
-    // Show only muted fonts (mirrors favoritesOnly / memoOnly). Takes precedence
+    // Show only muted fonts (mirrors pinnedOnly / memoOnly). Takes precedence
     // over mutedFilter when on.
     private static let mutedOnlyKey = "mutedOnly"
     @Published var mutedOnly: Bool = UserDefaults.standard.bool(forKey: AppViewModel.mutedOnlyKey) {
@@ -241,12 +241,12 @@ final class AppViewModel: ObservableObject {
         return max(1, UserDefaults.standard.integer(forKey: columnCountKey))
     }
 
-    // Favorites list order: false = alphabetical (가나다), true = most recent first.
+    // Pins list order: false = alphabetical (가나다), true = most recent first.
     // Default to Recent (most-recent-first) when unset; distinguish "never set"
     // from a stored false.
-    @Published var favoritesByRecent: Bool =
-        UserDefaults.standard.object(forKey: "favoritesByRecent") as? Bool ?? true {
-        didSet { UserDefaults.standard.set(favoritesByRecent, forKey: "favoritesByRecent") }
+    @Published var pinsByRecent: Bool =
+        UserDefaults.standard.object(forKey: "pinsByRecent") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(pinsByRecent, forKey: "pinsByRecent") }
     }
 
     // Appearance: false = dark (default), true = light. Persisted.
@@ -269,7 +269,7 @@ final class AppViewModel: ObservableObject {
 
     // Where the open detail view was launched from — decides which ordered list
     // the left/right arrow keys step through.
-    enum DetailSource { case grid, favorites }
+    enum DetailSource { case grid, pins }
     @Published var detailSource: DetailSource = .grid
 
     init() {
@@ -305,12 +305,12 @@ final class AppViewModel: ObservableObject {
     }
 
     // Wipe ALL persisted state and return every in-memory setting to its
-    // first-launch default. Favorites/memos are cleared by their own stores
+    // first-launch default. Pins/memos are cleared by their own stores
     // (see SettingsView.resetEverything); this handles the view-model's own
     // persisted keys (wallpaper, theme, sort order) and live UI state.
     func resetToDefaults() {
         // Remove the entire app defaults domain (wallpaper, theme, sort order,
-        // preview text, favorites/memos keys, the saved window frame, …).
+        // preview text, pins/memos keys, the saved window frame, …).
         if let bundleID = Bundle.main.bundleIdentifier {
             UserDefaults.standard.removePersistentDomain(forName: bundleID)
         }
@@ -319,7 +319,7 @@ final class AppViewModel: ObservableObject {
         darkWallpaper = ""
         lightWallpaper = ""
         isLightMode = false
-        favoritesByRecent = true
+        pinsByRecent = true
         columnCount = 4
         maxColumns = 6
         leftPanelWidth = Self.defaultLeftPanelWidth
@@ -327,7 +327,7 @@ final class AppViewModel: ObservableObject {
         previewSizeOffset = 0
         activeTag = nil
         weightFilter = .all
-        favoritesOnly = false
+        pinnedOnly = false
         memoOnly = false
         scriptFilter = []
         mutedFilter = .shown

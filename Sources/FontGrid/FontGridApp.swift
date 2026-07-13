@@ -160,9 +160,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
+// One-time UserDefaults migration from the pre-rename (Favorites-era) key
+// names. Runs in FontGridApp.init, before any store or view model reads
+// defaults, so existing pins and filter state survive the update.
+enum LegacyKeyMigration {
+    static func run() {
+        let defaults = UserDefaults.standard
+        let renames = [
+            ("FontGrid.favorites", "FontGrid.pins"),
+            ("favoritesOnly", "pinnedOnly"),
+            ("favoritesByRecent", "pinsByRecent"),
+        ]
+        for (old, new) in renames {
+            if defaults.object(forKey: new) == nil,
+               let value = defaults.object(forKey: old) {
+                defaults.set(value, forKey: new)
+            }
+            defaults.removeObject(forKey: old)
+        }
+    }
+}
+
 @main
 struct FontGridApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
+    init() { LegacyKeyMigration.run() }
 
     var body: some Scene {
         WindowGroup {
