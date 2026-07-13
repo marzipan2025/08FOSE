@@ -4,18 +4,20 @@ import SwiftUI
 // Result of one update check against the GitHub releases feed.
 enum UpdateStatus: Equatable {
     case upToDate(current: String)
-    case available(latest: String, current: String)
+    case available(latest: String, current: String, dmgURL: URL?)
     case failed
 }
 
-// Notify-only update check against the public GitHub releases feed: no
-// downloading, no self-update — a newer release just links to the releases
-// page in the browser.
+// Update check against the public GitHub releases feed. A newer release
+// offers a one-click download: the dmg asset is saved to ~/Downloads and
+// opened (macOS mounts it). No self-update — installing is still the user
+// dragging the app into /Applications. Releases without a dmg asset fall
+// back to opening the releases page in the browser.
 //
 // Two entry points share fetchStatus():
 //  - launch: the result becomes a toast (up-to-date auto-dismisses; a newer
-//    release carries a View button). Failures stay silent — an unasked-for
-//    update nudge is never worth an error.
+//    release carries a Download button). Failures stay silent — an
+//    unasked-for update nudge is never worth an error.
 //  - Settings "Check" button: the result becomes UpdateResultPopup, where a
 //    failure IS shown (the user explicitly asked).
 @MainActor
@@ -37,14 +39,20 @@ enum UpdateCheck {
                     title: "You're up to date",
                     detail: "v \(current) is the latest version."
                 ))
-            case .available(let latest, let current):
+            case .available(let latest, let current, let dmgURL):
                 toasts.show(Toast(
                     style: .info,
                     title: "Update available — v \(latest)",
                     detail: "You're on v \(current).",
                     icon: "arrow.down.circle",
-                    actionLabel: "View",
-                    action: { openReleasesPage() }
+                    actionLabel: dmgURL != nil ? "Download" : "View",
+                    action: {
+                        if let dmgURL {
+                            downloadAndMount(dmgURL, version: latest, toasts: toasts)
+                        } else {
+                            openReleasesPage()
+                        }
+                    }
                 ))
             case .failed:
                 break
@@ -53,17 +61,65 @@ enum UpdateCheck {
     }
 
     static func fetchStatus() async -> UpdateStatus {
-        guard let tag = await fetchLatestTag() else { return .failed }
-        let latest = tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
+        guard let release = await fetchLatestRelease() else { return .failed }
+        let latest = release.tag.hasPrefix("v") ? String(release.tag.dropFirst()) : release.tag
         return isNewer(latest, than: Theme.appVersion)
-            ? .available(latest: latest, current: Theme.appVersion)
+            ? .available(latest: latest, current: Theme.appVersion, dmgURL: release.dmgURL)
             : .upToDate(current: Theme.appVersion)
     }
 
-    // tag_name of the latest (non-draft, non-prerelease) release, or nil on
-    // any failure. Unauthenticated: fine at this frequency (the API allows
-    // 60 calls/hour per IP).
-    private static func fetchLatestTag() async -> String? {
+    // Saves the release's dmg into ~/Downloads and opens it, which mounts the
+    // disk image. Progress rides on the toast layer: a sticky "Downloading…"
+    // toast while the transfer runs, replaced by success (mount) or an error
+    // toast whose View button falls back to the releases page.
+    static func downloadAndMount(_ dmgURL: URL, version: String, toasts: ToastCenter) {
+        Task {
+            toasts.show(Toast(
+                style: .info,
+                title: "Downloading v \(version)…",
+                detail: "The disk image will open when it's ready.",
+                icon: "arrow.down.circle",
+                sticky: true
+            ))
+            do {
+                let (tmp, response) = try await URLSession.shared.download(from: dmgURL)
+                if let http = response as? HTTPURLResponse,
+                   !(200..<300).contains(http.statusCode) {
+                    throw URLError(.badServerResponse)
+                }
+                let folder = FileManager.default
+                    .urls(for: .downloadsDirectory, in: .userDomainMask).first
+                    ?? FileManager.default.temporaryDirectory
+                let dest = folder.appendingPathComponent(dmgURL.lastPathComponent)
+                try? FileManager.default.removeItem(at: dest)
+                try FileManager.default.moveItem(at: tmp, to: dest)
+                NSWorkspace.shared.open(dest)
+                toasts.show(Toast(
+                    style: .success,
+                    title: "Downloaded v \(version)",
+                    detail: "Opening the disk image — drag 08FOSE into Applications."
+                ))
+            } catch {
+                toasts.show(Toast(
+                    style: .error,
+                    title: "Download failed",
+                    detail: "The disk image couldn't be fetched from GitHub.",
+                    actionLabel: "View",
+                    action: { openReleasesPage() }
+                ))
+            }
+        }
+    }
+
+    private struct LatestRelease {
+        let tag: String
+        let dmgURL: URL?
+    }
+
+    // Latest (non-draft, non-prerelease) release: its tag_name plus the first
+    // .dmg asset's download URL, or nil on any failure. Unauthenticated: fine
+    // at this frequency (the API allows 60 calls/hour per IP).
+    private static func fetchLatestRelease() async -> LatestRelease? {
         var request = URLRequest(url: latestAPIURL)
         request.timeoutInterval = 10
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
@@ -72,7 +128,10 @@ enum UpdateCheck {
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let tag = object["tag_name"] as? String
         else { return nil }
-        return tag
+        let assets = object["assets"] as? [[String: Any]] ?? []
+        let dmg = assets.first { ($0["name"] as? String)?.hasSuffix(".dmg") == true }
+        let dmgURL = (dmg?["browser_download_url"] as? String).flatMap(URL.init(string:))
+        return LatestRelease(tag: tag, dmgURL: dmgURL)
     }
 
     // Numeric component-wise semver compare ("0.7.10" > "0.7.9"); missing
@@ -92,13 +151,15 @@ enum UpdateCheck {
 // In-app modal card showing the result of a manual update check (Settings →
 // Updates → Check). Same card language as the rename-tag / import-choice
 // popups. ESC / ✕ / backdrop close it; the available state adds a button
-// that opens the releases page in the browser.
+// that downloads the dmg and mounts it (or, with no dmg asset, opens the
+// releases page in the browser).
 struct UpdateResultPopup: View {
     let status: UpdateStatus
     let onClose: () -> Void
 
     @State private var primaryHovering = false
     @Environment(\.colorScheme) private var colorScheme
+    @EnvironmentObject private var toasts: ToastCenter
 
     var body: some View {
         ZStack {
@@ -133,11 +194,18 @@ struct UpdateResultPopup: View {
 
             // Only the available state carries a button (left-aligned); the
             // up-to-date / failed cards close via ✕ / ESC / backdrop only.
-            if case .available = status {
+            if case .available(let latest, _, let dmgURL) = status {
                 HStack {
-                    popupButton("View Release", tint: Theme.accent, hovering: $primaryHovering) {
-                        UpdateCheck.openReleasesPage()
-                        onClose()
+                    if let dmgURL {
+                        popupButton("Download & Open", tint: Theme.accent, hovering: $primaryHovering) {
+                            UpdateCheck.downloadAndMount(dmgURL, version: latest, toasts: toasts)
+                            onClose()
+                        }
+                    } else {
+                        popupButton("View Release", tint: Theme.accent, hovering: $primaryHovering) {
+                            UpdateCheck.openReleasesPage()
+                            onClose()
+                        }
                     }
                     Spacer()
                 }
@@ -177,7 +245,7 @@ struct UpdateResultPopup: View {
     private var versionLine: String {
         switch status {
         case .upToDate(let current):        return "v \(current)"
-        case .available(let latest, let current): return "v \(current) → v \(latest)"
+        case .available(let latest, let current, _): return "v \(current) → v \(latest)"
         case .failed:                       return "v \(Theme.appVersion)"
         }
     }
@@ -186,8 +254,10 @@ struct UpdateResultPopup: View {
         switch status {
         case .upToDate:
             return "This is the latest release on GitHub — there's nothing new to download."
-        case .available:
-            return "A newer release is ready on GitHub. Open the releases page to download it."
+        case .available(_, _, let dmgURL):
+            return dmgURL != nil
+                ? "A newer release is ready on GitHub. Download it and the disk image opens by itself."
+                : "A newer release is ready on GitHub. Open the releases page to download it."
         case .failed:
             return "GitHub couldn't be reached. Check your connection and try again."
         }

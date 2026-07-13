@@ -16,15 +16,18 @@ struct Toast: Identifiable, Equatable {
     var icon: String? = nil
     var actionLabel: String? = nil
     var action: (() -> Void)? = nil
+    // Never auto-dismisses (e.g. a download in progress); errors are always
+    // sticky regardless.
+    var sticky: Bool = false
 
     // Identity-based: a re-shown toast (new id) re-triggers the transition
     // even when the text happens to be identical.
     static func == (lhs: Toast, rhs: Toast) -> Bool { lhs.id == rhs.id }
 
-    // nil = sticky (errors). Action toasts get a longer window so the user
-    // can actually reach the button.
+    // nil = sticky. Action toasts get a longer window so the user can
+    // actually reach the button.
     var duration: Double? {
-        if style == .error { return nil }
+        if sticky || style == .error { return nil }
         return actionLabel != nil ? 4.0 : 2.0
     }
 
@@ -144,7 +147,7 @@ struct ToastView: View {
                 .padding(.leading, 4)
             }
 
-            if toast.style == .error {
+            if toast.duration == nil {
                 Button(action: onDismiss) {
                     Image(systemName: "xmark")
                         .font(.system(size: 10, weight: .medium))

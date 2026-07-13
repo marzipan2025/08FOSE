@@ -291,7 +291,7 @@ struct SettingsOverlay: View {
                 )
                 .fixedSize(horizontal: false, vertical: true)
 
-                Text("v \(Theme.appVersion) : The Data section now shows Favorites, Memos, Specimens and Tags counts in a single box, with Reset everything folded in and the per-item Clear buttons removed.")
+                Text("v \(Theme.appVersion) : Updating is now one click — the update toast and the Settings check popup download the new release's disk image into Downloads and open it for you, instead of sending you to the GitHub page.")
                     .font(.system(size: SettingsType.small))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
