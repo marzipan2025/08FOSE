@@ -10,7 +10,9 @@ enum UpdateStatus: Equatable {
 
 // Update check against the public GitHub releases feed. A newer release
 // offers a one-click download: the dmg asset is saved to ~/Downloads and
-// opened (macOS mounts it). No self-update — installing is still the user
+// opened (macOS mounts it). Once the volume mounts, a "Quit & Install" toast
+// appears so the user can close the running app (freeing /Applications) before
+// dragging the new build in. No self-update — installing is still the user
 // dragging the app into /Applications. Releases without a dmg asset fall
 // back to opening the releases page in the browser.
 //
@@ -69,8 +71,11 @@ enum UpdateCheck {
 
     // Saves the release's dmg into ~/Downloads and opens it, which mounts the
     // disk image. Progress rides on the toast layer: a sticky "Downloading…"
-    // toast while the transfer runs, replaced by success (mount) or an error
-    // toast whose View button falls back to the releases page.
+    // toast while the transfer runs, then a brief "Downloaded — opening…"
+    // success. When the volume finishes mounting (detected via
+    // observeMountThenOfferInstall) that's swapped for a sticky "Quit &
+    // Install" toast. A transfer failure shows an error toast whose View
+    // button falls back to the releases page.
     static func downloadAndMount(_ dmgURL: URL, version: String, toasts: ToastCenter) {
         Task {
             toasts.show(Toast(
@@ -92,11 +97,15 @@ enum UpdateCheck {
                 let dest = folder.appendingPathComponent(dmgURL.lastPathComponent)
                 try? FileManager.default.removeItem(at: dest)
                 try FileManager.default.moveItem(at: tmp, to: dest)
+                // Arm the mount watcher BEFORE opening so the notification can't
+                // be missed, then open the dmg (which triggers the mount).
+                observeMountThenOfferInstall(version: version, toasts: toasts)
                 NSWorkspace.shared.open(dest)
                 toasts.show(Toast(
                     style: .success,
                     title: "Downloaded v \(version)",
-                    detail: "Opening the disk image — drag 08FOSE into Applications."
+                    detail: "Opening the disk image…",
+                    icon: "arrow.down.circle"
                 ))
             } catch {
                 toasts.show(Toast(
@@ -108,6 +117,56 @@ enum UpdateCheck {
                 ))
             }
         }
+    }
+
+    // Non-nil while we're watching for the just-downloaded dmg to finish
+    // mounting; lets a repeat download tear down the previous watcher.
+    private static var mountObserver: NSObjectProtocol?
+
+    // Watch for OUR dmg's volume mounting, then replace the progress toast with
+    // a sticky "Quit & Install" toast. Installing stays manual (the user drags
+    // 08FOSE onto Applications in the mounted window), but quitting first frees
+    // /Applications so the copy can't hit an "app is in use" wall — and by then
+    // the disk-image window already shows the drag-to-Applications layout.
+    // One-shot: the observer removes itself once our volume appears.
+    private static func observeMountThenOfferInstall(version: String, toasts: ToastCenter) {
+        let center = NSWorkspace.shared.notificationCenter
+        if let existing = mountObserver {
+            center.removeObserver(existing)
+            mountObserver = nil
+        }
+        mountObserver = center.addObserver(
+            forName: NSWorkspace.didMountNotification,
+            object: nil,
+            queue: .main
+        ) { note in
+            // queue: .main → this runs on the main thread.
+            guard let url = mountedVolumeURL(from: note),
+                  // Our dmg mounts as /Volumes/08FOSE (a stale mount adds a
+                  // " 1" suffix, still caught by the prefix).
+                  url.lastPathComponent.hasPrefix("08FOSE") else { return }
+            if let observer = mountObserver {
+                center.removeObserver(observer)
+                mountObserver = nil
+            }
+            toasts.show(Toast(
+                style: .success,
+                title: "Ready to install — v \(version)",
+                detail: "Quit 08FOSE, then drag it onto Applications in the disk-image window.",
+                icon: "arrow.down.circle",
+                actionLabel: "Quit & Install",
+                action: { NSApp.terminate(nil) },
+                sticky: true
+            ))
+        }
+    }
+
+    // The mounted volume's location from a didMountNotification: the modern URL
+    // key, falling back to the legacy device-path string.
+    private static func mountedVolumeURL(from note: Notification) -> URL? {
+        if let url = note.userInfo?[NSWorkspace.volumeURLUserInfoKey] as? URL { return url }
+        if let path = note.userInfo?["NSDevicePath"] as? String { return URL(fileURLWithPath: path) }
+        return nil
     }
 
     private struct LatestRelease {
