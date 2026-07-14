@@ -192,7 +192,14 @@ struct FontGridApp: App {
             RootView()
                 .frame(minWidth: 880, minHeight: 640)
         }
-        .windowStyle(.titleBar)
+        // .hiddenTitleBar, not .titleBar: the window is BORN transparent-titlebar +
+        // full-size-content, so the very first frame already looks right. With
+        // .titleBar the window showed a standard titlebar strip for one frame
+        // before AppDelegate's (deferred) applyWindowStyleNow collapsed it —
+        // that flash read as a navbar briefly appearing then vanishing on launch.
+        // AppDelegate still runs to reposition the traffic lights, drop the
+        // titlebar separator, and re-apply after fullscreen transitions.
+        .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1280, height: 860)
     }
 }

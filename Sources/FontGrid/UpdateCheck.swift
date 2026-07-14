@@ -15,9 +15,9 @@ enum UpdateStatus: Equatable {
 // back to opening the releases page in the browser.
 //
 // Two entry points share fetchStatus():
-//  - launch: the result becomes a toast (up-to-date auto-dismisses; a newer
-//    release carries a Download button). Failures stay silent — an
-//    unasked-for update nudge is never worth an error.
+//  - launch: only a newer release surfaces a toast (carrying a Download
+//    button). Up-to-date and failure both stay silent — an unprompted
+//    "you're current" toast, or an error, is never worth interrupting launch.
 //  - Settings "Check" button: the result becomes UpdateResultPopup, where a
 //    failure IS shown (the user explicitly asked).
 @MainActor
@@ -33,12 +33,11 @@ enum UpdateCheck {
     static func checkOnLaunch(toasts: ToastCenter) {
         Task {
             switch await fetchStatus() {
-            case .upToDate(let current):
-                toasts.show(Toast(
-                    style: .success,
-                    title: "You're up to date",
-                    detail: "v \(current) is the latest version."
-                ))
+            case .upToDate:
+                // Already on the latest release: stay silent. An unprompted
+                // "you're up to date" toast on every launch is just noise —
+                // the launch toast is reserved for when there's an update.
+                break
             case .available(let latest, let current, let dmgURL):
                 toasts.show(Toast(
                     style: .info,
