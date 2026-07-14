@@ -8,13 +8,13 @@ enum UpdateStatus: Equatable {
     case failed
 }
 
-// Update check against the public GitHub releases feed. A newer release
-// offers a one-click download: the dmg asset is saved to ~/Downloads and
-// opened (macOS mounts it). Once the volume mounts, a "Quit & Install" toast
-// appears so the user can close the running app (freeing /Applications) before
-// dragging the new build in. No self-update — installing is still the user
-// dragging the app into /Applications. Releases without a dmg asset fall
-// back to opening the releases page in the browser.
+// Update check against the public GitHub releases feed. A newer release offers
+// a one-click, self-contained install: the dmg is downloaded to a temp dir and
+// mounted silently (no Finder window); an "Install & Relaunch" toast then lets
+// a detached helper replace the running bundle in place, unmount, and relaunch,
+// after which the fresh instance confirms with an "Updated to vX" toast.
+// Releases without a dmg asset fall back to opening the releases page in the
+// browser.
 //
 // Two entry points share fetchStatus():
 //  - launch: only a newer release surfaces a toast (carrying a Download
@@ -49,7 +49,7 @@ enum UpdateCheck {
                     actionLabel: dmgURL != nil ? "Download" : "View",
                     action: {
                         if let dmgURL {
-                            downloadAndMount(dmgURL, version: latest, toasts: toasts)
+                            downloadAndInstall(dmgURL, version: latest, toasts: toasts)
                         } else {
                             openReleasesPage()
                         }
@@ -69,19 +69,19 @@ enum UpdateCheck {
             : .upToDate(current: Theme.appVersion)
     }
 
-    // Saves the release's dmg into ~/Downloads and opens it, which mounts the
-    // disk image. Progress rides on the toast layer: a sticky "Downloading…"
-    // toast while the transfer runs, then a brief "Downloaded — opening…"
-    // success. When the volume finishes mounting (detected via
-    // observeMountThenOfferInstall) that's swapped for a sticky "Quit &
-    // Install" toast. A transfer failure shows an error toast whose View
-    // button falls back to the releases page.
-    static func downloadAndMount(_ dmgURL: URL, version: String, toasts: ToastCenter) {
+    enum UpdateError: Error { case mountFailed }
+
+    // Downloads the release dmg to a temp location, mounts it silently (no
+    // Finder window), verifies the app is inside, and offers a single
+    // "Install & Relaunch" confirmation. The actual install runs in a detached
+    // helper (see installAndRelaunch). A failure at any step shows an error
+    // toast whose View button falls back to the releases page.
+    static func downloadAndInstall(_ dmgURL: URL, version: String, toasts: ToastCenter) {
         Task {
             toasts.show(Toast(
                 style: .info,
                 title: "Downloading v \(version)…",
-                detail: "The disk image will open when it's ready.",
+                detail: "Preparing the update in the background.",
                 icon: "arrow.down.circle",
                 sticky: true
             ))
@@ -91,27 +91,42 @@ enum UpdateCheck {
                    !(200..<300).contains(http.statusCode) {
                     throw URLError(.badServerResponse)
                 }
-                let folder = FileManager.default
-                    .urls(for: .downloadsDirectory, in: .userDomainMask).first
-                    ?? FileManager.default.temporaryDirectory
-                let dest = folder.appendingPathComponent(dmgURL.lastPathComponent)
-                try? FileManager.default.removeItem(at: dest)
-                try FileManager.default.moveItem(at: tmp, to: dest)
-                // Arm the mount watcher BEFORE opening so the notification can't
-                // be missed, then open the dmg (which triggers the mount).
-                observeMountThenOfferInstall(version: version, toasts: toasts)
-                NSWorkspace.shared.open(dest)
+                // The dmg lives in a temp dir; the installer deletes it after.
+                let dmgDest = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("08FOSE-\(version).dmg")
+                try? FileManager.default.removeItem(at: dmgDest)
+                try FileManager.default.moveItem(at: tmp, to: dmgDest)
+
+                // Mount without a Finder window and locate the app inside.
+                guard let mountPoint = await attachDMG(at: dmgDest.path) else {
+                    throw UpdateError.mountFailed
+                }
+                let appSource = (mountPoint as NSString).appendingPathComponent("08FOSE.app")
+                guard FileManager.default.fileExists(atPath: appSource) else {
+                    _ = await runProcessData("/usr/bin/hdiutil", ["detach", mountPoint, "-quiet"])
+                    throw UpdateError.mountFailed
+                }
+
+                // Everything staged — one confirmation drives the rest.
                 toasts.show(Toast(
                     style: .success,
-                    title: "Downloaded v \(version)",
-                    detail: "Opening the disk image…",
-                    icon: "arrow.down.circle"
+                    title: "Ready to install — v \(version)",
+                    detail: "08FOSE will quit, update itself and reopen.",
+                    icon: "arrow.down.circle",
+                    actionLabel: "Install & Relaunch",
+                    action: {
+                        installAndRelaunch(appSource: appSource,
+                                           mountPoint: mountPoint,
+                                           dmgPath: dmgDest.path,
+                                           version: version)
+                    },
+                    sticky: true
                 ))
             } catch {
                 toasts.show(Toast(
                     style: .error,
                     title: "Download failed",
-                    detail: "The disk image couldn't be fetched from GitHub.",
+                    detail: "The update couldn't be prepared from GitHub.",
                     actionLabel: "View",
                     action: { openReleasesPage() }
                 ))
@@ -119,54 +134,118 @@ enum UpdateCheck {
         }
     }
 
-    // Non-nil while we're watching for the just-downloaded dmg to finish
-    // mounting; lets a repeat download tear down the previous watcher.
-    private static var mountObserver: NSObjectProtocol?
-
-    // Watch for OUR dmg's volume mounting, then replace the progress toast with
-    // a sticky "Quit & Install" toast. Installing stays manual (the user drags
-    // 08FOSE onto Applications in the mounted window), but quitting first frees
-    // /Applications so the copy can't hit an "app is in use" wall — and by then
-    // the disk-image window already shows the drag-to-Applications layout.
-    // One-shot: the observer removes itself once our volume appears.
-    private static func observeMountThenOfferInstall(version: String, toasts: ToastCenter) {
-        let center = NSWorkspace.shared.notificationCenter
-        if let existing = mountObserver {
-            center.removeObserver(existing)
-            mountObserver = nil
+    // Writes a detached bash helper that: waits for THIS app to quit, replaces
+    // the installed bundle (Bundle.main) with the mounted build, unmounts,
+    // deletes the dmg, and relaunches — passing -updatedTo (or -updateFailed)
+    // so the fresh instance can confirm the outcome. Then it terminates the
+    // app. A process can't atomically replace and relaunch itself, so the
+    // copy/relaunch must live in a separate process (the approach Sparkle's
+    // relauncher takes). The replace is staged (ditto → backup old → move new,
+    // restoring the backup on failure) so a mid-copy error can't leave the app
+    // missing from /Applications.
+    private static func installAndRelaunch(appSource: String, mountPoint: String,
+                                           dmgPath: String, version: String) {
+        let dest = Bundle.main.bundlePath
+        let pid = String(ProcessInfo.processInfo.processIdentifier)
+        let script = """
+        #!/bin/bash
+        APP_PID="$1"; SRC="$2"; DEST="$3"; MOUNT="$4"; DMG="$5"; VERSION="$6"
+        for i in $(seq 1 150); do kill -0 "$APP_PID" 2>/dev/null || break; sleep 0.1; done
+        OK=0
+        STAGE="${DEST}.update-$$"; BACKUP="${DEST}.old-$$"
+        rm -rf "$STAGE" "$BACKUP"
+        if ditto "$SRC" "$STAGE"; then
+          xattr -dr com.apple.quarantine "$STAGE" 2>/dev/null
+          if mv "$DEST" "$BACKUP" 2>/dev/null; then
+            if mv "$STAGE" "$DEST" 2>/dev/null; then
+              OK=1; rm -rf "$BACKUP"
+            else
+              mv "$BACKUP" "$DEST" 2>/dev/null
+            fi
+          fi
+        fi
+        rm -rf "$STAGE" 2>/dev/null
+        hdiutil detach "$MOUNT" -quiet 2>/dev/null
+        rm -f "$DMG" 2>/dev/null
+        if [ "$OK" = "1" ]; then
+          open -a "$DEST" --args -updatedTo "$VERSION"
+        else
+          open -a "$DEST" --args -updateFailed 1
+        fi
+        """
+        let scriptURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("08fose-install.sh")
+        do {
+            try script.write(to: scriptURL, atomically: true, encoding: .utf8)
+        } catch {
+            // Couldn't stage the helper — nothing destructive happened, so just
+            // leave the app running rather than quitting into a dead end.
+            return
         }
-        mountObserver = center.addObserver(
-            forName: NSWorkspace.didMountNotification,
-            object: nil,
-            queue: .main
-        ) { note in
-            // queue: .main → this runs on the main thread.
-            guard let url = mountedVolumeURL(from: note),
-                  // Our dmg mounts as /Volumes/08FOSE (a stale mount adds a
-                  // " 1" suffix, still caught by the prefix).
-                  url.lastPathComponent.hasPrefix("08FOSE") else { return }
-            if let observer = mountObserver {
-                center.removeObserver(observer)
-                mountObserver = nil
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/bash")
+        task.arguments = [scriptURL.path, pid, appSource, dest, mountPoint, dmgPath, version]
+        do { try task.run() } catch { return }
+        NSApp.terminate(nil)
+    }
+
+    // Mounts a dmg with no Finder window and returns its mount point, parsed
+    // from hdiutil's plist output (robust against the tab-delimited format).
+    private static func attachDMG(at path: String) async -> String? {
+        let data = await runProcessData(
+            "/usr/bin/hdiutil",
+            ["attach", path, "-nobrowse", "-noverify", "-plist"]
+        )
+        guard let plist = try? PropertyListSerialization.propertyList(
+                from: data, options: [], format: nil) as? [String: Any],
+              let entities = plist["system-entities"] as? [[String: Any]] else { return nil }
+        return entities.compactMap { $0["mount-point"] as? String }.first
+    }
+
+    // Runs a process off the main thread and returns its stdout. Used for
+    // hdiutil; the detached installer helper is spawned separately (fire and
+    // forget) since it must outlive this process.
+    private static func runProcessData(_ launchPath: String, _ args: [String]) async -> Data {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: launchPath)
+                process.arguments = args
+                let outPipe = Pipe()
+                process.standardOutput = outPipe
+                process.standardError = Pipe()
+                do { try process.run() } catch {
+                    continuation.resume(returning: Data()); return
+                }
+                let out = outPipe.fileHandleForReading.readDataToEndOfFile()
+                process.waitUntilExit()
+                continuation.resume(returning: out)
             }
-            toasts.show(Toast(
-                style: .success,
-                title: "Ready to install — v \(version)",
-                detail: "Quit 08FOSE, then drag it onto Applications in the disk-image window.",
-                icon: "arrow.down.circle",
-                actionLabel: "Quit & Install",
-                action: { NSApp.terminate(nil) },
-                sticky: true
-            ))
         }
     }
 
-    // The mounted volume's location from a didMountNotification: the modern URL
-    // key, falling back to the legacy device-path string.
-    private static func mountedVolumeURL(from note: Notification) -> URL? {
-        if let url = note.userInfo?[NSWorkspace.volumeURLUserInfoKey] as? URL { return url }
-        if let path = note.userInfo?["NSDevicePath"] as? String { return URL(fileURLWithPath: path) }
-        return nil
+    // Called once at launch: if we were relaunched by the installer helper,
+    // confirm the result. The flags come from the argument domain (-updatedTo /
+    // -updateFailed passed to `open --args`), so they're transient and clear on
+    // the next normal launch.
+    static func showPostUpdateToastIfNeeded(toasts: ToastCenter) {
+        let defaults = UserDefaults.standard
+        if let version = defaults.string(forKey: "updatedTo") {
+            toasts.show(Toast(
+                style: .success,
+                title: "Updated to v \(version)",
+                detail: "You're now on the latest version.",
+                icon: "checkmark.seal"
+            ))
+        } else if defaults.bool(forKey: "updateFailed") {
+            toasts.show(Toast(
+                style: .error,
+                title: "Update didn't complete",
+                detail: "08FOSE couldn't be replaced. Try again from Settings → Check for Updates.",
+                actionLabel: "View",
+                action: { openReleasesPage() }
+            ))
+        }
     }
 
     private struct LatestRelease {
@@ -256,7 +335,7 @@ struct UpdateResultPopup: View {
                 HStack {
                     if let dmgURL {
                         popupButton("Download & Open", tint: Theme.accent, hovering: $primaryHovering) {
-                            UpdateCheck.downloadAndMount(dmgURL, version: latest, toasts: toasts)
+                            UpdateCheck.downloadAndInstall(dmgURL, version: latest, toasts: toasts)
                             onClose()
                         }
                     } else {

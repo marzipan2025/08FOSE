@@ -166,8 +166,13 @@ struct RootView: View {
         .environmentObject(inputSource)
         .environmentObject(toasts)
         .preferredColorScheme(vm.isLightMode ? .light : .dark)
-        // One update check per app launch; silent unless a newer release exists.
-        .task { UpdateCheck.checkOnLaunch(toasts: toasts) }
+        // Confirm a just-completed self-update (if the installer relaunched us),
+        // then run one update check per launch; the check is silent unless a
+        // newer release exists.
+        .task {
+            UpdateCheck.showPostUpdateToastIfNeeded(toasts: toasts)
+            UpdateCheck.checkOnLaunch(toasts: toasts)
+        }
     }
 
     // Horizontal offset for the left toggle (anchored bottom-leading):
