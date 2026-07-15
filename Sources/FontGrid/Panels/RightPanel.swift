@@ -109,7 +109,7 @@ struct RightPanel: View {
                 .padding(.bottom, Theme.panelVPadding)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxHeight: expanded ? .infinity : 220)
+            .frame(maxHeight: expanded ? .infinity : 256)
             .scrollContentBackground(.hidden)
         }
     }
