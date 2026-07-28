@@ -331,7 +331,7 @@ struct SettingsOverlay: View {
                 )
                 .fixedSize(horizontal: false, vertical: true)
 
-                Text("v \(Theme.appVersion) : Variable fonts are now first class — cells mark them VF and sweep their weight on hover, the detail view adds a live weight slider (exports land as VF(nnn)), and the new Variable collection filter is on V.")
+                Text("v \(Theme.appVersion) : Variable fonts are now identified with a VF mark. Their weight can be adjusted with a slider in the detail view, and exported at the weight you choose. The new Variable filter is on V.")
                     .font(.system(size: SettingsType.small))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
