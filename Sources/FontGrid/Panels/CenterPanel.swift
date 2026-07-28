@@ -1128,6 +1128,11 @@ final class InputSourceManager: ObservableObject {
     }
 
     private func isSelectable(_ source: TISInputSource) -> Bool {
+        // Keyboard layouts / IMEs only. Palette-style sources (the Japanese
+        // 50-on palette, Character Viewer, emoji picker) also report ja/en
+        // languages and linger after their keyboard is removed, so they must be
+        // excluded or the toggle would try to switch to a palette.
+        isKeyboardSource(source) &&
         boolProperty(source, key: kTISPropertyInputSourceIsSelectCapable) &&
         boolProperty(source, key: kTISPropertyInputSourceIsEnabled)
     }
