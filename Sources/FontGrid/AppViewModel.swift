@@ -89,9 +89,12 @@ final class AppViewModel: ObservableObject {
         else { scriptFilter.insert(category) }
     }
 
-    // Canonical order of the Weights filter chips (All → 1 → 3+ → 5+), shared
-    // by the LeftPanel chips and the `w` shortcut so they stay in sync.
-    static let weightFilterCycle: [WeightFilter] = [.all, .exactly(1), .range(2, 3), .range(4, 5), .atLeast(6)]
+    // Canonical order of the Weights filter chips (All → 1 → 2+ → 5+ → 10+),
+    // shared by the LeftPanel chips and the `w` shortcut so they stay in sync.
+    // The chips are buckets, not cumulative thresholds — each "+" runs up to the
+    // next chip (2+ is 2–4, 5+ is 5–9) — so together they partition every family
+    // exactly once, with no weight count left unreachable.
+    static let weightFilterCycle: [WeightFilter] = [.all, .exactly(1), .range(2, 4), .range(5, 9), .atLeast(10)]
 
     // Advance the weight filter one step through weightFilterCycle, wrapping
     // back to .all. Bound to the `w` shortcut.

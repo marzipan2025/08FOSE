@@ -5,9 +5,12 @@ struct LeftPanel: View {
     @FocusState private var searchFocused: Bool
     @State private var settingsHovering = false
 
+    // Top row of the Weights grid; "10+" sits on the second row beside Variable.
+    // The four buckets partition the range with no gaps: 1 / 2–4 / 5–9 / 10+.
     private let weightOptions: [(label: String, value: WeightFilter)] = [
-        ("1", .exactly(1)), ("2+", .range(2, 3)), ("4+", .range(4, 5)), ("6+", .atLeast(6))
+        ("1", .exactly(1)), ("2+", .range(2, 4)), ("5+", .range(5, 9))
     ]
+    private let wideWeightOption: (label: String, value: WeightFilter) = ("10+", .atLeast(10))
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -121,19 +124,32 @@ struct LeftPanel: View {
 
     // MARK: - Filter
 
+    // Three equal columns: 1 / 3+ / 7+ on the first row, then 10+ beside the
+    // Variable filter, which spans the remaining two columns for a 1:2 split.
+    // Variable lives here rather than under Collections because it's another way
+    // of asking "what weights does this family give me" — a continuous axis
+    // instead of a count.
     private var weightFilterSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Weights")
                 .font(.system(size: Theme.smallSize))
                 .foregroundStyle(.secondary)
-            HStack(spacing: 6) {
-                ForEach(weightOptions, id: \.value) { option in
-                    PillButton(label: option.label, icon: nil, isOn: vm.weightFilter == option.value) {
-                        // Toggle: re-tapping the active chip clears to All (no chip).
-                        vm.weightFilter = (vm.weightFilter == option.value) ? .all : option.value
-                    }
+            Grid(horizontalSpacing: 6, verticalSpacing: 6) {
+                GridRow {
+                    ForEach(weightOptions, id: \.value) { weightPill($0) }
+                }
+                GridRow {
+                    weightPill(wideWeightOption)
+                    variablesOnlyToggle.gridCellColumns(2)
                 }
             }
+        }
+    }
+
+    private func weightPill(_ option: (label: String, value: WeightFilter)) -> some View {
+        PillButton(label: option.label, icon: nil, isOn: vm.weightFilter == option.value) {
+            // Toggle: re-tapping the active chip clears to All (no chip).
+            vm.weightFilter = (vm.weightFilter == option.value) ? .all : option.value
         }
     }
 
@@ -147,7 +163,6 @@ struct LeftPanel: View {
             HStack(spacing: 6) {
                 pinnedOnlyToggle
                 memoOnlyToggle
-                variablesOnlyToggle
             }
             HStack(spacing: 6) {
                 mutedToggle
@@ -156,11 +171,12 @@ struct LeftPanel: View {
         }
     }
 
-    // Show only variable fonts (mirrors Pinned / Memo). Always enabled — with no
-    // variable fonts installed it just shows the "Nothing found" empty state.
+    // Show only variable fonts. Sits in the Weights grid (see above). Always
+    // enabled — with no variable fonts installed it just shows the "Nothing
+    // found" empty state.
     private var variablesOnlyToggle: some View {
         filterPill(
-            label: "Variable",
+            label: "Variable Fonts",
             icon: nil,
             isOn: vm.variablesOnly
         ) {
