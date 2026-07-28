@@ -41,8 +41,16 @@ final class AppViewModel: ObservableObject {
     @Published var searchQuery: String = UserDefaults.standard.string(forKey: AppViewModel.searchQueryKey) ?? "" {
         didSet { UserDefaults.standard.set(searchQuery, forKey: Self.searchQueryKey) }
     }
+    // The weight-count chips and the Variable Fonts chip are one group: a family
+    // is counted either by how many static faces it ships or by having a
+    // continuous axis, never both. Selecting one side clears the other (the
+    // didSet pairs can't loop — each only fires when the other is already at its
+    // neutral value).
     @Published var weightFilter: WeightFilter = AppViewModel.loadWeightFilter() {
-        didSet { UserDefaults.standard.set(Self.encodeWeightFilter(weightFilter), forKey: Self.weightFilterKey) }
+        didSet {
+            UserDefaults.standard.set(Self.encodeWeightFilter(weightFilter), forKey: Self.weightFilterKey)
+            if weightFilter != .all { variablesOnly = false }
+        }
     }
     @Published var pinnedOnly: Bool = UserDefaults.standard.bool(forKey: AppViewModel.pinnedOnlyKey) {
         didSet { UserDefaults.standard.set(pinnedOnly, forKey: Self.pinnedOnlyKey) }
@@ -50,9 +58,12 @@ final class AppViewModel: ObservableObject {
     @Published var memoOnly: Bool = UserDefaults.standard.bool(forKey: AppViewModel.memoOnlyKey) {
         didSet { UserDefaults.standard.set(memoOnly, forKey: Self.memoOnlyKey) }
     }
-    // Show only variable fonts (mirrors pinnedOnly / memoOnly).
+    // Show only variable fonts. Paired with weightFilter (see above).
     @Published var variablesOnly: Bool = UserDefaults.standard.bool(forKey: AppViewModel.variablesOnlyKey) {
-        didSet { UserDefaults.standard.set(variablesOnly, forKey: Self.variablesOnlyKey) }
+        didSet {
+            UserDefaults.standard.set(variablesOnly, forKey: Self.variablesOnlyKey)
+            if variablesOnly { weightFilter = .all }
+        }
     }
     // Selected script buckets. Empty = no script filter (show all). Multiple
     // may be on at once (union); combined AND with the other filters.
