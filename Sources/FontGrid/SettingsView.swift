@@ -331,7 +331,7 @@ struct SettingsOverlay: View {
                 )
                 .fixedSize(horizontal: false, vertical: true)
 
-                Text("v \(Theme.appVersion) : Variable fonts are now identified with a VF mark. Their weight can be adjusted with a slider in the detail view, and exported at the weight you choose. The new Variable filter is on V.")
+                Text("v \(Theme.appVersion) : The preview input toggle now cycles through English, Korean, and Japanese. When the field is empty, each language shows its own sample sentence.")
                     .font(.system(size: SettingsType.small))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)

@@ -856,17 +856,17 @@ struct PreviewInputBar: View {
     var body: some View {
         HStack(spacing: 10) {
             Button {
-                inputSource.toggle()
+                inputSource.cycle()
                 focused = true
             } label: {
-                Text(inputSource.isKorean ? "가" : "A")
+                Text(inputSource.language.buttonGlyph)
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(.secondary)
                 .frame(width: 22, height: 18)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help(inputSource.isKorean ? "Switch to English input" : "Switch to Korean input")
+            .help("Cycle preview input language (English / Korean / Japanese)")
 
             TextField(inputSource.pangram, text: $text)
                 .textFieldStyle(.plain)
@@ -945,15 +945,45 @@ struct VisualEffectBlur: NSViewRepresentable {
 
 // MARK: - System Input Source Manager
 
+/// Preview input language. Drives the empty-state pangram, the toggle-button
+/// glyph, and which system input source the button cycles to.
+enum PreviewLanguage: CaseIterable {
+    case english, korean, japanese
+
+    // Empty-state preview pangram shown when the preview field is cleared.
+    var pangram: String {
+        switch self {
+        case .english:  return "The quick brown fox jumps over lazy dog."
+        case .korean:   return "다람쥐 헌 쳇바퀴에 타고파."
+        case .japanese: return "あのイーハトーヴォのすきとおった風。"
+        }
+    }
+
+    // Single glyph shown on the input-toggle button.
+    var buttonGlyph: String {
+        switch self {
+        case .english:  return "A"
+        case .korean:   return "가"
+        case .japanese: return "あ"
+        }
+    }
+
+    // Human-readable name, used in the button's help tooltip.
+    var displayName: String {
+        switch self {
+        case .english:  return "English"
+        case .korean:   return "Korean"
+        case .japanese: return "Japanese"
+        }
+    }
+}
+
 @MainActor
 final class InputSourceManager: ObservableObject {
-    @Published var isKorean: Bool = false
+    @Published var language: PreviewLanguage = .english
 
-    // Empty-state preview pangram, by current input source. Single source of
-    // truth for the fallback shown when the preview field is cleared.
-    var pangram: String {
-        isKorean ? "다람쥐 헌 쳇바퀴에 타고파." : "The quick brown fox jumps over lazy dog."
-    }
+    // Single source of truth for the empty-state fallback pangram.
+    var pangram: String { language.pangram }
 
     // The text to render: what the user typed, or the language pangram if empty.
     func resolved(_ text: String) -> String { text.isEmpty ? pangram : text }
@@ -972,25 +1002,50 @@ final class InputSourceManager: ObservableObject {
         DispatchQueue.main.async { self.refresh() }
     }
 
-    func toggle() { selectFirst(matchingKorean: !isKorean) }
+    // Cycle to the next language whose system input source is actually
+    // available, wrapping around. Languages without an installed/enabled
+    // input source are skipped, so the button never gets stuck.
+    func cycle() {
+        let order = PreviewLanguage.allCases
+        guard let idx = order.firstIndex(of: language) else { return }
+        for offset in 1...order.count {
+            let candidate = order[(idx + offset) % order.count]
+            if selectFirst(matching: candidate) { return }
+        }
+    }
 
     private func refresh() {
         guard let unmanaged = TISCopyCurrentKeyboardInputSource() else { return }
         let source = unmanaged.takeRetainedValue()
-        isKorean = sourceMatchesKorean(source)
+        language = detectLanguage(source)
     }
 
-    private func selectFirst(matchingKorean wantKorean: Bool) {
-        guard let listUnmanaged = TISCreateInputSourceList(nil, false) else { return }
+    private func detectLanguage(_ source: TISInputSource) -> PreviewLanguage {
+        if sourceMatchesKorean(source) { return .korean }
+        if sourceMatchesJapanese(source) { return .japanese }
+        return .english
+    }
+
+    @discardableResult
+    private func selectFirst(matching lang: PreviewLanguage) -> Bool {
+        guard let listUnmanaged = TISCreateInputSourceList(nil, false) else { return false }
         let array = listUnmanaged.takeRetainedValue() as NSArray
         for case let source as TISInputSource in array {
             guard isSelectable(source) else { continue }
-            let matches = wantKorean ? sourceMatchesKorean(source) : sourceMatchesEnglish(source)
-            if matches {
+            if sourceMatches(source, lang) {
                 TISSelectInputSource(source)
-                isKorean = wantKorean
-                return
+                language = lang
+                return true
             }
+        }
+        return false
+    }
+
+    private func sourceMatches(_ source: TISInputSource, _ lang: PreviewLanguage) -> Bool {
+        switch lang {
+        case .english:  return sourceMatchesEnglish(source)
+        case .korean:   return sourceMatchesKorean(source)
+        case .japanese: return sourceMatchesJapanese(source)
         }
     }
 
@@ -1009,6 +1064,12 @@ final class InputSourceManager: ObservableObject {
         let id = stringProperty(source, key: kTISPropertyInputSourceID).lowercased()
         if id.contains("keylayout.abc") || id.contains("keylayout.us") { return true }
         return languages(source).contains { $0.hasPrefix("en") }
+    }
+
+    private func sourceMatchesJapanese(_ source: TISInputSource) -> Bool {
+        let id = stringProperty(source, key: kTISPropertyInputSourceID).lowercased()
+        if id.contains("japanese") || id.contains("kotoeri") { return true }
+        return languages(source).contains { $0.hasPrefix("ja") }
     }
 
     private func stringProperty(_ source: TISInputSource, key: CFString) -> String {
