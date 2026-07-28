@@ -32,6 +32,7 @@ final class AppViewModel: ObservableObject {
     private static let weightFilterKey = "weightFilter"
     private static let pinnedOnlyKey = "pinnedOnly"
     private static let memoOnlyKey = "memoOnly"
+    private static let variablesOnlyKey = "variablesOnly"
     private static let scriptFilterKey = "scriptFilter"
     private static let activeTagKey = "activeTag"
     private static let columnCountKey = "columnCount"
@@ -48,6 +49,10 @@ final class AppViewModel: ObservableObject {
     }
     @Published var memoOnly: Bool = UserDefaults.standard.bool(forKey: AppViewModel.memoOnlyKey) {
         didSet { UserDefaults.standard.set(memoOnly, forKey: Self.memoOnlyKey) }
+    }
+    // Show only variable fonts (mirrors pinnedOnly / memoOnly).
+    @Published var variablesOnly: Bool = UserDefaults.standard.bool(forKey: AppViewModel.variablesOnlyKey) {
+        didSet { UserDefaults.standard.set(variablesOnly, forKey: Self.variablesOnlyKey) }
     }
     // Selected script buckets. Empty = no script filter (show all). Multiple
     // may be on at once (union); combined AND with the other filters.
@@ -329,6 +334,7 @@ final class AppViewModel: ObservableObject {
         weightFilter = .all
         pinnedOnly = false
         memoOnly = false
+        variablesOnly = false
         scriptFilter = []
         mutedFilter = .shown
         mutedOnly = false

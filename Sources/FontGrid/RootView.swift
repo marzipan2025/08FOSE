@@ -197,6 +197,7 @@ struct RootView: View {
     //   t   → toggle dark / light theme
     //   w   → cycle Weights filter (All → 1 → 3+ → 5+ → All)
     //   p/m → pinned / memo filter
+    //   v   → variable-fonts-only filter
     //   k/j/c/l/s/o → toggle script bucket
     //   (korean / japanese / chinese / latin / symbol / other)
     // Returns true when the key was handled (and should be consumed).
@@ -236,6 +237,9 @@ struct RootView: View {
             return true
         case "m":
             vm.memoOnly.toggle()
+            return true
+        case "v":
+            vm.variablesOnly.toggle()
             return true
         case "k", "j", "l", "o":
             // Chinese/Symbol are folded into Other, so only the filterable
@@ -446,6 +450,11 @@ private struct GlobalShortcutHandler: NSViewRepresentable {
             guard monitor == nil else { return }
             monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
                 guard let self else { return event }
+
+                // A modal panel (Save/Open) owns the keyboard while it's up — let
+                // every key (incl. ESC to cancel and ⌘-combos) reach the panel
+                // instead of driving the app's shortcuts behind it.
+                if NSApp.modalWindow != nil { return event }
 
                 // ESC cascade.
                 if event.keyCode == 53 {

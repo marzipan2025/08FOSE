@@ -13,6 +13,11 @@ struct WrappingPreviewLabel: NSViewRepresentable {
     let fontName: String
     let fontSize: CGFloat
     var color: Color? = nil   // nil → default label color
+    // When both are set, `fontName` is treated as the base face and its weight
+    // axis is overridden to `variationWeight` (drives the detail's Variable
+    // slider row). nil → render the face as-is.
+    var variationAxisID: Int? = nil
+    var variationWeight: Double? = nil
 
     private var nsColor: NSColor {
         color.map { NSColor($0) } ?? .labelColor
@@ -20,12 +25,14 @@ struct WrappingPreviewLabel: NSViewRepresentable {
 
     func makeNSView(context: Context) -> WrappingPreviewView {
         let view = WrappingPreviewView()
-        view.update(text: text, fontName: fontName, fontSize: fontSize, color: nsColor)
+        view.update(text: text, fontName: fontName, fontSize: fontSize, color: nsColor,
+                    variationAxisID: variationAxisID, variationWeight: variationWeight)
         return view
     }
 
     func updateNSView(_ view: WrappingPreviewView, context: Context) {
-        view.update(text: text, fontName: fontName, fontSize: fontSize, color: nsColor)
+        view.update(text: text, fontName: fontName, fontSize: fontSize, color: nsColor,
+                    variationAxisID: variationAxisID, variationWeight: variationWeight)
     }
 }
 
@@ -35,6 +42,8 @@ final class WrappingPreviewView: NSView {
     private var fontName: String = ""
     private var fontSize: CGFloat = 0
     private var color: NSColor = .labelColor
+    private var variationAxisID: Int? = nil
+    private var variationWeight: Double? = nil
 
     // The framesetter is immutable per attributed string, but during the detail
     // card's open/close spring this view is resized on EVERY animation frame,
@@ -48,18 +57,27 @@ final class WrappingPreviewView: NSView {
 
     override var isFlipped: Bool { true }
 
-    func update(text: String, fontName: String, fontSize: CGFloat, color: NSColor) {
+    func update(text: String, fontName: String, fontSize: CGFloat, color: NSColor,
+                variationAxisID: Int? = nil, variationWeight: Double? = nil) {
         if color != self.color {
             self.color = color
             needsDisplay = true
         }
-        guard text != self.text || fontName != self.fontName || fontSize != self.fontSize else {
+        guard text != self.text || fontName != self.fontName || fontSize != self.fontSize
+                || variationAxisID != self.variationAxisID || variationWeight != self.variationWeight else {
             return
         }
         self.text = text
         self.fontName = fontName
         self.fontSize = fontSize
-        let font = NSFont(name: fontName, size: fontSize) ?? .systemFont(ofSize: fontSize)
+        self.variationAxisID = variationAxisID
+        self.variationWeight = variationWeight
+        let font: NSFont
+        if let axisID = variationAxisID, let weight = variationWeight {
+            font = makeVariationFont(psName: fontName, size: fontSize, axisID: axisID, value: weight)
+        } else {
+            font = NSFont(name: fontName, size: fontSize) ?? .systemFont(ofSize: fontSize)
+        }
         let attrs: [NSAttributedString.Key: Any] = [
             .font: font,
             kCTForegroundColorFromContextAttributeName as NSAttributedString.Key: true

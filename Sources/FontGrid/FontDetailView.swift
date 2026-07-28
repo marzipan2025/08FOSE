@@ -81,6 +81,13 @@ struct FontDetailView: View {
     // text across every weight (and is drawn in the accent color).
     private var hasCustomSample: Bool { samples.hasSample(for: family.name) }
 
+    // Under the title: weight count, plus a "• Variable Font" tail when the
+    // family is backed by an OpenType variable font.
+    private var subtitleText: String {
+        let base = "\(family.weightCount) weight\(family.weightCount == 1 ? "" : "s")"
+        return family.isVariable ? "\(base) • Variable Font" : base
+    }
+
     private var sampleText: String {
         if hasCustomSample { return samples.sample(for: family.name) }
         return inputSource.resolved(previewText)
@@ -539,7 +546,7 @@ struct FontDetailView: View {
                                 .offset(y: -23 * 0.08)
                         }
                     }
-                    Text("\(family.weightCount) weight\(family.weightCount == 1 ? "" : "s")")
+                    Text(subtitleText)
                         .font(.system(size: Theme.bodySize))
                         .foregroundStyle(.secondary)
                 }
@@ -646,6 +653,19 @@ struct FontDetailView: View {
 
     private var weightListContent: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // Variable fonts lead with an interactive weight-axis row: a slider
+            // sweeps the sample between the axis's lightest and heaviest.
+            if let axis = family.weightAxis {
+                VariableWeightRow(
+                    basePSName: family.previewFontName ?? family.memberFontNames.first ?? family.name,
+                    familyName: family.name,
+                    sampleText: sampleText,
+                    sampleColor: sampleColor,
+                    sampleSize: CGFloat(vm.weightRowFontSize),
+                    axis: axis
+                )
+                Divider().opacity(0.15).padding(.horizontal, 24)
+            }
             ForEach(Array(family.memberFontNames.enumerated()), id: \.offset) { index, psName in
                 WeightRow(psName: psName, familyName: family.name, sampleText: sampleText, sampleColor: sampleColor, sampleSize: CGFloat(vm.weightRowFontSize))
                 if index < family.memberFontNames.count - 1 {
@@ -1016,6 +1036,88 @@ private extension View {
     }
 }
 
+// MARK: - Variable Weight Row
+
+// Top row of a variable font's weight list: a slider drives the sample text's
+// weight axis live between the axis minimum and maximum, so the whole range is
+// explorable without hopping between the named instances below.
+private struct VariableWeightRow: View {
+    let basePSName: String
+    let familyName: String
+    let sampleText: String
+    var sampleColor: Color? = nil
+    let sampleSize: CGFloat
+    let axis: WeightAxis
+
+    @EnvironmentObject var toasts: ToastCenter
+    @State private var weight: Double
+
+    init(basePSName: String, familyName: String, sampleText: String, sampleColor: Color?, sampleSize: CGFloat, axis: WeightAxis) {
+        self.basePSName = basePSName
+        self.familyName = familyName
+        self.sampleText = sampleText
+        self.sampleColor = sampleColor
+        self.sampleSize = sampleSize
+        self.axis = axis
+        _weight = State(initialValue: axis.defaultValue)
+    }
+
+    private var canExport: Bool {
+        SVGTextExporter.canExport(text: sampleText, fontName: basePSName)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 12) {
+                Text("Variable")
+                    .font(.system(size: Theme.bodySize, weight: .medium))
+                    .foregroundStyle(.primary)
+                // Slider + its value, kept as a tight cluster. The slider sits
+                // where the PostScript name is on the static rows: sized to 180pt
+                // then scaled to 90% (handle + track — the native Slider doesn't
+                // expose the handle size on its own), with the outer frame
+                // reserving exactly the scaled 162pt so there's no centering slack.
+                // The value is leading-aligned so it hugs the slider's right edge.
+                HStack(spacing: 10) {
+                    Slider(value: $weight, in: axis.minValue...axis.maxValue)
+                        .controlSize(.small)
+                        .frame(width: 180)
+                        .scaleEffect(0.9)
+                        .frame(width: 180 * 0.9)
+                    Text("\(Int(weight.rounded()))")
+                        .font(.system(size: Theme.smallSize).monospaced())
+                        .foregroundStyle(.tertiary)
+                        .frame(width: 34, alignment: .leading)
+                }
+                Spacer(minLength: 8)
+                ExportButton(enabled: canExport, action: exportArtwork)
+            }
+            WrappingPreviewLabel(
+                text: sampleText,
+                fontName: basePSName,
+                fontSize: sampleSize,
+                color: sampleColor,
+                variationAxisID: axis.id,
+                variationWeight: weight
+            )
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // Export the sample at the slider's current weight; the file stem ends with
+    // "VF(nnn)" so the exact weight is captured in the name.
+    private func exportArtwork() {
+        func clean(_ s: String) -> String { s.replacingOccurrences(of: "/", with: "-") }
+        let w = Int(weight.rounded())
+        let baseName = "08FOSE) \(clean(familyName))_VF(\(w))"
+        WeightArtwork.export(text: sampleText, fontName: basePSName, baseName: baseName,
+                             variation: (axisID: axis.id, value: weight), toasts: toasts)
+    }
+}
+
 // MARK: - Weight Row
 
 struct WeightRow: View {
@@ -1061,16 +1163,34 @@ struct WeightRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // Flatten this weight's sample text and save as SVG or PNG. The save panel
-    // carries an accessory view that lets the user pick the format and (for
-    // PNG) the fill color before confirming.
+    // Flatten this weight's sample text and save as SVG or PNG.
     private func exportArtwork() {
-        guard canExport else { NSSound.beep(); return }
+        WeightArtwork.export(text: sampleText, fontName: psName, baseName: artworkBaseName, toasts: toasts)
+    }
+
+    // e.g. "08FOSE) SDMapssi_Regular"  ("/" sanitized for the filesystem). No
+    // extension — NSSavePanel appends one based on `allowedContentTypes`.
+    private var artworkBaseName: String {
+        func clean(_ s: String) -> String { s.replacingOccurrences(of: "/", with: "-") }
+        return "08FOSE) \(clean(familyName))_\(clean(faceName))"
+    }
+}
+
+// Shared weight-row artwork export: a Save panel (format + color accessory)
+// that flattens `text` in `fontName` — optionally at a specific variation
+// weight — to SVG or PNG. Used by both the static weight rows and the
+// variable-weight row (which supplies a `variation` and a "VF(nnn)" base name).
+enum WeightArtwork {
+    @MainActor
+    static func export(text: String, fontName: String, baseName: String,
+                       variation: (axisID: Int, value: Double)? = nil,
+                       toasts: ToastCenter) {
+        guard SVGTextExporter.canExport(text: text, fontName: fontName) else { NSSound.beep(); return }
 
         let panel = NSSavePanel()
         panel.canCreateDirectories = true
         panel.showsTagField = false
-        panel.nameFieldStringValue = artworkBaseName
+        panel.nameFieldStringValue = baseName
         panel.allowedContentTypes = [.svg]
 
         let accessory = ExportOptionsAccessory()
@@ -1087,11 +1207,11 @@ struct WeightRow: View {
         let rendered: Data?
         switch accessory.format {
         case .svg:
-            rendered = SVGTextExporter.svg(text: sampleText, fontName: psName,
-                                           fill: accessory.colorHex)?.data(using: .utf8)
+            rendered = SVGTextExporter.svg(text: text, fontName: fontName,
+                                           fill: accessory.colorHex, variation: variation)?.data(using: .utf8)
         case .png:
-            rendered = SVGTextExporter.pngData(text: sampleText, fontName: psName,
-                                               color: accessory.color)
+            rendered = SVGTextExporter.pngData(text: text, fontName: fontName,
+                                               color: accessory.color, variation: variation)
         }
         let format = accessory.format == .svg ? "SVG" : "PNG"
         guard let rendered else {
@@ -1111,13 +1231,6 @@ struct WeightRow: View {
             toasts.show(Toast(style: .error, title: "\(format) export failed",
                               detail: "Couldn't write to \(url.lastPathComponent). Try a different folder."))
         }
-    }
-
-    // e.g. "08FOSE) SDMapssi_Regular"  ("/" sanitized for the filesystem). No
-    // extension — NSSavePanel appends one based on `allowedContentTypes`.
-    private var artworkBaseName: String {
-        func clean(_ s: String) -> String { s.replacingOccurrences(of: "/", with: "-") }
-        return "08FOSE) \(clean(familyName))_\(clean(faceName))"
     }
 }
 

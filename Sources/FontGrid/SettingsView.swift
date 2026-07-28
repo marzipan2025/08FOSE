@@ -331,7 +331,7 @@ struct SettingsOverlay: View {
                 )
                 .fixedSize(horizontal: false, vertical: true)
 
-                Text("v \(Theme.appVersion) : Favorites are now Pins — the panels, detail view, filters and backups all speak Pin, and the filter shortcut moved from F to P. Your existing data carries over automatically.")
+                Text("v \(Theme.appVersion) : Variable fonts are now first class — cells mark them VF and sweep their weight on hover, the detail view adds a live weight slider (exports land as VF(nnn)), and the new Variable collection filter is on V.")
                     .font(.system(size: SettingsType.small))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -349,6 +349,7 @@ struct SettingsOverlay: View {
                 shortcutRow("W", "Cycle weights filter")
                 shortcutRow("P", "Pinned filter")
                 shortcutRow("M", "Memos filter")
+                shortcutRow("V", "Variable fonts filter")
                 shortcutRow("0–4", "Wallpaper (0 = none)")
                 shortcutRow("K J C L S O", "Toggle script bucket")
                 shortcutRow("U", "Show / hide muted")

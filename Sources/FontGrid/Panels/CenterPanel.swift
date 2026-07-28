@@ -60,6 +60,7 @@ struct CenterPanel: View {
             .filter { vm.weightFilter.matches($0.weightCount) }
             .filter { !vm.pinnedOnly || pins.contains($0.name) }
             .filter { !vm.memoOnly || memos.hasNote(for: $0.name) }
+            .filter { !vm.variablesOnly || $0.isVariable }
             .filter { vm.scriptFilter.isEmpty || vm.scriptFilter.contains($0.script) }
             .filter { vm.activeTag == nil || memos.tags(for: $0.name).contains(vm.activeTag!) }
             .filter { family in
@@ -164,13 +165,14 @@ struct CenterPanel: View {
         // everything abbreviates: PIN / MEM / MUT and KR / JP / LTN / ETC.
         let scripts = ScriptCategory.allCases.filter { vm.scriptFilter.contains($0) }
         let total = (vm.pinnedOnly ? 1 : 0) + (vm.memoOnly ? 1 : 0)
-            + (vm.mutedOnly ? 1 : 0) + scripts.count
+            + (vm.mutedOnly ? 1 : 0) + (vm.variablesOnly ? 1 : 0) + scripts.count
         if total == 0 { return "\(count) fonts" }
         let abbr = total >= 2
 
         var segments: [String] = []
         if vm.pinnedOnly { segments.append(abbr ? "PIN" : "Pinned") }
         if vm.memoOnly { segments.append(abbr ? "MEM" : "Memoed") }
+        if vm.variablesOnly { segments.append(abbr ? "VF" : "Variable") }
         if vm.mutedOnly { segments.append(abbr ? "MUT" : "Muted") }
         segments.append(contentsOf: scripts.map { abbr ? $0.abbreviation : $0.label })
 
@@ -664,6 +666,10 @@ private struct DetailArrowKeyHandler: NSViewRepresentable {
                 guard let self else { return event }
                 // ←(123) / →(124)
                 guard event.keyCode == 123 || event.keyCode == 124 else { return event }
+                // A modal panel (Save/Open) owns the keyboard while it's up — its
+                // filename field lives in a separate (often out-of-process) window
+                // the firstResponder check below can't see, so bail outright.
+                if NSApp.modalWindow != nil { return event }
                 // Let text editing keep arrow keys (cursor movement).
                 if event.window?.firstResponder is NSText { return event }
                 // Plain arrows only — leave ⌘/⌥/⌃ combos for the system.

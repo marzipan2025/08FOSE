@@ -147,11 +147,24 @@ struct LeftPanel: View {
             HStack(spacing: 6) {
                 pinnedOnlyToggle
                 memoOnlyToggle
+                variablesOnlyToggle
             }
             HStack(spacing: 6) {
                 mutedToggle
                 mutedOnlyToggle
             }
+        }
+    }
+
+    // Show only variable fonts (mirrors Pinned / Memo). Always enabled — with no
+    // variable fonts installed it just shows the "Nothing found" empty state.
+    private var variablesOnlyToggle: some View {
+        filterPill(
+            label: "Variable",
+            icon: nil,
+            isOn: vm.variablesOnly
+        ) {
+            vm.variablesOnly.toggle()
         }
     }
 

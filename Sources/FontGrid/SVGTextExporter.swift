@@ -59,8 +59,9 @@ enum SVGTextExporter {
     /// Build an SVG document for `text` rendered in `fontName`, glyphs flattened
     /// to a single filled `<path>`. Honors `\n` as line breaks. Returns nil when
     /// no outlines result (so callers can no-op gracefully).
-    static func svg(text: String, fontName: String, fill: String = "#000000") -> String? {
-        guard let (path, size) = flatten(text: text, fontName: fontName) else { return nil }
+    static func svg(text: String, fontName: String, fill: String = "#000000",
+                    variation: (axisID: Int, value: Double)? = nil) -> String? {
+        guard let (path, size) = flatten(text: text, fontName: fontName, variation: variation) else { return nil }
         let w = fmt(size.width), h = fmt(size.height)
         return """
         <svg xmlns="http://www.w3.org/2000/svg" width="\(w)" height="\(h)" viewBox="0 0 \(w) \(h)">
@@ -71,8 +72,9 @@ enum SVGTextExporter {
 
     /// Rasterize the same flattened path used by `svg(...)` to a transparent
     /// PNG, filled with `color`. Returns nil when there are no outlines.
-    static func pngData(text: String, fontName: String, color: NSColor, scale: CGFloat = pngScale) -> Data? {
-        guard let (path, size) = flatten(text: text, fontName: fontName) else { return nil }
+    static func pngData(text: String, fontName: String, color: NSColor, scale: CGFloat = pngScale,
+                        variation: (axisID: Int, value: Double)? = nil) -> Data? {
+        guard let (path, size) = flatten(text: text, fontName: fontName, variation: variation) else { return nil }
         let w = max(1, Int(ceil(size.width * scale)))
         let h = max(1, Int(ceil(size.height * scale)))
         guard let rep = NSBitmapImageRep(
@@ -103,8 +105,9 @@ enum SVGTextExporter {
     // Flatten the rendered text to a single CGPath in SVG coords (origin at
     // top-left, y growing down), along with its bounding-box size. Shared by
     // the SVG and PNG paths.
-    private static func flatten(text: String, fontName: String) -> (path: CGPath, size: CGSize)? {
-        let font = CTFontCreateWithName(fontName as CFString, exportFontSize, nil)
+    private static func flatten(text: String, fontName: String,
+                                variation: (axisID: Int, value: Double)? = nil) -> (path: CGPath, size: CGSize)? {
+        let font = exportFont(fontName: fontName, variation: variation)
         let lineHeight = CTFontGetAscent(font) + CTFontGetDescent(font) + CTFontGetLeading(font)
 
         // Accumulate all glyph outlines in font (y-up) space.
@@ -145,6 +148,17 @@ enum SVGTextExporter {
     }
 
     // MARK: - Helpers
+
+    // Base export face, or a copy with one variation axis overridden — so the
+    // variable-weight row can flatten its sample at the slider's current weight.
+    private static func exportFont(fontName: String, variation: (axisID: Int, value: Double)?) -> CTFont {
+        let base = CTFontCreateWithName(fontName as CFString, exportFontSize, nil)
+        guard let v = variation else { return base }
+        let dict: [NSNumber: NSNumber] = [NSNumber(value: v.axisID): NSNumber(value: v.value)]
+        let attrs: [String: Any] = [kCTFontVariationAttribute as String: dict]
+        let desc = CTFontDescriptorCreateWithAttributes(attrs as CFDictionary)
+        return CTFontCreateCopyWithAttributes(base, exportFontSize, nil, desc)
+    }
 
     private static func runFont(of run: CTRun, fallback: CTFont) -> CTFont {
         let attrs = CTRunGetAttributes(run) as NSDictionary

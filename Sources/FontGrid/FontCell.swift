@@ -65,14 +65,28 @@ struct FontCell: View {
                     .padding(.top, 12)
             }
             .overlay(alignment: .bottomLeading) {
-                // CyclingPreviewLabel owns weightIndex state so the 400ms weight
-                // cycling re-renders only the preview label, not the whole cell.
-                CyclingPreviewLabel(
-                    family: family,
-                    previewText: resolvedPreviewText,
-                    fontSize: fontSize,
-                    isHovering: hovering
-                )
+                // Variable fonts with a weight axis sweep that axis smoothly on
+                // hover; everything else cycles through its discrete faces. Both
+                // own their own animation state so only the preview label
+                // re-renders, not the whole cell.
+                Group {
+                    if let axis = family.weightAxis {
+                        VariableWeightPreviewLabel(
+                            text: resolvedPreviewText,
+                            basePSName: family.previewFontName ?? family.memberFontNames.first ?? family.name,
+                            fontSize: fontSize,
+                            axis: axis,
+                            isHovering: hovering
+                        )
+                    } else {
+                        CyclingPreviewLabel(
+                            family: family,
+                            previewText: resolvedPreviewText,
+                            fontSize: fontSize,
+                            isHovering: hovering
+                        )
+                    }
+                }
                 .frame(height: previewFrameHeight)
                 .padding(.horizontal, 14)
                 .padding(.bottom, 6)
@@ -167,6 +181,12 @@ struct FontCell: View {
                 }
             }
             .offset(x: 1, y: 1)
+        } else if family.isVariable {
+            // Variable fonts get a "VF" mark instead of the weight count, in the
+            // same muted color as the number it replaces.
+            Text("VF")
+                .font(.system(size: Theme.smallSize, weight: .medium))
+                .foregroundStyle(Theme.weightBadge)
         } else {
             Text(String(format: "%02d", family.weightCount))
                 .font(.system(size: Theme.smallSize))
@@ -219,6 +239,107 @@ private struct CyclingPreviewLabel: View {
         cycleTask = nil
         weightIndex = 0
     }
+}
+
+// MARK: - Variable Weight Preview Label
+
+/// Preview for a variable font: at rest it renders at the axis minimum (the
+/// lightest face, matching the discrete cell's resting look); on hover it sweeps
+/// the weight up to the maximum and back, forever, with eased ends. The sweep
+/// runs inside the NSView (its own timer) so SwiftUI isn't re-invoked per frame.
+private struct VariableWeightPreviewLabel: NSViewRepresentable {
+    let text: String
+    let basePSName: String
+    let fontSize: Double
+    let axis: WeightAxis
+    let isHovering: Bool
+
+    func makeNSView(context: Context) -> VariableWeightTextView {
+        let view = VariableWeightTextView()
+        view.configure(text: text, basePSName: basePSName, fontSize: fontSize, axis: axis)
+        view.setHovering(isHovering)
+        return view
+    }
+
+    func updateNSView(_ view: VariableWeightTextView, context: Context) {
+        view.configure(text: text, basePSName: basePSName, fontSize: fontSize, axis: axis)
+        view.setHovering(isHovering)
+    }
+
+    static func dismantleNSView(_ view: VariableWeightTextView, coordinator: ()) {
+        view.setHovering(false)
+    }
+}
+
+final class VariableWeightTextView: NSView {
+    private var text: String = ""
+    private var basePSName: String = ""
+    private var fontSize: Double = 28
+    private var axis = WeightAxis(id: 0, minValue: 0, maxValue: 0, defaultValue: 0)
+
+    private var currentWeight: Double = 0
+    private var timer: Timer?
+    private var startTime: CFTimeInterval = 0
+    // One full up-and-back sweep. Brisk, but still eased at both ends.
+    private static let period: CFTimeInterval = 1.6
+
+    func configure(text: String, basePSName: String, fontSize: Double, axis: WeightAxis) {
+        guard text != self.text || basePSName != self.basePSName
+                || fontSize != self.fontSize || axis != self.axis else { return }
+        self.text = text
+        self.basePSName = basePSName
+        self.fontSize = fontSize
+        self.axis = axis
+        if timer == nil { currentWeight = axis.minValue }   // resting weight
+        needsDisplay = true
+    }
+
+    func setHovering(_ hovering: Bool) {
+        if hovering { startAnimating() } else { stopAnimating() }
+    }
+
+    private func startAnimating() {
+        guard timer == nil, axis.maxValue > axis.minValue else { return }
+        startTime = CACurrentMediaTime()
+        // .common so the sweep keeps ticking while the grid is being scrolled.
+        let t = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in self?.tick() }
+        RunLoop.main.add(t, forMode: .common)
+        timer = t
+    }
+
+    private func tick() {
+        let elapsed = CACurrentMediaTime() - startTime
+        // 0 → 1 → 0 with a cosine ease, so the weight lingers a touch at both
+        // extremes instead of snapping around. Starts at min (== resting) so
+        // there's no jump when the sweep begins.
+        let phase = (1 - cos(2 * Double.pi * elapsed / Self.period)) / 2
+        currentWeight = axis.minValue + (axis.maxValue - axis.minValue) * phase
+        needsDisplay = true
+    }
+
+    private func stopAnimating() {
+        guard timer != nil else { return }
+        timer?.invalidate()
+        timer = nil
+        currentWeight = axis.minValue
+        needsDisplay = true
+    }
+
+    override var isFlipped: Bool { false }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        needsDisplay = true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        guard !text.isEmpty, let ctx = NSGraphicsContext.current?.cgContext else { return }
+        let font = makeVariationFont(psName: basePSName, size: CGFloat(fontSize),
+                                     axisID: axis.id, value: currentWeight)
+        PreviewLineRenderer.draw(text: text, font: font, in: bounds, context: ctx)
+    }
+
+    deinit { timer?.invalidate() }
 }
 
 // MARK: - Preview Label (Core Text)
@@ -274,7 +395,17 @@ final class PreviewTextView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         guard !text.isEmpty, let ctx = NSGraphicsContext.current?.cgContext else { return }
+        PreviewLineRenderer.draw(text: text, font: font, in: bounds, context: ctx)
+    }
+}
 
+// MARK: - Shared single-line renderer
+
+/// Draws one centred, overflow-clipped line of `text` in `font`, matching the
+/// metrics both PreviewTextView (static faces) and VariableWeightTextView
+/// (animated variable weight) need, so they stay pixel-identical.
+enum PreviewLineRenderer {
+    static func draw(text: String, font: NSFont, in bounds: CGRect, context ctx: CGContext) {
         let attrs: [NSAttributedString.Key: Any] = [
             .font: font,
             kCTForegroundColorFromContextAttributeName as NSAttributedString.Key: true
@@ -301,6 +432,7 @@ final class PreviewTextView: NSView {
         }
         // Safety net for the rare case of a single glyph wider than the cell:
         // clip to bounds so it can't bleed to the card border.
+        ctx.saveGState()
         ctx.clip(to: bounds)
 
         var ascent: CGFloat = 0, descent: CGFloat = 0, leading: CGFloat = 0
@@ -311,6 +443,7 @@ final class PreviewTextView: NSView {
         let baselineY = (bounds.height - (ascent + descent)) / 2 + descent + 4
         ctx.textPosition = CGPoint(x: 0, y: baselineY)
         CTLineDraw(line, ctx)
+        ctx.restoreGState()
     }
 }
 
