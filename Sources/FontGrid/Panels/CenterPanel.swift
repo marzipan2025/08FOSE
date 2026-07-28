@@ -866,7 +866,11 @@ struct PreviewInputBar: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help("Cycle preview input language (English / Korean / Japanese)")
+            .disabled(!inputSource.canToggle)
+            .opacity(inputSource.canToggle ? 1 : 0.35)
+            .help(inputSource.canToggle
+                  ? "Cycle preview input language"
+                  : "No Korean or Japanese input source installed")
 
             TextField(inputSource.pangram, text: $text)
                 .textFieldStyle(.plain)
@@ -982,6 +986,16 @@ enum PreviewLanguage: CaseIterable {
 final class InputSourceManager: ObservableObject {
     @Published var language: PreviewLanguage = .english
 
+    // Whether the toggle button does anything: true only when a Korean or
+    // Japanese input source is installed (the A group is always present, so
+    // that alone means there is a second bucket to switch to).
+    @Published var canToggle: Bool = false
+
+    // ID of the last A-group (Latin/other) input source that was active, so we
+    // can restore that exact keyboard — English, German, … — when cycling back
+    // to A rather than forcing a switch to English.
+    private var previousLatinSourceID: String?
+
     // Single source of truth for the empty-state fallback pangram.
     var pangram: String { language.pangram }
 
@@ -996,34 +1010,69 @@ final class InputSourceManager: ObservableObject {
             name: NSNotification.Name("com.apple.Carbon.TISNotifySelectedKeyboardInputSourceChanged"),
             object: nil
         )
+        // The selection-change notification above does not fire when a keyboard
+        // is added/removed in System Settings, so re-check availability whenever
+        // the app is reactivated (the likely moment the user returns from there).
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleChange),
+            name: NSApplication.didBecomeActiveNotification,
+            object: nil
+        )
     }
 
     @objc private func handleChange() {
         DispatchQueue.main.async { self.refresh() }
     }
 
-    // Cycle to the next language whose system input source is actually
-    // available, wrapping around. Languages without an installed/enabled
-    // input source are skipped, so the button never gets stuck.
+    // Cycle A → 가(KB) → あ(JB) → A, skipping buckets whose input source is not
+    // installed. The A group ({English, German, …}) is treated as one bucket:
+    // returning to it restores the exact keyboard that was last active there.
     func cycle() {
-        let order = PreviewLanguage.allCases
+        guard canToggle else { return }
+        // Remember the current A-group keyboard before leaving it.
+        if language == .english, let id = currentSourceID() {
+            previousLatinSourceID = id
+        }
+        let order = PreviewLanguage.allCases   // [english (A), korean, japanese]
         guard let idx = order.firstIndex(of: language) else { return }
-        for offset in 1...order.count {
+        // offsets 1..<count never revisit the current bucket, so the A group is
+        // never re-selected onto itself (no silent EB↔XB switch).
+        for offset in 1..<order.count {
             let candidate = order[(idx + offset) % order.count]
-            if selectFirst(matching: candidate) { return }
+            if select(candidate) { return }
         }
     }
 
     private func refresh() {
         guard let unmanaged = TISCopyCurrentKeyboardInputSource() else { return }
         let source = unmanaged.takeRetainedValue()
-        language = detectLanguage(source)
+        let detected = detectLanguage(source)
+        language = detected
+        // Keep the A-group memory current whenever a Latin/other source is live.
+        if detected == .english {
+            previousLatinSourceID = stringProperty(source, key: kTISPropertyInputSourceID)
+        }
+        canToggle = hasInstalledSource(matching: .korean)
+            || hasInstalledSource(matching: .japanese)
     }
 
     private func detectLanguage(_ source: TISInputSource) -> PreviewLanguage {
         if sourceMatchesKorean(source) { return .korean }
         if sourceMatchesJapanese(source) { return .japanese }
         return .english
+    }
+
+    // Select the input source for a bucket, updating `language`. For the A
+    // group, restore the remembered keyboard first, falling back to any
+    // non-CJK keyboard.
+    @discardableResult
+    private func select(_ lang: PreviewLanguage) -> Bool {
+        if lang == .english, let id = previousLatinSourceID, selectSource(withID: id) {
+            language = .english
+            return true
+        }
+        return selectFirst(matching: lang)
     }
 
     @discardableResult
@@ -1041,9 +1090,38 @@ final class InputSourceManager: ObservableObject {
         return false
     }
 
+    private func selectSource(withID id: String) -> Bool {
+        guard let listUnmanaged = TISCreateInputSourceList(nil, false) else { return false }
+        let array = listUnmanaged.takeRetainedValue() as NSArray
+        for case let source as TISInputSource in array {
+            guard isSelectable(source) else { continue }
+            if stringProperty(source, key: kTISPropertyInputSourceID) == id {
+                TISSelectInputSource(source)
+                return true
+            }
+        }
+        return false
+    }
+
+    private func hasInstalledSource(matching lang: PreviewLanguage) -> Bool {
+        guard let listUnmanaged = TISCreateInputSourceList(nil, false) else { return false }
+        let array = listUnmanaged.takeRetainedValue() as NSArray
+        for case let source as TISInputSource in array {
+            guard isSelectable(source) else { continue }
+            if sourceMatches(source, lang) { return true }
+        }
+        return false
+    }
+
+    private func currentSourceID() -> String? {
+        guard let unmanaged = TISCopyCurrentKeyboardInputSource() else { return nil }
+        let source = unmanaged.takeRetainedValue()
+        return stringProperty(source, key: kTISPropertyInputSourceID)
+    }
+
     private func sourceMatches(_ source: TISInputSource, _ lang: PreviewLanguage) -> Bool {
         switch lang {
-        case .english:  return sourceMatchesEnglish(source)
+        case .english:  return sourceMatchesLatin(source)
         case .korean:   return sourceMatchesKorean(source)
         case .japanese: return sourceMatchesJapanese(source)
         }
@@ -1060,10 +1138,18 @@ final class InputSourceManager: ObservableObject {
         return languages(source).contains { $0.hasPrefix("ko") }
     }
 
-    private func sourceMatchesEnglish(_ source: TISInputSource) -> Bool {
-        let id = stringProperty(source, key: kTISPropertyInputSourceID).lowercased()
-        if id.contains("keylayout.abc") || id.contains("keylayout.us") { return true }
-        return languages(source).contains { $0.hasPrefix("en") }
+    // The "A" bucket: any keyboard layout that is not Korean or Japanese —
+    // English, other Latin layouts (German, French…), Cyrillic, and so on all
+    // preview with the English sample sentence.
+    private func sourceMatchesLatin(_ source: TISInputSource) -> Bool {
+        isKeyboardSource(source)
+            && !sourceMatchesKorean(source)
+            && !sourceMatchesJapanese(source)
+    }
+
+    private func isKeyboardSource(_ source: TISInputSource) -> Bool {
+        stringProperty(source, key: kTISPropertyInputSourceCategory)
+            == (kTISCategoryKeyboardInputSource as String)
     }
 
     private func sourceMatchesJapanese(_ source: TISInputSource) -> Bool {
