@@ -67,7 +67,7 @@
 		50753F0B5228D3B14DA0FCD9 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SettingsView.swift; path = Sources/FontGrid/SettingsView.swift; sourceTree = SOURCE_ROOT; };
 		4CE506718DF36C489EFC5E64 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Theme.swift; path = Sources/FontGrid/Theme.swift; sourceTree = SOURCE_ROOT; };
 		2811AC70E34C621964FDBA2F /* WrappingPreviewLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WrappingPreviewLabel.swift; path = Sources/FontGrid/WrappingPreviewLabel.swift; sourceTree = SOURCE_ROOT; };
-		AA00000000000000000000E1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = 08FOSE/Assets.xcassets; sourceTree = SOURCE_ROOT; };
+		AA00000000000000000000E1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Sources/FontGrid/Resources/Assets.xcassets; sourceTree = SOURCE_ROOT; };
 		AA00000000000000000000E3 /* Wallpapers */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Sources/FontGrid/Resources/Wallpapers; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 

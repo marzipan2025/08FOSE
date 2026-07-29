@@ -402,13 +402,13 @@ struct SettingsOverlay: View {
             Link(destination: URL(string: "https://www.panopt.net")!) {
                 Group {
                     if hovering {
-                        Image("PNPT")
+                        Image("PNPT", bundle: AppResources.bundle)
                             .renderingMode(.template)
                             .resizable()
                             .scaledToFit()
                             .foregroundStyle(.secondary)
                     } else {
-                        Image("PNPT")
+                        Image("PNPT", bundle: AppResources.bundle)
                             .resizable()
                             .scaledToFit()
                             .opacity(0.75)
