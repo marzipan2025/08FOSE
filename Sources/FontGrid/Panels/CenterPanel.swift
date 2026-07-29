@@ -57,18 +57,9 @@ struct CenterPanel: View {
                     || family.name.localizedCaseInsensitiveContains(vm.searchQuery)
                     || memos.note(for: family.name).localizedCaseInsensitiveContains(vm.searchQuery)
             }
-            // Weight-count chips describe families by how many discrete faces
-            // they ship, so variable fonts are held out of them — their member
-            // count is just how many named instances the file happens to
-            // declare, which would otherwise pile them into the high buckets.
-            // The Variable Fonts chip is how they're reached instead.
-            .filter { family in
-                guard vm.weightFilter != .all else { return true }
-                return !family.isVariable && vm.weightFilter.matches(family.weightCount)
-            }
+            .filter { vm.matchesWeightGroup($0) }
             .filter { !vm.pinnedOnly || pins.contains($0.name) }
             .filter { !vm.memoOnly || memos.hasNote(for: $0.name) }
-            .filter { !vm.variablesOnly || $0.isVariable }
             .filter { vm.scriptFilter.isEmpty || vm.scriptFilter.contains($0.script) }
             .filter { vm.activeTag == nil || memos.tags(for: $0.name).contains(vm.activeTag!) }
             .filter { family in

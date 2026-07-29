@@ -1,19 +1,17 @@
 import SwiftUI
 
-// Weight-count filter for the grid.
-// - .all: no filtering
+// One weight-count bucket for the grid filter. Buckets are selected as a set;
+// an empty set means no weight filtering.
 // - .exactly(n): families with exactly n weights
 // - .range(lo, hi): families with lo…hi weights (inclusive)
 // - .atLeast(n): families with n or more weights
 enum WeightFilter: Hashable {
-    case all
     case exactly(Int)
     case range(Int, Int)
     case atLeast(Int)
 
     func matches(_ weightCount: Int) -> Bool {
         switch self {
-        case .all: return true
         case .exactly(let n): return weightCount == n
         case .range(let lo, let hi): return weightCount >= lo && weightCount <= hi
         case .atLeast(let n): return weightCount >= n
@@ -29,7 +27,7 @@ final class AppViewModel: ObservableObject {
     // in the same filter/search context they left in. Keys are read at init
     // and rewritten on every change via didSet.
     private static let searchQueryKey = "searchQuery"
-    private static let weightFilterKey = "weightFilter"
+    private static let weightFiltersKey = "weightFilters"
     private static let pinnedOnlyKey = "pinnedOnly"
     private static let memoOnlyKey = "memoOnly"
     private static let variablesOnlyKey = "variablesOnly"
@@ -41,15 +39,12 @@ final class AppViewModel: ObservableObject {
     @Published var searchQuery: String = UserDefaults.standard.string(forKey: AppViewModel.searchQueryKey) ?? "" {
         didSet { UserDefaults.standard.set(searchQuery, forKey: Self.searchQueryKey) }
     }
-    // The weight-count chips and the Variable Fonts chip are one group: a family
-    // is counted either by how many static faces it ships or by having a
-    // continuous axis, never both. Selecting one side clears the other (the
-    // didSet pairs can't loop — each only fires when the other is already at its
-    // neutral value).
-    @Published var weightFilter: WeightFilter = AppViewModel.loadWeightFilter() {
+    // The weight-count chips and the Variable Fonts chip are one group, combined
+    // as a union: a family shows if it lands in any selected bucket. Empty set
+    // (with Variable off) means no weight filtering.
+    @Published var weightFilters: Set<WeightFilter> = AppViewModel.loadWeightFilters() {
         didSet {
-            UserDefaults.standard.set(Self.encodeWeightFilter(weightFilter), forKey: Self.weightFilterKey)
-            if weightFilter != .all { variablesOnly = false }
+            UserDefaults.standard.set(weightFilters.map(Self.encodeWeightFilter), forKey: Self.weightFiltersKey)
         }
     }
     @Published var pinnedOnly: Bool = UserDefaults.standard.bool(forKey: AppViewModel.pinnedOnlyKey) {
@@ -58,12 +53,9 @@ final class AppViewModel: ObservableObject {
     @Published var memoOnly: Bool = UserDefaults.standard.bool(forKey: AppViewModel.memoOnlyKey) {
         didSet { UserDefaults.standard.set(memoOnly, forKey: Self.memoOnlyKey) }
     }
-    // Show only variable fonts. Paired with weightFilter (see above).
+    // Include variable fonts. Unions with weightFilters (see above).
     @Published var variablesOnly: Bool = UserDefaults.standard.bool(forKey: AppViewModel.variablesOnlyKey) {
-        didSet {
-            UserDefaults.standard.set(variablesOnly, forKey: Self.variablesOnlyKey)
-            if variablesOnly { weightFilter = .all }
-        }
+        didSet { UserDefaults.standard.set(variablesOnly, forKey: Self.variablesOnlyKey) }
     }
     // Selected script buckets. Empty = no script filter (show all). Multiple
     // may be on at once (union); combined AND with the other filters.
@@ -100,18 +92,26 @@ final class AppViewModel: ObservableObject {
         else { scriptFilter.insert(category) }
     }
 
-    // Canonical order of the Weights filter chips (All → 1 → 2+ → 5+ → 10+),
-    // shared by the LeftPanel chips and the `w` shortcut so they stay in sync.
-    // The chips are buckets, not cumulative thresholds — each "+" runs up to the
-    // next chip (2+ is 2–4, 5+ is 5–9) — so together they partition every family
-    // exactly once, with no weight count left unreachable.
-    static let weightFilterCycle: [WeightFilter] = [.all, .exactly(1), .range(2, 4), .range(5, 9), .atLeast(10)]
+    // The Weights filter chips (1 / 2+ / 5+ / 10+). The chips are buckets, not
+    // cumulative thresholds — each "+" runs up to the next chip (2+ is 2–4, 5+
+    // is 5–9) — so together they partition every family exactly once, with no
+    // weight count left unreachable.
+    static let weightFilterOptions: [WeightFilter] = [.exactly(1), .range(2, 4), .range(5, 9), .atLeast(10)]
 
-    // Advance the weight filter one step through weightFilterCycle, wrapping
-    // back to .all. Bound to the `w` shortcut.
-    func cycleWeightFilter() {
-        let idx = Self.weightFilterCycle.firstIndex(of: weightFilter) ?? 0
-        weightFilter = Self.weightFilterCycle[(idx + 1) % Self.weightFilterCycle.count]
+    func toggleWeightFilter(_ option: WeightFilter) {
+        if weightFilters.contains(option) { weightFilters.remove(option) }
+        else { weightFilters.insert(option) }
+    }
+
+    // A family passes the Weights group when it lands in any selected bucket.
+    // Weight-count chips describe families by how many discrete faces they ship,
+    // so variable fonts are held out of them — their member count is just how
+    // many named instances the file happens to declare, which would otherwise
+    // pile them into the high buckets. The Variable Fonts chip reaches them.
+    func matchesWeightGroup(_ family: FontFamily) -> Bool {
+        if weightFilters.isEmpty && !variablesOnly { return true }
+        if family.isVariable { return variablesOnly }
+        return weightFilters.contains { $0.matches(family.weightCount) }
     }
 
     // Active note tag (lowercased, without '#'). nil = no tag filter. Single
@@ -214,33 +214,32 @@ final class AppViewModel: ObservableObject {
     // synthesis for free — round-trip through a short string instead.
     private static func encodeWeightFilter(_ w: WeightFilter) -> String {
         switch w {
-        case .all: return "all"
         case .exactly(let n): return "exactly:\(n)"
         case .range(let lo, let hi): return "range:\(lo)-\(hi)"
         case .atLeast(let n): return "atLeast:\(n)"
         }
     }
 
-    private static func loadWeightFilter() -> WeightFilter {
-        guard let s = UserDefaults.standard.string(forKey: weightFilterKey) else { return .all }
-        if s == "all" { return .all }
+    private static func decodeWeightFilter(_ s: String) -> WeightFilter? {
         let parts = s.split(separator: ":")
-        var decoded: WeightFilter? = nil
-        if parts.count == 2 {
-            let arg = String(parts[1])
-            switch parts[0] {
-            case "exactly": if let n = Int(arg) { decoded = .exactly(n) }
-            case "atLeast": if let n = Int(arg) { decoded = .atLeast(n) }
-            case "range":
-                let r = arg.split(separator: "-")
-                if r.count == 2, let lo = Int(r[0]), let hi = Int(r[1]) { decoded = .range(lo, hi) }
-            default: break
-            }
+        guard parts.count == 2 else { return nil }
+        let arg = String(parts[1])
+        switch parts[0] {
+        case "exactly": return Int(arg).map { .exactly($0) }
+        case "atLeast": return Int(arg).map { .atLeast($0) }
+        case "range":
+            let r = arg.split(separator: "-")
+            guard r.count == 2, let lo = Int(r[0]), let hi = Int(r[1]) else { return nil }
+            return .range(lo, hi)
+        default: return nil
         }
+    }
+
+    private static func loadWeightFilters() -> Set<WeightFilter> {
+        let raw = (UserDefaults.standard.array(forKey: weightFiltersKey) as? [String]) ?? []
         // Normalize: only keep values that map to a current chip; stale ones
-        // (e.g. the old 3+/5+) fall back to All so no orphaned filter sticks.
-        if let decoded, weightFilterCycle.contains(decoded) { return decoded }
-        return .all
+        // (e.g. the old 3+/5+) are dropped so no orphaned filter sticks.
+        return Set(raw.compactMap(decodeWeightFilter).filter { weightFilterOptions.contains($0) })
     }
 
     private static func loadScriptFilter() -> Set<ScriptCategory> {
@@ -345,7 +344,7 @@ final class AppViewModel: ObservableObject {
         rightPanelWidth = Self.defaultRightPanelWidth
         previewSizeOffset = 0
         activeTag = nil
-        weightFilter = .all
+        weightFilters = []
         pinnedOnly = false
         memoOnly = false
         variablesOnly = false

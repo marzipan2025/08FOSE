@@ -195,9 +195,7 @@ struct RootView: View {
     // App-wide single-key shortcuts (no modifiers, not while editing text):
     //   0–4 → wallpaper (0 = none, 1–4 = Wallpaper01–04)
     //   t   → toggle dark / light theme
-    //   w   → cycle Weights filter (All → 1 → 3+ → 5+ → All)
     //   p/m → pinned / memo filter
-    //   v   → variable-fonts-only filter
     //   k/j/c/l/s/o → toggle script bucket
     //   (korean / japanese / chinese / latin / symbol / other)
     // Returns true when the key was handled (and should be consumed).
@@ -229,17 +227,11 @@ struct RootView: View {
         case "t":
             vm.isLightMode.toggle()
             return true
-        case "w":
-            vm.cycleWeightFilter()
-            return true
         case "p":
             vm.pinnedOnly.toggle()
             return true
         case "m":
             vm.memoOnly.toggle()
-            return true
-        case "v":
-            vm.variablesOnly.toggle()
             return true
         case "k", "j", "l", "o":
             // Chinese/Symbol are folded into Other, so only the filterable

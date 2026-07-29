@@ -12,6 +12,17 @@ struct LeftPanel: View {
     ]
     private let wideWeightOption: (label: String, value: WeightFilter) = ("10+", .atLeast(10))
 
+    // Every group in the panel — Weights, Collections, Scripts, the two
+    // sliders, Theme, Wallpaper — is a label over its controls, so the two
+    // metrics below are shared instead of re-picked per group: they used to
+    // drift (8 for the chip groups, 6 for the sliders) and read as uneven.
+    private static let groupLabelSpacing: CGFloat = 8
+    private static let groupLabelTopPad: CGFloat = 2
+    // A Slider carries ~4pt of its own padding above the track, so the same
+    // declared spacing reads looser under a slider label than under a pill
+    // row. Subtract it here to keep every label-to-control gap even.
+    private static let sliderLabelSpacing: CGFloat = groupLabelSpacing - 4
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Fixed top: search.
@@ -23,6 +34,9 @@ struct LeftPanel: View {
 
             // Scrollable middle: grows as more controls are added without
             // pushing the Settings footer off-screen.
+            // Two groups under plain headers. PanelSection's own title styling
+            // already matches the right panel's PINNED / TAGS rows, so the
+            // header rides inside the section rather than sitting above a rule.
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     PanelSection("Filters") {
@@ -35,17 +49,10 @@ struct LeftPanel: View {
 
                     PanelHDivider()
 
-                    PanelSection("Layout") {
+                    PanelSection("View") {
                         VStack(alignment: .leading, spacing: 14) {
                             columnSlider
                             fontSizeSlider
-                        }
-                    }
-
-                    PanelHDivider()
-
-                    PanelSection("Appearance") {
-                        VStack(alignment: .leading, spacing: 14) {
                             themePicker
                             wallpaperPicker
                         }
@@ -128,12 +135,10 @@ struct LeftPanel: View {
     // Variable filter, which spans the remaining two columns for a 1:2 split.
     // Variable lives here rather than under Collections because it's another way
     // of asking "what weights does this family give me" — a continuous axis
-    // instead of a count.
+    // instead of a count. All four chips combine as a union.
     private var weightFilterSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Weights")
-                .font(.system(size: Theme.smallSize))
-                .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: Self.groupLabelSpacing) {
+            groupLabel("Weights")
             Grid(horizontalSpacing: 6, verticalSpacing: 6) {
                 GridRow {
                     ForEach(weightOptions, id: \.value) { weightPill($0) }
@@ -147,19 +152,16 @@ struct LeftPanel: View {
     }
 
     private func weightPill(_ option: (label: String, value: WeightFilter)) -> some View {
-        PillButton(label: option.label, icon: nil, isOn: vm.weightFilter == option.value) {
-            // Toggle: re-tapping the active chip clears to All (no chip).
-            vm.weightFilter = (vm.weightFilter == option.value) ? .all : option.value
+        PillButton(label: option.label, icon: nil, isOn: vm.weightFilters.contains(option.value)) {
+            vm.toggleWeightFilter(option.value)
         }
     }
 
     // Pins / Memo filters, pulled out of the old "Sortings" group into
     // their own labeled section.
     private var collectionsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Collections")
-                .font(.system(size: Theme.smallSize))
-                .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: Self.groupLabelSpacing) {
+            groupLabel("Collections")
             HStack(spacing: 6) {
                 pinnedOnlyToggle
                 memoOnlyToggle
@@ -171,7 +173,7 @@ struct LeftPanel: View {
         }
     }
 
-    // Show only variable fonts. Sits in the Weights grid (see above). Always
+    // Include variable fonts. Sits in the Weights grid (see above). Always
     // enabled — with no variable fonts installed it just shows the "Nothing
     // found" empty state.
     private var variablesOnlyToggle: some View {
@@ -229,12 +231,36 @@ struct LeftPanel: View {
 
     // The six script buckets, labeled "Scripts".
     private var scriptsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Scripts")
-                .font(.system(size: Theme.smallSize))
-                .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: Self.groupLabelSpacing) {
+            groupLabel("Scripts")
             scriptFilterRows
         }
+    }
+
+    private func groupLabelText(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: Theme.smallSize))
+            .foregroundStyle(.secondary)
+    }
+
+    // Shared group label. The top pad lifts each label off the group above it.
+    private func groupLabel(_ text: String) -> some View {
+        groupLabelText(text)
+            .padding(.top, Self.groupLabelTopPad)
+    }
+
+    // Group label for the sliders: same label, plus the live value trailing.
+    // Padded as a row so the value stays baseline-aligned with the label.
+    private func sliderLabel(_ text: String, value: String) -> some View {
+        HStack {
+            groupLabelText(text)
+            Spacer()
+            Text(value)
+                .font(.system(size: Theme.smallSize, weight: .medium))
+                .foregroundStyle(.primary)
+                .monospacedDigit()
+        }
+        .padding(.top, Self.groupLabelTopPad)
     }
 
     private var pinnedOnlyToggle: some View {
@@ -291,17 +317,8 @@ struct LeftPanel: View {
     private var columnSlider: some View {
         let safeMax = max(2, vm.maxColumns)
         let current = min(max(1, vm.columnCount), max(1, vm.maxColumns))
-        return VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text("Columns")
-                    .font(.system(size: Theme.smallSize))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text("\(current)")
-                    .font(.system(size: Theme.smallSize, weight: .medium))
-                    .foregroundStyle(.primary)
-                    .monospacedDigit()
-            }
+        return VStack(alignment: .leading, spacing: Self.sliderLabelSpacing) {
+            sliderLabel("Columns", value: "\(current)")
             Slider(
                 value: Binding(
                     get: { Double(current) },
@@ -311,66 +328,55 @@ struct LeftPanel: View {
                 step: 1
             )
             .disabled(vm.maxColumns <= 1)
-            HStack {
-                Text("1")
-                Spacer()
-                Text("\(max(1, vm.maxColumns))")
-            }
-            .font(.system(size: 10))
-            .foregroundStyle(.tertiary)
-            .monospacedDigit()
         }
     }
 
     private var fontSizeSlider: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text("Font Size")
-                    .font(.system(size: Theme.smallSize))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text(formattedOffset(vm.previewSizeOffset))
-                    .font(.system(size: Theme.smallSize, weight: .medium))
-                    .foregroundStyle(.primary)
-                    .monospacedDigit()
-            }
-            Slider(value: $vm.previewSizeOffset, in: AppViewModel.previewOffsetRange, step: 1)
+        VStack(alignment: .leading, spacing: Self.sliderLabelSpacing) {
+            sliderLabel("Font Size", value: formattedOffset(vm.previewSizeOffset))
+            // Stepless so AppKit doesn't comb the track with one tick per unit;
+            // the binding rounds instead, which keeps the offset integral and
+            // the thumb snapping exactly as the stepped slider did.
+            Slider(
+                value: Binding(
+                    get: { vm.previewSizeOffset },
+                    set: { vm.previewSizeOffset = $0.rounded() }
+                ),
+                in: AppViewModel.previewOffsetRange
+            )
             sliderScale
         }
     }
 
-    // The range is asymmetric (e.g. -8...20), so 0 is NOT at the track's
-    // midpoint. Place each label at its true fractional position so the
-    // numbers line up with the slider's tick marks and thumb.
+    // Three tick marks — the two range ends and 0 — standing in for the old
+    // number row. The range is asymmetric (-10...30), so 0 is NOT at the
+    // track's midpoint: each tick sits at its true fractional position so it
+    // lines up with the thumb.
     private var sliderScale: some View {
         let lo = AppViewModel.previewOffsetRange.lowerBound
         let hi = AppViewModel.previewOffsetRange.upperBound
-        let labels: [Double] = [lo, 0, hi]
         return GeometryReader { geo in
             let inset: CGFloat = 11   // ≈ slider knob half-width
             let usable = max(1, geo.size.width - inset * 2)
-            ZStack {
-                ForEach(labels, id: \.self) { value in
+            ZStack(alignment: .topLeading) {
+                ForEach([lo, 0, hi], id: \.self) { value in
                     let f = CGFloat((value - lo) / (hi - lo))
-                    Text(formattedOffset(value))
-                        .position(x: inset + usable * f, y: 7)
+                    Rectangle()
+                        .fill(.tertiary)
+                        .frame(width: 1, height: 4)
+                        .position(x: inset + usable * f, y: 2)
                 }
             }
         }
-        .frame(height: 14)
-        .font(.system(size: 10))
-        .foregroundStyle(.tertiary)
-        .monospacedDigit()
+        .frame(height: 6)
     }
 
     // Wallpaper switcher (None / 1–4). Shared between dark and light mode —
     // the per-wallpaper blend map inside WallpaperOverlay decides how each
     // image composites onto whichever appearance is active.
     private var wallpaperPicker: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Wallpaper")
-                .font(.system(size: Theme.smallSize))
-                .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: Self.groupLabelSpacing) {
+            groupLabel("Wallpaper")
             HStack(spacing: 6) {
                 filterPill(label: "0", icon: nil, isOn: vm.wallpaper.isEmpty) {
                     vm.wallpaper = ""
@@ -386,10 +392,8 @@ struct LeftPanel: View {
 
     // Dark / Light theme switch. Light mode is a work in progress.
     private var themePicker: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Theme")
-                .font(.system(size: Theme.smallSize))
-                .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: Self.groupLabelSpacing) {
+            groupLabel("Theme")
             HStack(spacing: 6) {
                 filterPill(label: "Dark", icon: "moon.fill", isOn: !vm.isLightMode) {
                     vm.isLightMode = false
