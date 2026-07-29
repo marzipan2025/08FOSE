@@ -163,6 +163,7 @@ struct SettingsOverlay: View {
                     .padding(.bottom, 6)
                 shortcutsSection
                 licensesSection
+                panoptMark
             }
             // Fixed 480pt content column (shrinks if the center panel is
             // narrower), centered within the center region.
@@ -380,6 +381,48 @@ struct SettingsOverlay: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: Theme.pillRadius).stroke(Theme.border, lineWidth: 1)
                 )
+        }
+    }
+
+    // A small panopt logo at the very end of the screen, sitting like a
+    // superscript signature. Links out to the homepage in the default browser.
+    private var panoptMark: some View {
+        HStack {
+            Spacer()
+            PanoptLink()
+        }
+        .padding(.top, 4)
+    }
+
+    // Resting: the logo in its own faint grey (subtle, easy to miss on
+    // purpose). Hover: template-tinted to the secondary colour so it comes
+    // forward. The "P" is a transparent cut-out, preserved in both modes.
+    private struct PanoptLink: View {
+        @State private var hovering = false
+
+        var body: some View {
+            Link(destination: URL(string: "https://www.panopt.net")!) {
+                Group {
+                    if hovering {
+                        Image("PNPT")
+                            .renderingMode(.template)
+                            .resizable()
+                            .scaledToFit()
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Image("PNPT")
+                            .resizable()
+                            .scaledToFit()
+                            .opacity(0.75)
+                    }
+                }
+                .frame(width: 24, height: 24)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("panopt.net")
+            .onHover { hovering = $0 }
+            .animation(.easeInOut(duration: 0.15), value: hovering)
         }
     }
 
