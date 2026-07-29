@@ -332,7 +332,7 @@ struct SettingsOverlay: View {
                 )
                 .fixedSize(horizontal: false, vertical: true)
 
-                Text("v \(Theme.appVersion) : The Weights filters are no longer exclusive — pick any combination of the weight-count chips and Variable Fonts, and the grid shows every family matching one of them. The W and V shortcuts are retired.")
+                Text("v \(Theme.appVersion) : The left panel is regrouped under Filters and View. Every label now sits the same distance above its controls, and the two sliders trade their number scales for bare tick marks.")
                     .font(.system(size: SettingsType.small))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)

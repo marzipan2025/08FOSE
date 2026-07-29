@@ -54,6 +54,10 @@ struct LeftPanel: View {
                             columnSlider
                             fontSizeSlider
                             themePicker
+                                // Font Size ends in the tick-mark row, which is
+                                // mostly empty space, so this one gap reads
+                                // wider than the rest at the same spacing.
+                                .padding(.top, -4)
                             wallpaperPicker
                         }
                     }
