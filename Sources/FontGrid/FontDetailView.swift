@@ -37,6 +37,16 @@ struct FontDetailView: View {
     // opening the detail doesn't stutter; empty until ready (cells fall back to
     // outline rendering meanwhile).
     @State private var glyphMap: [CGGlyph: String] = [:]
+    // Glyph inspect mode: while ⌥ is held, the card recedes to one flat tone,
+    // the grid switches to hairline outlines, and rolling over a glyph blows it
+    // up to fill the card. See OptionKeyMonitor and inspectDim below.
+    @StateObject private var optionKey = OptionKeyMonitor()
+    @State private var zoomedGlyph: CGGlyph? = nil
+    // Trailing debounce on the rollover, so sweeping the pointer across the grid
+    // lands on where it stopped instead of flashing every cell on the way.
+    @State private var zoomTask: Task<Void, Never>? = nil
+
+    private var inspecting: Bool { optionKey.down && vm.detailGlyphsVisible }
 
     // At/above this card width the info section sits in the right of the middle
     // (weight-list) section; below it, the info flows as multiple columns under
@@ -126,6 +136,13 @@ struct FontDetailView: View {
             }
         }
         .onPreferenceChange(TitleHeightKey.self) { titleAreaHeight = $0 }
+        // The blown-up glyph sits above everything but inside the card's clip.
+        .overlay {
+            if inspecting, let zoomedGlyph {
+                glyphZoom(zoomedGlyph)
+            }
+        }
+        .animation(.easeInOut(duration: 0.08), value: inspecting)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -144,6 +161,16 @@ struct FontDetailView: View {
         // the memo field handle their own taps first, so they're unaffected.
         .onTapGesture {
             NSApp.keyWindow?.makeFirstResponder(nil)
+        }
+        .onAppear { optionKey.start() }
+        .onDisappear { optionKey.stop(); zoomTask?.cancel() }
+        // Leaving inspect mode drops the blown-up glyph, so re-entering starts
+        // clean instead of flashing whatever was last under the pointer.
+        .onChange(of: inspecting) { active in
+            if !active {
+                zoomTask?.cancel()
+                zoomedGlyph = nil
+            }
         }
         .task(id: family.id) {
             infoExpanded = false
@@ -177,7 +204,7 @@ struct FontDetailView: View {
     // section only. Title and memo keep the card's full width.
     private func wideLayout(width: CGFloat, height: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            titleArea
+            titleArea.inspectDim(inspecting)
             Rectangle().fill(detailDivider).frame(height: 1)
             HStack(spacing: 0) {
                 weightList
@@ -185,11 +212,12 @@ struct FontDetailView: View {
                 if !metadata.isEmpty {
                     infoColumn
                         .frame(width: max(180, width * 0.25))
+                        .inspectDim(inspecting)
                 }
             }
             .frame(maxHeight: .infinity)
             Rectangle().fill(detailDivider).frame(height: 1)
-            memoArea(cardHeight: height)
+            memoArea(cardHeight: height).inspectDim(inspecting)
         }
     }
 
@@ -199,12 +227,14 @@ struct FontDetailView: View {
     // one scroll so nothing gets clipped between them.
     private func narrowLayout(width: CGFloat, height: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            titleArea
+            titleArea.inspectDim(inspecting)
             Rectangle().fill(detailDivider).frame(height: 1)
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    if !metadata.isEmpty { infoColumns(width: width) }
-                    weightListContent
+                    if !metadata.isEmpty {
+                        infoColumns(width: width).inspectDim(inspecting)
+                    }
+                    weightListContent.inspectDim(inspecting)
                     if vm.detailGlyphsVisible { glyphsSection }
                 }
             }
@@ -212,7 +242,7 @@ struct FontDetailView: View {
             // Reset scroll to top when ←/→ switches fonts.
             .id(family.id)
             Rectangle().fill(detailDivider).frame(height: 1)
-            memoArea(cardHeight: height)
+            memoArea(cardHeight: height).inspectDim(inspecting)
         }
     }
 
@@ -389,11 +419,10 @@ struct FontDetailView: View {
         .background(memoAreaBackground)
     }
 
-    // Memo strip background. Light mode uses a brighter solid (≈0.93,
-    // white-ward 40%) instead of the global memoSurface overlay.
-    private var memoAreaBackground: Color {
-        colorScheme == .light ? Color(white: 0.93) : Theme.memoSurface
-    }
+    // Memo strip background: none, so the card's own body colour carries through
+    // and the strip reads as part of the same surface rather than a shelf under
+    // it. Clear rather than a copy of the card colour, so the two can't drift.
+    private var memoAreaBackground: Color { .clear }
 
     // MARK: - Memo (expanded: fills body)
 
@@ -643,7 +672,7 @@ struct FontDetailView: View {
     // `weightListContent` in a shared scroll with the info section.
     private var weightList: some View {
         ScrollView {
-            weightListContent
+            weightListContent.inspectDim(inspecting)
             if vm.detailGlyphsVisible { glyphsSection }
         }
         // Fresh identity per font so ←/→ navigation starts back at the top
@@ -722,6 +751,9 @@ struct FontDetailView: View {
             .padding(.horizontal, 24)
             .padding(.top, 24)
             .padding(.bottom, 20)
+            // The section's own header is chrome, so it recedes with everything
+            // else — only the grid stays.
+            .inspectDim(inspecting)
             glyphGrid
                 .padding(.horizontal, 24)
                 .padding(.bottom, 20)
@@ -767,8 +799,14 @@ struct FontDetailView: View {
         let columns = Array(repeating: GridItem(.flexible(), spacing: spacing), count: columnCount)
         return LazyVGrid(columns: columns, alignment: .leading, spacing: spacing) {
             ForEach(0..<count, id: \.self) { index in
-                GlyphCell(font: font, glyph: CGGlyph(index), character: glyphMap[CGGlyph(index)])
-                    .frame(height: cell)
+                GlyphCell(
+                    font: font,
+                    glyph: CGGlyph(index),
+                    character: glyphMap[CGGlyph(index)],
+                    inspecting: inspecting,
+                    onRollover: { scheduleZoom($0) }
+                )
+                .frame(height: cell)
             }
         }
         // Fresh layout when the cell size changes: LazyVGrid reuses cells and
@@ -782,6 +820,68 @@ struct FontDetailView: View {
             }
         )
         .onPreferenceChange(GlyphAreaWidthKey.self) { glyphAreaWidth = $0 }
+    }
+
+    // MARK: - Glyph inspect
+
+    // Trailing debounce: each rollover restarts the clock, so a pointer swept
+    // across the grid only resolves once it settles. 80ms is long enough to skip
+    // the cells passed through, short enough to feel immediate when it lands.
+    private func scheduleZoom(_ glyph: CGGlyph?) {
+        zoomTask?.cancel()
+        zoomTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 80_000_000)
+            guard !Task.isCancelled else { return }
+            zoomedGlyph = glyph
+        }
+    }
+
+    // The blown-up glyph. Filled, at full ink strength — the one thing in the
+    // card that isn't receding. Scaled so the font's em box fits the card's
+    // shorter side with a 4% margin, and positioned by the font's own metrics
+    // rather than by its inked bounds: relative size AND relative position hold
+    // across glyphs, so a comma stays a small mark low in the frame while a
+    // CJK ideograph fills it.
+    @ViewBuilder
+    private func glyphZoom(_ glyph: CGGlyph) -> some View {
+        Canvas { ctx, size in
+            // 12% breathing room per side: accents, swashes and tall marks reach
+            // well past the em box, and at a tighter fit they clipped on the
+            // card edge.
+            let em = min(size.width, size.height) * 0.76
+            guard em > 1 else { return }
+            let font = CTFontCreateWithName(selectedGlyphPS as CFString, em, nil)
+            var g = glyph
+            var advance = CGSize.zero
+            CTFontGetAdvancesForGlyphs(font, .horizontal, &g, &advance, 1)
+            // Split the em box at the font's own ascent/descent ratio to find
+            // where the baseline sits inside it.
+            let ascent = CTFontGetAscent(font)
+            let descent = CTFontGetDescent(font)
+            let ratio = ascent / max(1, ascent + descent)
+            ctx.withCGContext { cg in
+                cg.textMatrix = .identity
+                cg.translateBy(x: 0, y: size.height)
+                cg.scaleBy(x: 1, y: -1)
+                let boxTop = (size.height + em) / 2      // y-up: top edge of the em box
+                var pos = CGPoint(
+                    x: (size.width - advance.width) / 2,
+                    // Dropped 20pt below the box's own baseline: a mathematically
+                    // centred em box sits high in the card, because the ascent
+                    // half is mostly filled and the descent half mostly isn't.
+                    y: boxTop - em * ratio - 20
+                )
+                // Fully opaque, unlike the 0.85 the grid cells use: at 0.85 the
+                // outlined glyphs underneath showed through the strokes and the
+                // big glyph read as translucent.
+                cg.setFillColor((colorScheme == .light ? NSColor.black : NSColor.white).cgColor)
+                CTFontDrawGlyphs(font, &g, &pos, 1, cg)
+            }
+        }
+        // The overlay must never take the pointer: rollover on the cells beneath
+        // is what drives it, and swallowing events would freeze it on the first
+        // glyph (and kill scrolling through the grid).
+        .allowsHitTesting(false)
     }
 
     // MARK: - Actions
@@ -819,6 +919,75 @@ struct FontDetailView: View {
     }
 }
 
+// Tracks the ⌥ key for as long as the detail card is open.
+//
+// A *local* monitor only sees events routed to this app, so "the app is
+// frontmost" comes for free — no extra check needed. Two things it does have to
+// handle: ⌥ held while the app deactivates (⌘-Tab away) would otherwise leave
+// the mode stuck on, and ⌥ pressed in another app *before* clicking in here
+// never produces a flagsChanged event at all, so the current flags are re-read
+// on activation. Typing is exempt: ⌥ is a dead key for special characters, so
+// the mode stays off whenever a text field holds focus.
+@MainActor final class OptionKeyMonitor: ObservableObject {
+    @Published private(set) var down = false
+
+    private var flagsMonitor: Any?
+    private var observers: [NSObjectProtocol] = []
+
+    func start() {
+        guard flagsMonitor == nil else { return }
+        flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
+            self?.update(event.modifierFlags)
+            return event   // observe only — never consume
+        }
+        let center = NotificationCenter.default
+        observers = [
+            center.addObserver(forName: NSApplication.didResignActiveNotification,
+                               object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor in self?.down = false }
+            },
+            center.addObserver(forName: NSApplication.didBecomeActiveNotification,
+                               object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor in self?.update(NSEvent.modifierFlags) }
+            }
+        ]
+    }
+
+    func stop() {
+        if let flagsMonitor { NSEvent.removeMonitor(flagsMonitor) }
+        flagsMonitor = nil
+        observers.forEach { NotificationCenter.default.removeObserver($0) }
+        observers = []
+        down = false
+    }
+
+    private func update(_ flags: NSEvent.ModifierFlags) {
+        let editing = NSApp.keyWindow?.firstResponder is NSText
+        let next = flags.contains(.option) && !editing
+        if next != down { down = next }
+    }
+}
+
+// The recede treatment for everything that isn't the glyph grid: desaturated,
+// flattened to a single tone, and faded back until it reads as texture rather
+// than content. Nothing is removed — the layout stays exactly where it was.
+// Hit testing goes off so clicks can't land on controls that are barely there.
+private struct InspectDim: ViewModifier {
+    let active: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .saturation(active ? 0 : 1)
+            .contrast(active ? 0 : 1)
+            .opacity(active ? 0.5 : 1)
+            .allowsHitTesting(!active)
+    }
+}
+
+extension View {
+    func inspectDim(_ active: Bool) -> some View { modifier(InspectDim(active: active)) }
+}
+
 // One glyph centered in its cell, drawn on a SwiftUI Canvas (no per-cell NSView)
 // so even ~50k-glyph CJK fonts scroll smoothly. Glyphs that map to a character
 // are drawn as TEXT (CTLine) so color fonts (emoji) render in their real color;
@@ -828,12 +997,26 @@ private struct GlyphCell: View {
     let glyph: CGGlyph
     // Mapped character (nil = unmapped or map not built yet → outline, no copy).
     let character: String?
+    // ⌥ inspect mode: draw as a hairline outline instead of a filled shape, and
+    // report rollover so the card can blow this glyph up.
+    let inspecting: Bool
+    let onRollover: (CGGlyph?) -> Void
     @Environment(\.colorScheme) private var colorScheme
     @State private var hovering = false
     @State private var showCopied = false
 
+    // Bitmap colour glyphs (Apple Color Emoji and friends) have no outline to
+    // trace, so inspect mode can't draw them as line art. They recede with the
+    // rest of the chrome instead, and don't answer rollover.
+    private var outlinePath: CGPath? {
+        guard inspecting else { return nil }
+        return CTFontCreatePathForGlyph(font, glyph, nil)
+    }
+    private var inspectable: Bool { outlinePath != nil }
+
     var body: some View {
-        Canvas { ctx, size in
+        let path = outlinePath
+        return Canvas { ctx, size in
             // Non-copyable glyphs (outline box) are drawn more faded.
             let ink = (colorScheme == .light ? NSColor.black : NSColor.white)
                 .withAlphaComponent(character != nil ? 0.85 : 0.5)
@@ -842,7 +1025,21 @@ private struct GlyphCell: View {
                 cg.textMatrix = .identity
                 cg.translateBy(x: 0, y: size.height)
                 cg.scaleBy(x: 1, y: -1)
-                if let character {
+                if let path {
+                    // Hairline trace of the outline. 0.5pt lands on exactly one
+                    // device pixel at 2x. Centred on the path's own bounds so it
+                    // sits where the filled version did.
+                    let b = path.boundingBoxOfPath
+                    guard b.width.isFinite, b.height.isFinite else { return }
+                    cg.saveGState()
+                    cg.translateBy(x: (size.width - b.width) / 2 - b.minX,
+                                   y: (size.height - b.height) / 2 - b.minY)
+                    cg.addPath(path)
+                    cg.setStrokeColor(Self.inspectInk(colorScheme).cgColor)
+                    cg.setLineWidth(0.5)
+                    cg.strokePath()
+                    cg.restoreGState()
+                } else if let character {
                     // Color-aware text render — shows the font's own color glyph.
                     let attr = NSAttributedString(string: character,
                                                   attributes: [.font: font, .foregroundColor: ink])
@@ -883,11 +1080,35 @@ private struct GlyphCell: View {
                     .transition(.opacity)
             }
         }
+        // Colour glyphs keep their filled render in inspect mode, so fade them
+        // back to match the rest of the receded chrome.
+        .saturation(inspecting && !inspectable ? 0 : 1)
+        .opacity(inspecting && !inspectable ? 0.5 : 1)
         .contentShape(Rectangle())
-        .onHover { hovering = $0 }
-        .onTapGesture { handleTap() }
-        // Hover tooltip: the character this glyph maps to. Empty when unmapped.
-        .nativeTooltip(character ?? "")
+        .onHover { hovering in
+            self.hovering = hovering
+            guard inspectable else { return }
+            onRollover(hovering ? glyph : nil)
+        }
+        // Inspect mode owns the pointer: a click here would otherwise copy while
+        // the user is only looking.
+        // Entering inspect mode with the pointer already parked on a cell fires
+        // no hover event, so the mode change has to report the rollover itself.
+        // Only the cell under the pointer answers.
+        .onChange(of: inspecting) { active in
+            guard hovering, inspectable else { return }
+            onRollover(active ? glyph : nil)
+        }
+        .onTapGesture { if !inspecting { handleTap() } }
+        // Hover tooltip: the character this glyph maps to. Empty when unmapped,
+        // and suppressed entirely in inspect mode — the blown-up glyph is the
+        // answer to "what is this", so a small popup on top of it is just noise.
+        .nativeTooltip(inspecting ? "" : (character ?? ""))
+    }
+
+    // Inspect-mode ink, matching the ActionButton labels' `.secondary`.
+    static func inspectInk(_ scheme: ColorScheme) -> NSColor {
+        (scheme == .light ? NSColor.black : NSColor.white).withAlphaComponent(0.55)
     }
 
     @ViewBuilder

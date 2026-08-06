@@ -332,7 +332,7 @@ struct SettingsOverlay: View {
                 )
                 .fixedSize(horizontal: false, vertical: true)
 
-                Text("v \(Theme.appVersion) : The left panel is regrouped under Filters and View. Every label now sits the same distance above its controls, and the two sliders trade their number scales for bare tick marks.")
+                Text("v \(Theme.appVersion) : Hold ⌥ with a font open and the card recedes to a single tone, its glyphs redrawn as hairline outlines. Roll the pointer over any glyph and it fills the card, sized to the font's em box so a comma stays a small mark and an ideograph fills the frame.")
                     .font(.system(size: SettingsType.small))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
