@@ -124,6 +124,10 @@ struct RootView: View {
             }
         }
         .animation(.easeOut(duration: 0.18), value: vm.showSettings)
+        // Silence the tooltips of everything the modals cover — the glyph grid,
+        // the font cells, the pin rows. Their tracking rects survive underneath,
+        // so without this the pointer pops them over the modal.
+        .environment(\.tooltipsSuppressed, vm.showSettings || vm.renamingTag != nil)
         // Toast layer: topmost (above the wallpaper tint AND the Settings
         // overlay — import/export toasts fire while Settings is open). Aligned
         // to the center panel column's top edge, sliding in from above.

@@ -858,18 +858,20 @@ struct FontDetailView: View {
             // where the baseline sits inside it.
             let ascent = CTFontGetAscent(font)
             let descent = CTFontGetDescent(font)
-            let ratio = ascent / max(1, ascent + descent)
             ctx.withCGContext { cg in
                 cg.textMatrix = .identity
                 cg.translateBy(x: 0, y: size.height)
                 cg.scaleBy(x: 1, y: -1)
-                let boxTop = (size.height + em) / 2      // y-up: top edge of the em box
+                // Centre the font's ascent-to-descent band in the card, then drop
+                // it 20pt. Splitting the em box by the ascent:descent ratio (the
+                // first attempt) rode high: ascent + descent normally runs past
+                // one em, so normalising them into the box under-allocated the
+                // ascent and pushed the glyph out through the top. Both metrics
+                // are font-level, so relative position still holds across glyphs
+                // — a comma stays low, an apostrophe stays high.
                 var pos = CGPoint(
                     x: (size.width - advance.width) / 2,
-                    // Dropped 20pt below the box's own baseline: a mathematically
-                    // centred em box sits high in the card, because the ascent
-                    // half is mostly filled and the descent half mostly isn't.
-                    y: boxTop - em * ratio - 20
+                    y: (size.height - (ascent - descent)) / 2 - 20
                 )
                 // Fully opaque, unlike the 0.85 the grid cells use: at 0.85 the
                 // outlined glyphs underneath showed through the strokes and the

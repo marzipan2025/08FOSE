@@ -332,7 +332,7 @@ struct SettingsOverlay: View {
                 )
                 .fixedSize(horizontal: false, vertical: true)
 
-                Text("v \(Theme.appVersion) : Hold ⌥ with a font open and the card recedes to a single tone, its glyphs redrawn as hairline outlines. Roll the pointer over any glyph and it fills the card, sized to the font's em box so a comma stays a small mark and an ideograph fills the frame.")
+                Text("v \(Theme.appVersion) : The blown-up glyph now centres on the font's own ascent-to-descent band, so it stays put as the window grows taller. Tooltips no longer pop through this screen from the grid behind it.")
                     .font(.system(size: SettingsType.small))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
