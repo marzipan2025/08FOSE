@@ -332,7 +332,7 @@ struct SettingsOverlay: View {
                 )
                 .fixedSize(horizontal: false, vertical: true)
 
-                Text("v \(Theme.appVersion) : The blown-up glyph now centres on the font's own ascent-to-descent band, so it stays put as the window grows taller. Tooltips no longer pop through this screen from the grid behind it.")
+                Text("v \(Theme.appVersion) : Emoji blow up under ⌥ too, in their own colours. They come from bitmaps rather than outlines, so past their largest strike they are drawn with the pixels left visible instead of smoothed away.")
                     .font(.system(size: SettingsType.small))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)

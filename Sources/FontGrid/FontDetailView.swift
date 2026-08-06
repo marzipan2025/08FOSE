@@ -854,10 +854,12 @@ struct FontDetailView: View {
             var g = glyph
             var advance = CGSize.zero
             CTFontGetAdvancesForGlyphs(font, .horizontal, &g, &advance, 1)
-            // Split the em box at the font's own ascent/descent ratio to find
-            // where the baseline sits inside it.
             let ascent = CTFontGetAscent(font)
             let descent = CTFontGetDescent(font)
+            // Fully opaque, unlike the 0.85 the grid cells use: at 0.85 the
+            // outlined glyphs underneath showed through the strokes and the big
+            // glyph read as translucent.
+            let ink = colorScheme == .light ? NSColor.black : NSColor.white
             ctx.withCGContext { cg in
                 cg.textMatrix = .identity
                 cg.translateBy(x: 0, y: size.height)
@@ -869,15 +871,35 @@ struct FontDetailView: View {
                 // ascent and pushed the glyph out through the top. Both metrics
                 // are font-level, so relative position still holds across glyphs
                 // — a comma stays low, an apostrophe stays high.
-                var pos = CGPoint(
-                    x: (size.width - advance.width) / 2,
-                    y: (size.height - (ascent - descent)) / 2 - 20
-                )
-                // Fully opaque, unlike the 0.85 the grid cells use: at 0.85 the
-                // outlined glyphs underneath showed through the strokes and the
-                // big glyph read as translucent.
-                cg.setFillColor((colorScheme == .light ? NSColor.black : NSColor.white).cgColor)
-                CTFontDrawGlyphs(font, &g, &pos, 1, cg)
+                let baseline = (size.height - (ascent - descent)) / 2 - 20
+                // Same split as the grid cells: draw through a CTLine when the
+                // glyph maps to a character, so colour fonts come out in their
+                // own colours — this is what lets emoji blow up even though they
+                // have no outline for the grid to trace. Everything else is
+                // drawn by glyph ID.
+                if let character = glyphMap[glyph] {
+                    // Bitmap colour fonts top out at their largest strike (Apple
+                    // Color Emoji: 160px), so filling the card upscales several
+                    // times over. No setting recovers detail that isn't there, so
+                    // drop interpolation and let the pixels show rather than
+                    // smear them. Only for those glyphs — vector ones scale
+                    // cleanly and want the default.
+                    // (Antialiasing is left on: it governs vector edges, not
+                    // bitmap scaling, and killing it would only jag the rest.)
+                    if CTFontCreatePathForGlyph(font, glyph, nil) == nil {
+                        cg.interpolationQuality = .none
+                    }
+                    let attr = NSAttributedString(string: character,
+                                                  attributes: [.font: font, .foregroundColor: ink])
+                    let line = CTLineCreateWithAttributedString(attr)
+                    let width = CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
+                    cg.textPosition = CGPoint(x: (size.width - width) / 2, y: baseline)
+                    CTLineDraw(line, cg)
+                } else {
+                    var pos = CGPoint(x: (size.width - advance.width) / 2, y: baseline)
+                    cg.setFillColor(ink.cgColor)
+                    CTFontDrawGlyphs(font, &g, &pos, 1, cg)
+                }
             }
         }
         // The overlay must never take the pointer: rollover on the cells beneath
@@ -1008,13 +1030,14 @@ private struct GlyphCell: View {
     @State private var showCopied = false
 
     // Bitmap colour glyphs (Apple Color Emoji and friends) have no outline to
-    // trace, so inspect mode can't draw them as line art. They recede with the
-    // rest of the chrome instead, and don't answer rollover.
+    // trace, so inspect mode can't draw them as line art — they recede with the
+    // rest of the chrome instead. They still answer rollover: the blow-up is
+    // drawn filled, which colour glyphs handle fine.
     private var outlinePath: CGPath? {
         guard inspecting else { return nil }
         return CTFontCreatePathForGlyph(font, glyph, nil)
     }
-    private var inspectable: Bool { outlinePath != nil }
+    private var hasOutline: Bool { outlinePath != nil }
 
     var body: some View {
         let path = outlinePath
@@ -1085,12 +1108,11 @@ private struct GlyphCell: View {
         }
         // Colour glyphs keep their filled render in inspect mode, so fade them
         // back to match the rest of the receded chrome.
-        .saturation(inspecting && !inspectable ? 0 : 1)
-        .opacity(inspecting && !inspectable ? 0.5 : 1)
+        .saturation(inspecting && !hasOutline ? 0 : 1)
+        .opacity(inspecting && !hasOutline ? 0.5 : 1)
         .contentShape(Rectangle())
         .onHover { hovering in
             self.hovering = hovering
-            guard inspectable else { return }
             onRollover(hovering ? glyph : nil)
         }
         // Inspect mode owns the pointer: a click here would otherwise copy while
@@ -1099,7 +1121,7 @@ private struct GlyphCell: View {
         // no hover event, so the mode change has to report the rollover itself.
         // Only the cell under the pointer answers.
         .onChange(of: inspecting) { active in
-            guard hovering, inspectable else { return }
+            guard hovering else { return }
             onRollover(active ? glyph : nil)
         }
         .onTapGesture { if !inspecting { handleTap() } }
