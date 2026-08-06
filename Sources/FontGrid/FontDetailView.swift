@@ -239,6 +239,7 @@ struct FontDetailView: View {
                 }
             }
             .frame(maxHeight: .infinity)
+            .scrollIndicators(inspecting ? .hidden : .automatic)
             // Reset scroll to top when ←/→ switches fonts.
             .id(family.id)
             Rectangle().fill(detailDivider).frame(height: 1)
@@ -269,6 +270,7 @@ struct FontDetailView: View {
             .padding(.vertical, 20)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .scrollIndicators(inspecting ? .hidden : .automatic)
     }
 
     private func infoColumns(width: CGFloat) -> some View {
@@ -675,6 +677,10 @@ struct FontDetailView: View {
             weightListContent.inspectDim(inspecting)
             if vm.detailGlyphsVisible { glyphsSection }
         }
+        // The scroller is drawn by AppKit outside the dimmed subtree, so it
+        // stays at full strength while everything else recedes — the one bright
+        // thing left on the card. Hidden for the duration; the wheel still works.
+        .scrollIndicators(inspecting ? .hidden : .automatic)
         // Fresh identity per font so ←/→ navigation starts back at the top
         // instead of keeping the previous font's scroll offset.
         .id(family.id)
