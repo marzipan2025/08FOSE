@@ -1026,9 +1026,10 @@ private struct GlyphCell: View {
                 cg.translateBy(x: 0, y: size.height)
                 cg.scaleBy(x: 1, y: -1)
                 if let path {
-                    // Hairline trace of the outline. 0.5pt lands on exactly one
-                    // device pixel at 2x. Centred on the path's own bounds so it
-                    // sits where the filled version did.
+                    // Hairline trace of the outline, at half a device pixel on a
+                    // 2x display — it antialiases to a fainter line rather than
+                    // a thinner one, which is the point. Centred on the path's
+                    // own bounds so it sits where the filled version did.
                     let b = path.boundingBoxOfPath
                     guard b.width.isFinite, b.height.isFinite else { return }
                     cg.saveGState()
@@ -1036,7 +1037,7 @@ private struct GlyphCell: View {
                                    y: (size.height - b.height) / 2 - b.minY)
                     cg.addPath(path)
                     cg.setStrokeColor(Self.inspectInk(colorScheme).cgColor)
-                    cg.setLineWidth(0.5)
+                    cg.setLineWidth(0.3)
                     cg.strokePath()
                     cg.restoreGState()
                 } else if let character {
