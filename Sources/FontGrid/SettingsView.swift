@@ -332,7 +332,10 @@ struct SettingsOverlay: View {
                 )
                 .fixedSize(horizontal: false, vertical: true)
 
-                Text("v \(Theme.appVersion) : Emoji blow up under ⌥ too, in their own colours. They come from bitmaps rather than outlines, so past their largest strike they are drawn with the pixels left visible instead of smoothed away.")
+                // Pinned to the version the note actually describes, rather than
+                // tracking appVersion — a patch that ships no user-facing change
+                // would otherwise relabel this text as its own.
+                Text("v 0.8.8.2 : Emoji blow up under ⌥ too, in their own colours. They come from bitmaps rather than outlines, so past their largest strike they are drawn with the pixels left visible instead of smoothed away.")
                     .font(.system(size: SettingsType.small))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
