@@ -890,7 +890,24 @@ struct FontDetailView: View {
                 // own colours — this is what lets emoji blow up even though they
                 // have no outline for the grid to trace. Everything else is
                 // drawn by glyph ID.
-                if let character = glyphMap[glyph] {
+                let path = CTFontCreatePathForGlyph(font, glyph, nil)
+
+                // Reversed: the fill flips to the opposite ink — white on light,
+                // black on dark — which alone would sink into the card, so the
+                // outline is traced in the accent at 1pt to carry the shape. It
+                // needs a path, so colour bitmap glyphs fall through to solid.
+                if vm.glyphZoomStyle == .reversed, let path {
+                    cg.saveGState()
+                    cg.translateBy(x: (size.width - advance.width) / 2, y: baseline)
+                    cg.addPath(path)
+                    cg.setFillColor((colorScheme == .light ? NSColor.white : NSColor.black).cgColor)
+                    cg.fillPath()
+                    cg.addPath(path)
+                    cg.setStrokeColor(Theme.accentInk(colorScheme).cgColor)
+                    cg.setLineWidth(1)
+                    cg.strokePath()
+                    cg.restoreGState()
+                } else if let character = glyphMap[glyph] {
                     // Bitmap colour fonts top out at their largest strike (Apple
                     // Color Emoji: 160px), so filling the card upscales several
                     // times over. No setting recovers detail that isn't there, so
@@ -899,9 +916,7 @@ struct FontDetailView: View {
                     // cleanly and want the default.
                     // (Antialiasing is left on: it governs vector edges, not
                     // bitmap scaling, and killing it would only jag the rest.)
-                    if CTFontCreatePathForGlyph(font, glyph, nil) == nil {
-                        cg.interpolationQuality = .none
-                    }
+                    if path == nil { cg.interpolationQuality = .none }
                     let attr = NSAttributedString(string: character,
                                                   attributes: [.font: font, .foregroundColor: ink])
                     let line = CTLineCreateWithAttributedString(attr)

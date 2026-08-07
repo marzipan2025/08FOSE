@@ -12,9 +12,8 @@ struct LeftPanel: View {
     ]
     private let wideWeightOption: (label: String, value: WeightFilter) = ("10+", .atLeast(10))
 
-    // Every group in the panel — Weight Count, Collections, Scripts, Preview
-    // Weight, the two sliders, Theme, Wallpaper — is a label over its controls,
-    // so the two
+    // Every group in the panel — Weight Count, Collections, Scripts, the two
+    // sliders, Theme, Wallpaper — is a label over its controls, so the two
     // metrics below are shared instead of re-picked per group: they used to
     // drift (8 for the chip groups, 6 for the sliders) and read as uneven.
     private static let groupLabelSpacing: CGFloat = 8
@@ -60,7 +59,6 @@ struct LeftPanel: View {
                                 // wider than the rest at the same spacing.
                                 .padding(.top, -4)
                             wallpaperPicker
-                            previewWeightSection
                         }
                     }
                 }
@@ -240,23 +238,6 @@ struct LeftPanel: View {
         VStack(alignment: .leading, spacing: Self.groupLabelSpacing) {
             groupLabel("Scripts")
             scriptFilterRows
-        }
-    }
-
-    // Which face the grid cells and pinned rows are drawn in. It belongs to View
-    // rather than Filters: nothing is added or removed by it, only redrawn. Last
-    // in the group — it's reached for far less often than the layout, theme and
-    // wallpaper controls above it.
-    private var previewWeightSection: some View {
-        VStack(alignment: .leading, spacing: Self.groupLabelSpacing) {
-            groupLabel("Preview Weight")
-            HStack(spacing: 6) {
-                ForEach(PreviewWeight.allCases, id: \.self) { option in
-                    filterPill(label: option.label, icon: nil, isOn: vm.previewWeight == option) {
-                        vm.previewWeight = option
-                    }
-                }
-            }
         }
     }
 

@@ -18,6 +18,24 @@ enum PreviewWeight: String, CaseIterable {
     }
 }
 
+// How the blown-up glyph is drawn while the space bar is held.
+//
+// `.solid` is the plain ink of the appearance — black on light, white on dark.
+// `.reversed` inverts that fill and traces the outline in the accent colour at
+// 1pt: white on light, black on dark, which would otherwise sink into the card.
+// Bitmap colour glyphs (emoji) have no outline to trace and nothing meaningful
+// to invert, so they stay solid under either setting.
+enum GlyphZoomStyle: String, CaseIterable {
+    case solid, reversed
+
+    var label: String {
+        switch self {
+        case .solid: return "Solid"
+        case .reversed: return "Reversed"
+        }
+    }
+}
+
 // One weight-count bucket for the grid filter. Buckets are selected as a set;
 // an empty set means no weight filtering.
 // - .exactly(n): families with exactly n weights
@@ -51,6 +69,7 @@ final class AppViewModel: ObservableObject {
     private static let variablesOnlyKey = "variablesOnly"
     private static let scriptFilterKey = "scriptFilter"
     private static let previewWeightKey = "previewWeight"
+    private static let glyphZoomStyleKey = "glyphZoomStyle"
     private static let activeTagKey = "activeTag"
     private static let columnCountKey = "columnCount"
     private static let previewSizeOffsetKey = "previewSizeOffset"
@@ -81,6 +100,10 @@ final class AppViewModel: ObservableObject {
     // changes nothing about ordering, filtering or what the detail card shows.
     @Published var previewWeight: PreviewWeight = AppViewModel.loadPreviewWeight() {
         didSet { UserDefaults.standard.set(previewWeight.rawValue, forKey: Self.previewWeightKey) }
+    }
+    // How the space-bar glyph blow-up is drawn. See GlyphZoomStyle.
+    @Published var glyphZoomStyle: GlyphZoomStyle = AppViewModel.loadGlyphZoomStyle() {
+        didSet { UserDefaults.standard.set(glyphZoomStyle.rawValue, forKey: Self.glyphZoomStyleKey) }
     }
 
     // Selected script buckets. Empty = no script filter (show all). Multiple
@@ -274,6 +297,10 @@ final class AppViewModel: ObservableObject {
         PreviewWeight(rawValue: UserDefaults.standard.string(forKey: previewWeightKey) ?? "") ?? .normal
     }
 
+    private static func loadGlyphZoomStyle() -> GlyphZoomStyle {
+        GlyphZoomStyle(rawValue: UserDefaults.standard.string(forKey: glyphZoomStyleKey) ?? "") ?? .solid
+    }
+
     private static func loadScriptFilter() -> Set<ScriptCategory> {
         let raw = (UserDefaults.standard.array(forKey: scriptFilterKey) as? [String]) ?? []
         return Set(raw.compactMap { ScriptCategory(rawValue: $0) })
@@ -382,6 +409,7 @@ final class AppViewModel: ObservableObject {
         variablesOnly = false
         scriptFilter = []
         previewWeight = .normal
+        glyphZoomStyle = .solid
         mutedFilter = .shown
         mutedOnly = false
         searchQuery = ""

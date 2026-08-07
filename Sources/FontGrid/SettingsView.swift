@@ -94,6 +94,11 @@ struct SettingsOverlay: View {
     // Equal gap from the top and right edges of the window for the close button.
     private static let closeInset: CGFloat = 40
 
+    // Floor on the gap between a row's description and its control. A plain
+    // Spacer lets a long description run right up to the button, which read as
+    // crowded; this keeps them apart however the text wraps.
+    private static let rowControlGap: CGFloat = 32
+
     var body: some View {
         ZStack {
             // Blur everything behind. Light mode uses the brightest material
@@ -156,6 +161,8 @@ struct SettingsOverlay: View {
                     // to sit flush with the section labels below.
                     .offset(x: -2)
                 dataSection
+                    .padding(.bottom, 6)
+                viewSettingsSection
                     .padding(.bottom, 6)
                 updatesSection
                     .padding(.bottom, 6)
@@ -233,7 +240,7 @@ struct SettingsOverlay: View {
                             .foregroundStyle(.tertiary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    Spacer(minLength: 12)
+                    Spacer(minLength: Self.rowControlGap)
                     SettingsButton(label: "Reset") { vm.confirmReset = true }
                         .offset(y: 6)
                         .confirmationDialog(
@@ -277,6 +284,58 @@ struct SettingsOverlay: View {
             .padding(.vertical, 12)
     }
 
+    // Rendering choices that don't belong in the left panel: neither filters
+    // nor anything reached for often enough to earn a permanent chip there.
+    private var viewSettingsSection: some View {
+        SettingsSection("View Settings") {
+            VStack(spacing: 18) {
+                choiceRow(
+                    title: "Preview weight",
+                    detail: "Which face of each family the grid and the pinned list are drawn in."
+                ) {
+                    ForEach(PreviewWeight.allCases, id: \.self) { option in
+                        SettingsChoiceButton(label: option.label, isOn: vm.previewWeight == option) {
+                            vm.previewWeight = option
+                        }
+                    }
+                }
+                choiceRow(
+                    title: "Zoomed glyph",
+                    detail: "How a glyph is drawn when you hold space over the grid. Reversed flips the fill and traces the outline in the accent colour."
+                ) {
+                    ForEach(GlyphZoomStyle.allCases, id: \.self) { option in
+                        SettingsChoiceButton(label: option.label, isOn: vm.glyphZoomStyle == option) {
+                            vm.glyphZoomStyle = option
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Same shape as backupRow, with a row of exclusive choices where its
+    // single action button would be.
+    private func choiceRow<Content: View>(
+        title: String,
+        detail: String,
+        @ViewBuilder choices: () -> Content
+    ) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: SettingsType.body))
+                    .foregroundStyle(.primary)
+                Text(detail)
+                    .font(.system(size: SettingsType.small))
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: Self.rowControlGap)
+            HStack(spacing: 6) { choices() }
+                .offset(y: 6)
+        }
+    }
+
     private func backupRow(
         title: String,
         detail: String,
@@ -291,8 +350,9 @@ struct SettingsOverlay: View {
                 Text(detail)
                     .font(.system(size: SettingsType.small))
                     .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            Spacer()
+            Spacer(minLength: Self.rowControlGap)
             SettingsButton(label: button, action: action)
                 .offset(y: 6)
         }
@@ -310,7 +370,7 @@ struct SettingsOverlay: View {
                         .foregroundStyle(.tertiary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                Spacer(minLength: 12)
+                Spacer(minLength: Self.rowControlGap)
                 SettingsButton(label: "Check") {
                     Task { vm.updateStatus = await UpdateCheck.fetchStatus() }
                 }
@@ -335,7 +395,7 @@ struct SettingsOverlay: View {
                 // Pinned to the version the note actually describes, rather than
                 // tracking appVersion — a patch that ships no user-facing change
                 // would otherwise relabel this text as its own.
-                Text("v 0.8.9.2 : Glyph inspect moves from ⌥ to the space bar. Open a font, hold space, and the card recedes to a single tone with its glyphs redrawn as outlines — roll over any one of them to fill the card with it. Space because that is where Quick Look lives.")
+                Text("v 0.8.9.3 : Preview weight moves here, into View Settings, alongside a new choice for the zoomed glyph. Reversed flips its fill — white on light, black on dark — and traces the outline in the accent colour. Emoji keep their own colours either way, having no outline to trace.")
                     .font(.system(size: SettingsType.small))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -650,6 +710,37 @@ private struct SettingsButton: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: Theme.pillRadius)
                         .stroke(Theme.border, lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .onHover { hovering = $0 }
+    }
+}
+
+// One of a set of exclusive choices. SettingsButton's metrics with the left
+// panel's chip colours, so a selected option reads the same here as there.
+private struct SettingsChoiceButton: View {
+    let label: String
+    let isOn: Bool
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Text(label)
+                .font(.system(size: SettingsType.small, weight: isOn ? .medium : .regular))
+                .foregroundStyle(isOn ? Theme.accent : Color.secondary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: Theme.pillRadius)
+                        .fill(isOn ? Theme.accent.opacity(hovering ? 0.24 : 0.15)
+                                   : (hovering ? Theme.surfaceFillHover : Theme.surfaceFill))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: Theme.pillRadius)
+                        .stroke(isOn ? Theme.accent.opacity(0.6) : Theme.border, lineWidth: 1)
                 )
         }
         .buttonStyle(.plain)

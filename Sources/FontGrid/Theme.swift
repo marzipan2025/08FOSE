@@ -3,7 +3,7 @@ import AppKit
 
 enum Theme {
     // App
-    static let appVersion = "0.8.9.2"
+    static let appVersion = "0.8.9.3"
 
     // Panels
     static let panelDefaultWidth: CGFloat = 240
@@ -39,10 +39,16 @@ enum Theme {
 
     // Colors — backgrounds & neutrals adapt to appearance. The key accent is
     // gold (#D9A633) in dark mode and hot pink in light mode.
-    static let accent = adaptive(
-        dark: NSColor(red: 217/255, green: 166/255, blue: 51/255, alpha: 1),    // #D9A633 gold
-        light: NSColor(red: 255/255, green: 77/255, blue: 0/255, alpha: 1)      // #FF4D00 vivid orange
-    )
+    private static let accentDark = NSColor(red: 217/255, green: 166/255, blue: 51/255, alpha: 1)  // #D9A633 gold
+    private static let accentLight = NSColor(red: 255/255, green: 77/255, blue: 0/255, alpha: 1)   // #FF4D00 vivid orange
+    static let accent = adaptive(dark: accentDark, light: accentLight)
+
+    /// The accent as a concrete NSColor, for Core Graphics drawing inside a
+    /// Canvas — dynamic colours there resolve against the context's appearance
+    /// rather than the view's, so the scheme has to be passed in explicitly.
+    static func accentInk(_ scheme: ColorScheme) -> NSColor {
+        scheme == .light ? accentLight : accentDark
+    }
     static let weightBadge = Color(red: 84/255, green: 97/255, blue: 111/255)
     // Blue-grey accent (memo text & memo dot). Light mode keeps the dark-mode
     // hue but bumps saturation +80% (×1.8) and brightness +40% (×1.4) so it
