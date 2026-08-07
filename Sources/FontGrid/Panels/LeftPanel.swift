@@ -52,7 +52,6 @@ struct LeftPanel: View {
 
                     PanelSection("View") {
                         VStack(alignment: .leading, spacing: 14) {
-                            previewWeightSection
                             columnSlider
                             fontSizeSlider
                             themePicker
@@ -61,6 +60,7 @@ struct LeftPanel: View {
                                 // wider than the rest at the same spacing.
                                 .padding(.top, -4)
                             wallpaperPicker
+                            previewWeightSection
                         }
                     }
                 }
@@ -244,9 +244,9 @@ struct LeftPanel: View {
     }
 
     // Which face the grid cells and pinned rows are drawn in. It belongs to View
-    // rather than Filters: nothing is added or removed by it, only redrawn. It
-    // leads the group, next to Font Size — together they are how large and how
-    // heavy the previews render.
+    // rather than Filters: nothing is added or removed by it, only redrawn. Last
+    // in the group — it's reached for far less often than the layout, theme and
+    // wallpaper controls above it.
     private var previewWeightSection: some View {
         VStack(alignment: .leading, spacing: Self.groupLabelSpacing) {
             groupLabel("Preview Weight")
