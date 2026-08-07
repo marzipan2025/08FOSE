@@ -37,16 +37,16 @@ struct FontDetailView: View {
     // opening the detail doesn't stutter; empty until ready (cells fall back to
     // outline rendering meanwhile).
     @State private var glyphMap: [CGGlyph: String] = [:]
-    // Glyph inspect mode: while ⌥ is held, the card recedes to one flat tone,
-    // the grid switches to hairline outlines, and rolling over a glyph blows it
-    // up to fill the card. See OptionKeyMonitor and inspectDim below.
-    @StateObject private var optionKey = OptionKeyMonitor()
+    // Glyph inspect mode: while the space bar is held, the card recedes to one
+    // flat tone, the grid switches to hairline outlines, and rolling over a
+    // glyph blows it up to fill the card. See InspectKeyMonitor and inspectDim.
+    @StateObject private var inspectKey = InspectKeyMonitor()
     @State private var zoomedGlyph: CGGlyph? = nil
     // Trailing debounce on the rollover, so sweeping the pointer across the grid
     // lands on where it stopped instead of flashing every cell on the way.
     @State private var zoomTask: Task<Void, Never>? = nil
 
-    private var inspecting: Bool { optionKey.down && vm.detailGlyphsVisible }
+    private var inspecting: Bool { inspectKey.down && vm.detailGlyphsVisible }
 
     // At/above this card width the info section sits in the right of the middle
     // (weight-list) section; below it, the info flows as multiple columns under
@@ -162,8 +162,15 @@ struct FontDetailView: View {
         .onTapGesture {
             NSApp.keyWindow?.makeFirstResponder(nil)
         }
-        .onAppear { optionKey.start() }
-        .onDisappear { optionKey.stop(); zoomTask?.cancel() }
+        // The card keeps its key monitor while a modal covers it, so the modal
+        // has to be excluded explicitly — otherwise the space bar gets swallowed
+        // out from under Settings and its own scrolling stops working.
+        .onAppear {
+            inspectKey.start(canEngage: {
+                vm.detailGlyphsVisible && !vm.showSettings && vm.renamingTag == nil
+            })
+        }
+        .onDisappear { inspectKey.stop(); zoomTask?.cancel() }
         // Leaving inspect mode drops the blown-up glyph, so re-entering starts
         // clean instead of flashing whatever was last under the pointer.
         .onChange(of: inspecting) { active in
@@ -949,52 +956,69 @@ struct FontDetailView: View {
     }
 }
 
-// Tracks the ⌥ key for as long as the detail card is open.
+// Tracks the space bar for as long as the detail card is open.
+//
+// Space rather than a modifier because the macOS idiom for "show me this
+// bigger" is Quick Look, and that is the key it lives on. ⌘ was the obvious
+// alternative and the wrong one: it precedes every command in the app and every
+// app-switch outside it, so the card would blink into inspect mode on the way
+// to ⌘F, ⌘, or ⌘-Tab.
 //
 // A *local* monitor only sees events routed to this app, so "the app is
-// frontmost" comes for free — no extra check needed. Two things it does have to
-// handle: ⌥ held while the app deactivates (⌘-Tab away) would otherwise leave
-// the mode stuck on, and ⌥ pressed in another app *before* clicking in here
-// never produces a flagsChanged event at all, so the current flags are re-read
-// on activation. Typing is exempt: ⌥ is a dead key for special characters, so
-// the mode stays off whenever a text field holds focus.
-@MainActor final class OptionKeyMonitor: ObservableObject {
+// frontmost" comes for free. Two more things it handles: the key is swallowed
+// while engaged, or the scroll view underneath would page down on every press;
+// and the app deactivating mid-hold releases the mode, since the matching key-up
+// is delivered to whoever took focus, not to us.
+//
+// Typing is exempt — space is a space when a text field has focus.
+@MainActor final class InspectKeyMonitor: ObservableObject {
     @Published private(set) var down = false
 
-    private var flagsMonitor: Any?
-    private var observers: [NSObjectProtocol] = []
+    // Asked before engaging, so the key stays a normal space when the card has
+    // no glyph grid to inspect.
+    private var canEngage: () -> Bool = { true }
+    private var keyMonitor: Any?
+    private var resignObserver: NSObjectProtocol?
 
-    func start() {
-        guard flagsMonitor == nil else { return }
-        flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
-            self?.update(event.modifierFlags)
-            return event   // observe only — never consume
-        }
-        let center = NotificationCenter.default
-        observers = [
-            center.addObserver(forName: NSApplication.didResignActiveNotification,
-                               object: nil, queue: .main) { [weak self] _ in
-                Task { @MainActor in self?.down = false }
-            },
-            center.addObserver(forName: NSApplication.didBecomeActiveNotification,
-                               object: nil, queue: .main) { [weak self] _ in
-                Task { @MainActor in self?.update(NSEvent.modifierFlags) }
+    private static let spaceKeyCode: UInt16 = 49
+
+    func start(canEngage: @escaping () -> Bool) {
+        self.canEngage = canEngage
+        guard keyMonitor == nil else { return }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { [weak self] event in
+            guard let self, event.keyCode == Self.spaceKeyCode else { return event }
+
+            // Key-up releases unconditionally — never behind the guards below.
+            // A modal can open, or focus can land in a text field (⌘F), while
+            // the key is still down; checking the guards here would skip the
+            // release and strand the mode on with no way back.
+            if event.type == .keyUp {
+                guard self.down else { return event }
+                self.down = false
+                return nil
             }
-        ]
+
+            // A modal owns the keyboard while it's up, and a focused field owns
+            // the space bar; in both cases it's just a space.
+            if NSApp.modalWindow != nil { return event }
+            if NSApp.keyWindow?.firstResponder is NSText { return event }
+            guard self.canEngage() else { return event }
+            if !self.down { self.down = true }
+            return nil   // engaged: swallow it so nothing scrolls
+        }
+        resignObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didResignActiveNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.down = false }
+        }
     }
 
     func stop() {
-        if let flagsMonitor { NSEvent.removeMonitor(flagsMonitor) }
-        flagsMonitor = nil
-        observers.forEach { NotificationCenter.default.removeObserver($0) }
-        observers = []
+        if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
+        keyMonitor = nil
+        if let resignObserver { NotificationCenter.default.removeObserver(resignObserver) }
+        resignObserver = nil
         down = false
-    }
-
-    private func update(_ flags: NSEvent.ModifierFlags) {
-        let editing = NSApp.keyWindow?.firstResponder is NSText
-        let next = flags.contains(.option) && !editing
-        if next != down { down = next }
     }
 }
 
@@ -1027,7 +1051,7 @@ private struct GlyphCell: View {
     let glyph: CGGlyph
     // Mapped character (nil = unmapped or map not built yet → outline, no copy).
     let character: String?
-    // ⌥ inspect mode: draw as a hairline outline instead of a filled shape, and
+    // Inspect mode: draw as a hairline outline instead of a filled shape, and
     // report rollover so the card can blow this glyph up.
     let inspecting: Bool
     let onRollover: (CGGlyph?) -> Void
