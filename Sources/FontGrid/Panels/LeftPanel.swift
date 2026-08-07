@@ -12,8 +12,9 @@ struct LeftPanel: View {
     ]
     private let wideWeightOption: (label: String, value: WeightFilter) = ("10+", .atLeast(10))
 
-    // Every group in the panel — Weights, Collections, Scripts, the two
-    // sliders, Theme, Wallpaper — is a label over its controls, so the two
+    // Every group in the panel — Weight Count, Collections, Scripts, Preview
+    // Weight, the two sliders, Theme, Wallpaper — is a label over its controls,
+    // so the two
     // metrics below are shared instead of re-picked per group: they used to
     // drift (8 for the chip groups, 6 for the sliders) and read as uneven.
     private static let groupLabelSpacing: CGFloat = 8
@@ -44,7 +45,6 @@ struct LeftPanel: View {
                             weightFilterSection
                             collectionsSection
                             scriptsSection
-                            previewWeightSection
                         }
                     }
 
@@ -52,6 +52,7 @@ struct LeftPanel: View {
 
                     PanelSection("View") {
                         VStack(alignment: .leading, spacing: 14) {
+                            previewWeightSection
                             columnSlider
                             fontSizeSlider
                             themePicker
@@ -143,7 +144,7 @@ struct LeftPanel: View {
     // instead of a count. All four chips combine as a union.
     private var weightFilterSection: some View {
         VStack(alignment: .leading, spacing: Self.groupLabelSpacing) {
-            groupLabel("Weights")
+            groupLabel("Weight Count")
             Grid(horizontalSpacing: 6, verticalSpacing: 6) {
                 GridRow {
                     ForEach(weightOptions, id: \.value) { weightPill($0) }
@@ -242,9 +243,10 @@ struct LeftPanel: View {
         }
     }
 
-    // Which face the grid cells and pinned rows are drawn in. Not a filter —
-    // nothing is added or removed by it — so it sits at the end of the group,
-    // after the three that do filter.
+    // Which face the grid cells and pinned rows are drawn in. It belongs to View
+    // rather than Filters: nothing is added or removed by it, only redrawn. It
+    // leads the group, next to Font Size — together they are how large and how
+    // heavy the previews render.
     private var previewWeightSection: some View {
         VStack(alignment: .leading, spacing: Self.groupLabelSpacing) {
             groupLabel("Preview Weight")

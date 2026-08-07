@@ -335,7 +335,7 @@ struct SettingsOverlay: View {
                 // Pinned to the version the note actually describes, rather than
                 // tracking appVersion — a patch that ships no user-facing change
                 // would otherwise relabel this text as its own.
-                Text("v 0.8.9 : Preview Weight, under Scripts, picks which face the grid and the pinned list are drawn in — Thin, Normal or Heavy. It changes nothing else: ordering, filtering and the detail card all stay as they were, and hovering a cell still sweeps the whole family.")
+                Text("v 0.8.9.1 : Preview Weight, under View, picks which face the grid and the pinned list are drawn in — Thin, Normal or Heavy. It changes nothing else: ordering, filtering and the detail card all stay as they were, and hovering a cell still sweeps the whole family. The weight filter above is now Weight Count, which is what its chips have always counted.")
                     .font(.system(size: SettingsType.small))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
