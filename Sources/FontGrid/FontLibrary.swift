@@ -96,6 +96,30 @@ extension FontFamily {
     // a run. Value is Optional so a nil result is cached too.
     private static var previewCache: [String: String?] = [:]
 
+    /// The face the grid cells and pinned rows draw with, per the Preview Weight
+    /// setting. `memberFontNames` is sorted light → heavy, so the two extremes
+    /// are just its ends — nothing is re-sorted and the array itself is never
+    /// reversed, which matters because classification, variable detection,
+    /// metadata and Show in Finder all key off its first element.
+    func previewName(for weight: PreviewWeight) -> String {
+        switch weight {
+        case .thin:   return memberFontNames.first ?? name
+        case .heavy:  return memberFontNames.last ?? name
+        case .normal: return previewFontName ?? memberFontNames.first ?? name
+        }
+    }
+
+    /// Index of `previewName(for:)` within `memberFontNames`, for the cell's
+    /// hover cycle to rest on and return to.
+    func previewIndex(for weight: PreviewWeight) -> Int {
+        guard !memberFontNames.isEmpty else { return 0 }
+        switch weight {
+        case .thin:   return 0
+        case .heavy:  return memberFontNames.count - 1
+        case .normal: return memberFontNames.firstIndex(of: previewName(for: weight)) ?? 0
+        }
+    }
+
     /// The variable font's weight axis (min/default/max), or nil when the family
     /// isn't variable or exposes no 'wght' axis (e.g. width- or optical-only).
     /// Drives the list cell's hover weight sweep. Cached like previewFontName.

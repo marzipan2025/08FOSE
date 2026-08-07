@@ -17,6 +17,7 @@ struct FontCell: View {
     @EnvironmentObject var memos: MemoStore
     @EnvironmentObject var samples: SampleStore
     @EnvironmentObject var inputSource: InputSourceManager
+    @EnvironmentObject var vm: AppViewModel
     @Environment(\.colorScheme) private var colorScheme
     @State private var hovering = false
 
@@ -51,7 +52,9 @@ struct FontCell: View {
     // constant while still fully containing the glyphs (no clipping). Capped so
     // it never crowds the header at large sizes for tall fonts.
     private var previewFrameHeight: CGFloat {
-        let name = family.memberFontNames.first ?? family.name
+        // Measure the face actually on screen: a Heavy cut can be taller than the
+        // family's lightest, and measuring the wrong one clips it.
+        let name = family.previewName(for: vm.previewWeight)
         let line = previewLineHeight(fontName: name, fontSize: fontSize, text: resolvedPreviewText)
         return min(line + 10, cellHeight - 38)
     }
@@ -73,7 +76,7 @@ struct FontCell: View {
                     if let axis = family.weightAxis {
                         VariableWeightPreviewLabel(
                             text: resolvedPreviewText,
-                            basePSName: family.previewFontName ?? family.memberFontNames.first ?? family.name,
+                            basePSName: family.previewName(for: vm.previewWeight),
                             fontSize: fontSize,
                             axis: axis,
                             isHovering: hovering
@@ -83,7 +86,8 @@ struct FontCell: View {
                             family: family,
                             previewText: resolvedPreviewText,
                             fontSize: fontSize,
-                            isHovering: hovering
+                            isHovering: hovering,
+                            restingIndex: family.previewIndex(for: vm.previewWeight)
                         )
                     }
                 }
@@ -202,13 +206,17 @@ private struct CyclingPreviewLabel: View {
     let previewText: String
     let fontSize: Double
     let isHovering: Bool
+    // Where the cycle sits at rest and returns to — the face chosen by the
+    // Preview Weight setting. The sweep itself still runs the whole family in
+    // light → heavy order, just starting from here.
+    let restingIndex: Int
 
-    @State private var weightIndex: Int = 0
+    @State private var weightIndex: Int? = nil
     @State private var cycleTask: Task<Void, Never>? = nil
 
     private var displayedFontName: String {
         guard !family.memberFontNames.isEmpty else { return family.name }
-        return family.memberFontNames[weightIndex % family.memberFontNames.count]
+        return family.memberFontNames[(weightIndex ?? restingIndex) % family.memberFontNames.count]
     }
 
     var body: some View {
@@ -223,13 +231,13 @@ private struct CyclingPreviewLabel: View {
 
     private func startCycling() {
         cycleTask?.cancel()
-        weightIndex = 0
+        weightIndex = restingIndex
         guard family.memberFontNames.count > 1 else { return }
         cycleTask = Task { @MainActor in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 400_000_000)
                 if Task.isCancelled { return }
-                weightIndex = (weightIndex + 1) % family.memberFontNames.count
+                weightIndex = ((weightIndex ?? restingIndex) + 1) % family.memberFontNames.count
             }
         }
     }
@@ -237,7 +245,9 @@ private struct CyclingPreviewLabel: View {
     private func stopCycling() {
         cycleTask?.cancel()
         cycleTask = nil
-        weightIndex = 0
+        // nil, not restingIndex: the resting face then follows the setting live
+        // if it changes while this cell is off-hover.
+        weightIndex = nil
     }
 }
 

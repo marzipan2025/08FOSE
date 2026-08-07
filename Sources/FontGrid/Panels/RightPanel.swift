@@ -196,7 +196,7 @@ struct RightPanel: View {
     // Resolve the deterministic preview face per the weight rule, falling back
     // to the family name when no Regular / 400 / 500 member exists.
     private func previewFontName(for name: String) -> String {
-        (vm.library.families.first { $0.name == name }?.previewFontName) ?? name
+        (vm.library.families.first { $0.name == name }?.previewName(for: vm.previewWeight)) ?? name
     }
 
     private var pinsList: some View {

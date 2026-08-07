@@ -1,5 +1,23 @@
 import SwiftUI
 
+// Which face of a family the grid cells and pinned rows draw with.
+//
+// `memberFontNames` is already sorted light → heavy, so the two ends are just
+// its first and last elements — no extra sorting or metric probing. `.normal`
+// keeps the existing rule (a face literally named "Regular", else usWeightClass
+// 400 / 500) so it means the same thing for variable and static families alike.
+enum PreviewWeight: String, CaseIterable {
+    case thin, normal, heavy
+
+    var label: String {
+        switch self {
+        case .thin: return "Thin"
+        case .normal: return "Normal"
+        case .heavy: return "Heavy"
+        }
+    }
+}
+
 // One weight-count bucket for the grid filter. Buckets are selected as a set;
 // an empty set means no weight filtering.
 // - .exactly(n): families with exactly n weights
@@ -32,6 +50,7 @@ final class AppViewModel: ObservableObject {
     private static let memoOnlyKey = "memoOnly"
     private static let variablesOnlyKey = "variablesOnly"
     private static let scriptFilterKey = "scriptFilter"
+    private static let previewWeightKey = "previewWeight"
     private static let activeTagKey = "activeTag"
     private static let columnCountKey = "columnCount"
     private static let previewSizeOffsetKey = "previewSizeOffset"
@@ -57,6 +76,13 @@ final class AppViewModel: ObservableObject {
     @Published var variablesOnly: Bool = UserDefaults.standard.bool(forKey: AppViewModel.variablesOnlyKey) {
         didSet { UserDefaults.standard.set(variablesOnly, forKey: Self.variablesOnlyKey) }
     }
+    // Which face of each family the *lists* render — the grid cells and the
+    // pinned rows. Purely presentational: it picks a face to draw with, and
+    // changes nothing about ordering, filtering or what the detail card shows.
+    @Published var previewWeight: PreviewWeight = AppViewModel.loadPreviewWeight() {
+        didSet { UserDefaults.standard.set(previewWeight.rawValue, forKey: Self.previewWeightKey) }
+    }
+
     // Selected script buckets. Empty = no script filter (show all). Multiple
     // may be on at once (union); combined AND with the other filters.
     @Published var scriptFilter: Set<ScriptCategory> = AppViewModel.loadScriptFilter() {
@@ -242,6 +268,12 @@ final class AppViewModel: ObservableObject {
         return Set(raw.compactMap(decodeWeightFilter).filter { weightFilterOptions.contains($0) })
     }
 
+    // Defaults to .normal: it's the only setting that resolves the same way for
+    // variable and static families, so the grid reads consistently out of the box.
+    private static func loadPreviewWeight() -> PreviewWeight {
+        PreviewWeight(rawValue: UserDefaults.standard.string(forKey: previewWeightKey) ?? "") ?? .normal
+    }
+
     private static func loadScriptFilter() -> Set<ScriptCategory> {
         let raw = (UserDefaults.standard.array(forKey: scriptFilterKey) as? [String]) ?? []
         return Set(raw.compactMap { ScriptCategory(rawValue: $0) })
@@ -349,6 +381,7 @@ final class AppViewModel: ObservableObject {
         memoOnly = false
         variablesOnly = false
         scriptFilter = []
+        previewWeight = .normal
         mutedFilter = .shown
         mutedOnly = false
         searchQuery = ""

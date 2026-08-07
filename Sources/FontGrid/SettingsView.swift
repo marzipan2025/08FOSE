@@ -335,7 +335,7 @@ struct SettingsOverlay: View {
                 // Pinned to the version the note actually describes, rather than
                 // tracking appVersion — a patch that ships no user-facing change
                 // would otherwise relabel this text as its own.
-                Text("v 0.8.8.2 : Emoji blow up under ⌥ too, in their own colours. They come from bitmaps rather than outlines, so past their largest strike they are drawn with the pixels left visible instead of smoothed away.")
+                Text("v 0.8.9 : Preview Weight, under Scripts, picks which face the grid and the pinned list are drawn in — Thin, Normal or Heavy. It changes nothing else: ordering, filtering and the detail card all stay as they were, and hovering a cell still sweeps the whole family.")
                     .font(.system(size: SettingsType.small))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)

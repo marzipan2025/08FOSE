@@ -44,6 +44,7 @@ struct LeftPanel: View {
                             weightFilterSection
                             collectionsSection
                             scriptsSection
+                            previewWeightSection
                         }
                     }
 
@@ -238,6 +239,22 @@ struct LeftPanel: View {
         VStack(alignment: .leading, spacing: Self.groupLabelSpacing) {
             groupLabel("Scripts")
             scriptFilterRows
+        }
+    }
+
+    // Which face the grid cells and pinned rows are drawn in. Not a filter —
+    // nothing is added or removed by it — so it sits at the end of the group,
+    // after the three that do filter.
+    private var previewWeightSection: some View {
+        VStack(alignment: .leading, spacing: Self.groupLabelSpacing) {
+            groupLabel("Preview Weight")
+            HStack(spacing: 6) {
+                ForEach(PreviewWeight.allCases, id: \.self) { option in
+                    filterPill(label: option.label, icon: nil, isOn: vm.previewWeight == option) {
+                        vm.previewWeight = option
+                    }
+                }
+            }
         }
     }
 
