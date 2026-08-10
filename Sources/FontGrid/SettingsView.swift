@@ -301,7 +301,7 @@ struct SettingsOverlay: View {
                 }
                 choiceRow(
                     title: "Zoomed glyph",
-                    detail: "How a glyph is drawn when you hold space over the grid. Reversed flips the fill and traces the outline in the accent colour."
+                    detail: "How a glyph is drawn when you hold space over the grid. Contour flips the fill, traces the outline in the accent colour, and marks each on-curve node."
                 ) {
                     ForEach(GlyphZoomStyle.allCases, id: \.self) { option in
                         SettingsChoiceButton(label: option.label, isOn: vm.glyphZoomStyle == option) {
@@ -395,7 +395,7 @@ struct SettingsOverlay: View {
                 // Pinned to the version the note actually describes, rather than
                 // tracking appVersion — a patch that ships no user-facing change
                 // would otherwise relabel this text as its own.
-                Text("v 0.8.9.3 : Preview weight moves here, into View Settings, alongside a new choice for the zoomed glyph. Reversed flips its fill — white on light, black on dark — and traces the outline in the accent colour. Emoji keep their own colours either way, having no outline to trace.")
+                Text("v 0.8.10 : The zoomed glyph's Reversed style is now Contour — it still flips the fill and traces the outline in the accent colour, and now marks every on-curve node the way a type editor would. Emoji keep their own colours either way, having no outline to trace.")
                     .font(.system(size: SettingsType.small))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)

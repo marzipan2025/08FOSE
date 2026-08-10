@@ -892,20 +892,24 @@ struct FontDetailView: View {
                 // drawn by glyph ID.
                 let path = CTFontCreatePathForGlyph(font, glyph, nil)
 
-                // Reversed: the fill flips to the opposite ink — white on light,
+                // Contour: the fill flips to the opposite ink — white on light,
                 // black on dark — which alone would sink into the card, so the
-                // outline is traced in the accent at 1pt to carry the shape. It
-                // needs a path, so colour bitmap glyphs fall through to solid.
-                if vm.glyphZoomStyle == .reversed, let path {
+                // outline is traced in the accent at 1pt to carry the shape, then
+                // every on-curve node gets its own marker. Needs a path, so
+                // colour bitmap glyphs fall through to solid.
+                if vm.glyphZoomStyle == .contour, let path {
+                    let contourInk = colorScheme == .light ? NSColor.white : NSColor.black
+                    let accent = Theme.accentInk(colorScheme)
                     cg.saveGState()
                     cg.translateBy(x: (size.width - advance.width) / 2, y: baseline)
                     cg.addPath(path)
-                    cg.setFillColor((colorScheme == .light ? NSColor.white : NSColor.black).cgColor)
+                    cg.setFillColor(contourInk.cgColor)
                     cg.fillPath()
                     cg.addPath(path)
-                    cg.setStrokeColor(Theme.accentInk(colorScheme).cgColor)
+                    cg.setStrokeColor(accent.cgColor)
                     cg.setLineWidth(1)
                     cg.strokePath()
+                    drawNodeMarkers(path, in: cg, fill: contourInk, edge: accent)
                     cg.restoreGState()
                 } else if let character = glyphMap[glyph] {
                     // Bitmap colour fonts top out at their largest strike (Apple
@@ -934,6 +938,64 @@ struct FontDetailView: View {
         // is what drives it, and swallowing events would freeze it on the first
         // glyph (and kill scrolling through the grid).
         .allowsHitTesting(false)
+    }
+
+    // A square on each on-curve point of the outline, the way a type editor
+    // marks its nodes. Off-curve control points are skipped: they sit away from
+    // the contour — outside it through a curve — and without the handle lines a
+    // type editor draws to tether them, they read as strays. Dropping them also
+    // roughly halves the count on curve-heavy glyphs.
+    //
+    // A 3×3 core, a 1pt accent edge drawn *outside* it, then a second 1pt ring
+    // of the fill colour beyond that — 7 across in total. Core Graphics centres
+    // a stroke on its path, so each ring's rect is outset by enough to place the
+    // whole width beyond what came before.
+    //
+    // The core takes the glyph's own fill rather than the edge colour, so a
+    // marker reads as a ring rather than a dot.
+    private static let nodeMarkerSize: CGFloat = 3
+    private static let nodeMarkerEdge: CGFloat = 1
+
+    private func drawNodeMarkers(_ path: CGPath, in cg: CGContext,
+                                 fill: NSColor, edge: NSColor) {
+        let size = Self.nodeMarkerSize
+        let width = Self.nodeMarkerEdge
+        var nodes: [CGPoint] = []
+        path.applyWithBlock { element in
+            let p = element.pointee.points
+            switch element.pointee.type {
+            case .moveToPoint, .addLineToPoint:
+                nodes.append(p[0])
+            // Quadratic for TrueType outlines, cubic for CFF — fonts ship both.
+            // Either way the last point is where the curve lands on the contour;
+            // the ones before it are controls, and are dropped.
+            case .addQuadCurveToPoint:
+                nodes.append(p[1])
+            case .addCurveToPoint:
+                nodes.append(p[2])
+            case .closeSubpath:
+                break
+            @unknown default:
+                break
+            }
+        }
+        guard !nodes.isEmpty else { return }
+        cg.setLineWidth(width)
+        for node in nodes {
+            let box = CGRect(x: node.x - size / 2, y: node.y - size / 2,
+                             width: size, height: size)
+            cg.setFillColor(fill.cgColor)
+            cg.fill(box)
+            cg.setStrokeColor(edge.cgColor)
+            cg.stroke(box.insetBy(dx: -width / 2, dy: -width / 2))
+            // A second ring in the glyph's own fill, same weight, just beyond
+            // the accent one. Where a node sits on the contour the marker's edge
+            // would otherwise run into the outline's, both being the accent at
+            // the same weight; this keeps a fill-coloured gap between them so
+            // the marker reads as detached.
+            cg.setStrokeColor(fill.cgColor)
+            cg.stroke(box.insetBy(dx: -width * 1.5, dy: -width * 1.5))
+        }
     }
 
     // MARK: - Actions

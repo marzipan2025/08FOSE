@@ -21,17 +21,18 @@ enum PreviewWeight: String, CaseIterable {
 // How the blown-up glyph is drawn while the space bar is held.
 //
 // `.solid` is the plain ink of the appearance — black on light, white on dark.
-// `.reversed` inverts that fill and traces the outline in the accent colour at
-// 1pt: white on light, black on dark, which would otherwise sink into the card.
-// Bitmap colour glyphs (emoji) have no outline to trace and nothing meaningful
-// to invert, so they stay solid under either setting.
+// `.contour` inverts that fill, traces the outline in the accent colour at
+// 1pt (white on light, black on dark, which would otherwise sink into the
+// card), and marks every on-curve node the way a type editor would. Bitmap
+// colour glyphs (emoji) have no outline to trace and nothing meaningful to
+// invert, so they stay solid under either setting.
 enum GlyphZoomStyle: String, CaseIterable {
-    case solid, reversed
+    case solid, contour
 
     var label: String {
         switch self {
         case .solid: return "Solid"
-        case .reversed: return "Reversed"
+        case .contour: return "Contour"
         }
     }
 }
