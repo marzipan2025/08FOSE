@@ -309,6 +309,17 @@ struct SettingsOverlay: View {
                         }
                     }
                 }
+                choiceRow(
+                    title: "Motion",
+                    detail: "Use animations for major transitions like opening detail cards or sliding panels."
+                ) {
+                    SettingsChoiceButton(label: "On", isOn: vm.useMotion) {
+                        vm.useMotion = true
+                    }
+                    SettingsChoiceButton(label: "Off", isOn: !vm.useMotion) {
+                        vm.useMotion = false
+                    }
+                }
             }
         }
     }
@@ -395,7 +406,7 @@ struct SettingsOverlay: View {
                 // Pinned to the version the note actually describes, rather than
                 // tracking appVersion — a patch that ships no user-facing change
                 // would otherwise relabel this text as its own.
-                Text("v 0.8.10.1 : Light mode Wallpaper 04 is now a solid yellow (#FFBB29) Color Burn overlay for a cleaner, more vivid look. Transitions for opening/closing the font detail view and arrow navigation are optimized for high performance by stabilizing grid cell layout hierarchy.")
+                Text("v 0.8.10.2 : Added a Motion option (On/Off) in View Settings. Disabling it runs all major transitions, including detail card openings and panel slides, instantly for a snappier experience, while keeping micro-animations active.")
                     .font(.system(size: SettingsType.small))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -505,7 +516,7 @@ struct SettingsOverlay: View {
     // MARK: - Actions
 
     private func close() {
-        withAnimation(.easeOut(duration: 0.18)) { vm.showSettings = false }
+        withAnimation(vm.useMotion ? .easeOut(duration: 0.18) : nil) { vm.showSettings = false }
     }
 
     // MARK: - Export / Import

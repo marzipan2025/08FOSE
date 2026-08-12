@@ -74,6 +74,7 @@ final class AppViewModel: ObservableObject {
     private static let activeTagKey = "activeTag"
     private static let columnCountKey = "columnCount"
     private static let previewSizeOffsetKey = "previewSizeOffset"
+    private static let useMotionKey = "useMotion"
 
     @Published var searchQuery: String = UserDefaults.standard.string(forKey: AppViewModel.searchQueryKey) ?? "" {
         didSet { UserDefaults.standard.set(searchQuery, forKey: Self.searchQueryKey) }
@@ -105,6 +106,10 @@ final class AppViewModel: ObservableObject {
     // How the space-bar glyph blow-up is drawn. See GlyphZoomStyle.
     @Published var glyphZoomStyle: GlyphZoomStyle = AppViewModel.loadGlyphZoomStyle() {
         didSet { UserDefaults.standard.set(glyphZoomStyle.rawValue, forKey: Self.glyphZoomStyleKey) }
+    }
+    // Whether to use animations for major transitions (opening detail, sliding panels).
+    @Published var useMotion: Bool = UserDefaults.standard.object(forKey: AppViewModel.useMotionKey) as? Bool ?? true {
+        didSet { UserDefaults.standard.set(useMotion, forKey: Self.useMotionKey) }
     }
 
     // Selected script buckets. Empty = no script filter (show all). Multiple
@@ -363,9 +368,14 @@ final class AppViewModel: ObservableObject {
         detailSource = source
         detailGlyphsVisible = false
         if selectedFamily == nil {
-            withAnimation(Self.detailOpenSpring) { selectedFamily = family }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [self] in
-                if selectedFamily != nil { detailGlyphsVisible = true }
+            if useMotion {
+                withAnimation(Self.detailOpenSpring) { selectedFamily = family }
+            } else {
+                selectedFamily = family
+            }
+            // Delay the heavy glyphs section until the animation settles.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                if self.selectedFamily != nil { self.detailGlyphsVisible = true }
             }
         } else {
             // Already open (← / → or list switch): keep glyphs, just swap.
@@ -379,7 +389,11 @@ final class AppViewModel: ObservableObject {
     // the grid isn't dragged through the collapse, while staying responsive.
     func closeDetail() {
         detailGlyphsVisible = false
-        withAnimation(Self.detailCloseSpring) { selectedFamily = nil }
+        if useMotion {
+            withAnimation(Self.detailCloseSpring) { selectedFamily = nil }
+        } else {
+            selectedFamily = nil
+        }
     }
 
     // Wipe ALL persisted state and return every in-memory setting to its
@@ -417,5 +431,6 @@ final class AppViewModel: ObservableObject {
         selectedFamily = nil
         detailGlyphsVisible = false
         detailSource = .grid
+        useMotion = true
     }
 }

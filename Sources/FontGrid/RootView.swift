@@ -102,14 +102,14 @@ struct RootView: View {
         // while the popup modal is open.
         .overlay(alignment: .bottomLeading) {
             PanelToggleButton(open: leftPanelOpen) {
-                withAnimation(.easeInOut(duration: 0.22)) { leftPanelOpen.toggle() }
+                withAnimation(vm.useMotion ? .easeInOut(duration: 0.22) : nil) { leftPanelOpen.toggle() }
             }
             .offset(x: leftToggleX, y: -Self.toggleBottomInset)
             .allowsHitTesting(vm.renamingTag == nil)
         }
         .overlay(alignment: .bottomTrailing) {
             PanelToggleButton(open: rightPanelOpen) {
-                withAnimation(.easeInOut(duration: 0.22)) { rightPanelOpen.toggle() }
+                withAnimation(vm.useMotion ? .easeInOut(duration: 0.22) : nil) { rightPanelOpen.toggle() }
             }
             .offset(x: rightToggleX, y: -Self.toggleBottomInset)
             .allowsHitTesting(vm.renamingTag == nil)
@@ -245,10 +245,10 @@ struct RootView: View {
             }
             return true
         case "[":
-            withAnimation(.easeInOut(duration: 0.22)) { leftPanelOpen.toggle() }
+            withAnimation(vm.useMotion ? .easeInOut(duration: 0.22) : nil) { leftPanelOpen.toggle() }
             return true
         case "]":
-            withAnimation(.easeInOut(duration: 0.22)) { rightPanelOpen.toggle() }
+            withAnimation(vm.useMotion ? .easeInOut(duration: 0.22) : nil) { rightPanelOpen.toggle() }
             return true
         case "u":
             vm.cycleMutedFilter()
@@ -315,7 +315,7 @@ struct RootView: View {
         // A Clear All confirmation is open: let ESC fall through so it dismisses
         // only the dialog, keeping Settings open.
         if vm.isPresentingConfirm { return false }
-        withAnimation(.easeOut(duration: 0.18)) { vm.showSettings = false }
+        withAnimation(vm.useMotion ? .easeOut(duration: 0.18) : nil) { vm.showSettings = false }
         return true
     }
 
@@ -324,7 +324,7 @@ struct RootView: View {
     // the modal and tangle the ESC cascade.
     private func toggleSettings() -> Bool {
         if vm.renamingTag != nil { return true }
-        withAnimation(.easeOut(duration: 0.18)) { vm.showSettings.toggle() }
+        withAnimation(vm.useMotion ? .easeOut(duration: 0.18) : nil) { vm.showSettings.toggle() }
         return true
     }
 
@@ -344,7 +344,7 @@ struct RootView: View {
         if leftPanelOpen {
             Self.makeSearchFieldFirstResponder()
         } else {
-            withAnimation(.easeInOut(duration: 0.22)) { leftPanelOpen = true }
+            withAnimation(vm.useMotion ? .easeInOut(duration: 0.22) : nil) { leftPanelOpen = true }
             // Wait out the 0.22s slide: claiming focus mid-animation fails.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 Self.makeSearchFieldFirstResponder()
