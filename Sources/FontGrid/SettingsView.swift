@@ -395,7 +395,7 @@ struct SettingsOverlay: View {
                 // Pinned to the version the note actually describes, rather than
                 // tracking appVersion — a patch that ships no user-facing change
                 // would otherwise relabel this text as its own.
-                Text("v 0.8.10 : The zoomed glyph's Reversed style is now Contour — it still flips the fill and traces the outline in the accent colour, and now marks every on-curve node the way a type editor would. Emoji keep their own colours either way, having no outline to trace.")
+                Text("v 0.8.10.1 : Light mode Wallpaper 04 is now a solid yellow (#FFBB29) Color Burn overlay for a cleaner, more vivid look. Transitions for opening/closing the font detail view and arrow navigation are optimized for high performance by stabilizing grid cell layout hierarchy.")
                     .font(.system(size: SettingsType.small))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)

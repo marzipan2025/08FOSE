@@ -465,32 +465,28 @@ private struct FontGridScroll: View {
 
     @ViewBuilder
     private func cellView(for family: FontFamily) -> some View {
-        if vm.selectedFamily?.id == family.id {
-            Color.clear
-                .frame(height: Theme.cellHeight(fontSize: vm.gridFontSize))
-        } else {
-            FontCell(
-                family: family,
-                previewText: previewText,
-                fontSize: vm.gridFontSize,
-                // Suppress memo tooltips while the grid is covered — by the
-                // Settings blur or by the open detail card.
-                tooltipSuppressed: vm.showSettings || vm.selectedFamily != nil,
-                // Muted fonts read de-emphasized but stay fully tappable.
-                dimmed: muted.contains(family.name),
-                onHoverChange: { isHovering in
-                    if isHovering {
-                        hoveredFamilyID = family.id
-                    } else if hoveredFamilyID == family.id {
-                        hoveredFamilyID = nil
-                    }
-                },
-                onTap: {
-                    vm.openDetail(family, source: .grid)
+        FontCell(
+            family: family,
+            previewText: previewText,
+            fontSize: vm.gridFontSize,
+            // Suppress memo tooltips while the grid is covered — by the
+            // Settings blur or by the open detail card.
+            tooltipSuppressed: vm.showSettings || vm.selectedFamily != nil,
+            // Muted fonts read de-emphasized but stay fully tappable.
+            dimmed: muted.contains(family.name),
+            onHoverChange: { isHovering in
+                if isHovering {
+                    hoveredFamilyID = family.id
+                } else if hoveredFamilyID == family.id {
+                    hoveredFamilyID = nil
                 }
-            )
-            .matchedGeometryEffect(id: family.id, in: cellHero)
-        }
+            },
+            onTap: {
+                vm.openDetail(family, source: .grid)
+            }
+        )
+        .opacity(vm.selectedFamily?.id == family.id ? 0 : 1)
+        .matchedGeometryEffect(id: family.id, in: cellHero)
     }
 }
 

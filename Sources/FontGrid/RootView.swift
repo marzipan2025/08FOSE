@@ -714,9 +714,43 @@ struct WallpaperOverlay: View {
         return Self.lightOverlays[name]
     }
 
+    // Per-wallpaper solid-color override. When present (light mode only for now),
+    // a flat Color rectangle is drawn instead of loading an image asset — no
+    // multi-layer blending, no tint, no shine overlay.
+    private struct SolidColorSpec {
+        let color: Color
+        let mode: BlendMode
+        let opacity: Double
+    }
+
+    private static let lightSolidColors: [String: [SolidColorSpec]] = [
+        "Wallpaper04": [
+            SolidColorSpec(
+                color: Color(red: 1.0, green: 0.73, blue: 0.16),  // #FFBB29 (파란색 채널 추가 보정)
+                mode: .colorBurn,
+                opacity: 0.85
+            )
+        ]
+    ]
+
+    private var resolvedSolidColors: [SolidColorSpec]? {
+        guard colorScheme == .light else { return nil }
+        return Self.lightSolidColors[name]
+    }
+
     var body: some View {
         let imageName = resolvedImageName
-        if !imageName.isEmpty, let img = Self.image(named: imageName, ext: Self.imageExtension) {
+        if let solids = resolvedSolidColors {
+            ZStack {
+                ForEach(Array(solids.enumerated()), id: \.offset) { _, solid in
+                    solid.color
+                        .ignoresSafeArea()
+                        .blendMode(solid.mode)
+                        .opacity(solid.opacity)
+                }
+            }
+            .allowsHitTesting(false)
+        } else if !imageName.isEmpty, let img = Self.image(named: imageName, ext: Self.imageExtension) {
             ZStack {
                 ForEach(Array(resolvedLayers.enumerated()), id: \.offset) { _, layer in
                     Image(nsImage: img)
