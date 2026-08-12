@@ -26,7 +26,7 @@ struct RootView: View {
             if leftPanelOpen {
                 LeftPanel()
                     .frame(width: vm.leftPanelWidth)
-                    .transition(.move(edge: .leading))
+                    .transition(vm.useMotion ? .move(edge: .leading) : .identity)
                 ResizableVDivider(
                     width: $vm.leftPanelWidth,
                     dragStartWidth: $leftDragStart,
@@ -47,7 +47,7 @@ struct RootView: View {
                 )
                 RightPanel()
                     .frame(width: vm.rightPanelWidth)
-                    .transition(.move(edge: .trailing))
+                    .transition(vm.useMotion ? .move(edge: .trailing) : .identity)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -123,7 +123,7 @@ struct RootView: View {
                     .transition(.opacity)
             }
         }
-        .animation(.easeOut(duration: 0.18), value: vm.showSettings)
+        .animation(vm.useMotion ? .easeOut(duration: 0.18) : nil, value: vm.showSettings)
         // Silence the tooltips of everything the modals cover — the glyph grid,
         // the font cells, the pin rows. Their tracking rects survive underneath,
         // so without this the pointer pops them over the modal.
@@ -728,7 +728,7 @@ struct WallpaperOverlay: View {
             SolidColorSpec(
                 color: Color(red: 1.0, green: 0.73, blue: 0.16),  // #FFBB29 (파란색 채널 추가 보정)
                 mode: .colorBurn,
-                opacity: 0.85
+                opacity: 0.65
             )
         ]
     ]
