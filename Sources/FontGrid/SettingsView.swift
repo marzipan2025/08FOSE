@@ -406,7 +406,7 @@ struct SettingsOverlay: View {
                 // Pinned to the version the note actually describes, rather than
                 // tracking appVersion — a patch that ships no user-facing change
                 // would otherwise relabel this text as its own.
-                Text("v 0.8.10.8 : Corrected the close button's xmark vertical offset inside the circle for pixel-perfect centering.")
+                Text("v 0.8.11 : Adjusted light mode Wallpaper 04 to a bright, warm golden yellow with 0.6 opacity.")
                     .font(.system(size: SettingsType.small))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)

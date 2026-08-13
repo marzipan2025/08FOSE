@@ -726,9 +726,9 @@ struct WallpaperOverlay: View {
     private static let lightSolidColors: [String: [SolidColorSpec]] = [
         "Wallpaper04": [
             SolidColorSpec(
-                color: Color(red: 1.0, green: 0.73, blue: 0.16),  // #FFBB29 (파란색 채널 추가 보정)
-                mode: .colorBurn,
-                opacity: 0.65
+                color: Color(red: 1.0, green: 0.87, blue: 0.08),  // 따뜻한 금빛 노란색
+                mode: .multiply,
+                opacity: 0.6
             )
         ]
     ]
