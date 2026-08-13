@@ -18,23 +18,18 @@ enum PreviewWeight: String, CaseIterable {
     }
 }
 
-// How the blown-up glyph is drawn while the space bar is held.
+// How the blown-up glyph is drawn while a key is held over the grid. Not a
+// stored preference — the key chosen picks the style, space for one and ⌥ for
+// the other, since in practice both get reached for constantly.
 //
 // `.solid` is the plain ink of the appearance — black on light, white on dark.
 // `.contour` inverts that fill, traces the outline in the accent colour at
 // 1pt (white on light, black on dark, which would otherwise sink into the
 // card), and marks every on-curve node the way a type editor would. Bitmap
 // colour glyphs (emoji) have no outline to trace and nothing meaningful to
-// invert, so they stay solid under either setting.
-enum GlyphZoomStyle: String, CaseIterable {
+// invert, so they stay solid under either.
+enum GlyphZoomStyle {
     case solid, contour
-
-    var label: String {
-        switch self {
-        case .solid: return "Solid"
-        case .contour: return "Contour"
-        }
-    }
 }
 
 // One weight-count bucket for the grid filter. Buckets are selected as a set;
@@ -70,7 +65,6 @@ final class AppViewModel: ObservableObject {
     private static let variablesOnlyKey = "variablesOnly"
     private static let scriptFilterKey = "scriptFilter"
     private static let previewWeightKey = "previewWeight"
-    private static let glyphZoomStyleKey = "glyphZoomStyle"
     private static let activeTagKey = "activeTag"
     private static let columnCountKey = "columnCount"
     private static let previewSizeOffsetKey = "previewSizeOffset"
@@ -102,10 +96,6 @@ final class AppViewModel: ObservableObject {
     // changes nothing about ordering, filtering or what the detail card shows.
     @Published var previewWeight: PreviewWeight = AppViewModel.loadPreviewWeight() {
         didSet { UserDefaults.standard.set(previewWeight.rawValue, forKey: Self.previewWeightKey) }
-    }
-    // How the space-bar glyph blow-up is drawn. See GlyphZoomStyle.
-    @Published var glyphZoomStyle: GlyphZoomStyle = AppViewModel.loadGlyphZoomStyle() {
-        didSet { UserDefaults.standard.set(glyphZoomStyle.rawValue, forKey: Self.glyphZoomStyleKey) }
     }
     // Whether to use animations for major transitions (opening detail, sliding panels).
     @Published var useMotion: Bool = UserDefaults.standard.object(forKey: AppViewModel.useMotionKey) as? Bool ?? true {
@@ -303,10 +293,6 @@ final class AppViewModel: ObservableObject {
         PreviewWeight(rawValue: UserDefaults.standard.string(forKey: previewWeightKey) ?? "") ?? .normal
     }
 
-    private static func loadGlyphZoomStyle() -> GlyphZoomStyle {
-        GlyphZoomStyle(rawValue: UserDefaults.standard.string(forKey: glyphZoomStyleKey) ?? "") ?? .solid
-    }
-
     private static func loadScriptFilter() -> Set<ScriptCategory> {
         let raw = (UserDefaults.standard.array(forKey: scriptFilterKey) as? [String]) ?? []
         return Set(raw.compactMap { ScriptCategory(rawValue: $0) })
@@ -362,19 +348,37 @@ final class AppViewModel: ObservableObject {
     private static let detailOpenSpring = Animation.spring(response: 0.42, dampingFraction: 0.80)
     private static let detailCloseSpring = Animation.spring(response: 0.38, dampingFraction: 0.82)
 
+    // How long the Glyphs grid is held back after the card opens. With motion on
+    // this tracks detailOpenSpring's response, so building the grid can't stutter
+    // the expand. With motion off there's no spring to protect — but the card
+    // should still paint before the grid lands on it, and a tenth of a second
+    // buys that without reading as a stall.
+    private static let glyphsRevealDelay: TimeInterval = 0.35
+    private static let glyphsRevealDelayInstant: TimeInterval = 0.1
+
+    // Bumped on every open/close so a pending reveal can be identified as stale.
+    private var detailOpenToken = 0
+
     // Open the detail for `family`; the glyph grid is shown only after the open
     // animation settles so the expand stays smooth.
     func openDetail(_ family: FontFamily, source: DetailSource) {
         detailSource = source
         detailGlyphsVisible = false
+        detailOpenToken += 1
+        let token = detailOpenToken
         if selectedFamily == nil {
             if useMotion {
                 withAnimation(Self.detailOpenSpring) { selectedFamily = family }
             } else {
                 selectedFamily = family
             }
-            // Delay the heavy glyphs section until the animation settles.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            // Hold the heavy glyphs section back until the card has settled.
+            // The token matters: closing and reopening inside the delay window
+            // would otherwise let the first open's timer fire into the second
+            // one's animation — the exact stutter this delay exists to prevent.
+            let delay = useMotion ? Self.glyphsRevealDelay : Self.glyphsRevealDelayInstant
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self, token == self.detailOpenToken else { return }
                 if self.selectedFamily != nil { self.detailGlyphsVisible = true }
             }
         } else {
@@ -389,6 +393,8 @@ final class AppViewModel: ObservableObject {
     // the grid isn't dragged through the collapse, while staying responsive.
     func closeDetail() {
         detailGlyphsVisible = false
+        // Retire any reveal still in flight, so it can't land after the close.
+        detailOpenToken += 1
         if useMotion {
             withAnimation(Self.detailCloseSpring) { selectedFamily = nil }
         } else {
@@ -424,7 +430,6 @@ final class AppViewModel: ObservableObject {
         variablesOnly = false
         scriptFilter = []
         previewWeight = .normal
-        glyphZoomStyle = .solid
         mutedFilter = .shown
         mutedOnly = false
         searchQuery = ""

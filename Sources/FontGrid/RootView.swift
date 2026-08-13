@@ -345,8 +345,11 @@ struct RootView: View {
             Self.makeSearchFieldFirstResponder()
         } else {
             withAnimation(vm.useMotion ? .easeInOut(duration: 0.22) : nil) { leftPanelOpen = true }
-            // Wait out the 0.22s slide: claiming focus mid-animation fails.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            // Wait out the 0.22s slide: claiming focus mid-animation fails. With
+            // motion off nothing slides, but the panel still has to be laid out
+            // before its field exists to focus, so a short hop stands in.
+            let delay = vm.useMotion ? 0.3 : 0.05
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                 Self.makeSearchFieldFirstResponder()
             }
         }

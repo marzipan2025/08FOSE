@@ -46,7 +46,12 @@ struct FontDetailView: View {
     // lands on where it stopped instead of flashing every cell on the way.
     @State private var zoomTask: Task<Void, Never>? = nil
 
-    private var inspecting: Bool { inspectKey.down && vm.detailGlyphsVisible }
+    // The drawing style the held key selects, once the card actually has a glyph
+    // grid to inspect. nil means neither key is down.
+    private var inspectStyle: GlyphZoomStyle? {
+        vm.detailGlyphsVisible ? inspectKey.style : nil
+    }
+    private var inspecting: Bool { inspectStyle != nil }
 
     // At/above this card width the info section sits in the right of the middle
     // (weight-list) section; below it, the info flows as multiple columns under
@@ -898,7 +903,7 @@ struct FontDetailView: View {
                 // outline is traced in the accent at 1pt to carry the shape, then
                 // every on-curve node gets its own marker. Needs a path, so
                 // colour bitmap glyphs fall through to solid.
-                if vm.glyphZoomStyle == .contour, let path {
+                if inspectStyle == .contour, let path {
                     let contourInk = colorScheme == .light ? NSColor.white : NSColor.black
                     let accent = Theme.accentInk(colorScheme)
                     cg.saveGState()
@@ -1034,35 +1039,50 @@ struct FontDetailView: View {
     }
 }
 
-// Tracks the space bar for as long as the detail card is open.
+// Tracks the two inspect keys for as long as the detail card is open, and
+// reports which drawing style the one being held selects.
 //
-// Space rather than a modifier because the macOS idiom for "show me this
-// bigger" is Quick Look, and that is the key it lives on. ⌘ was the obvious
-// alternative and the wrong one: it precedes every command in the app and every
-// app-switch outside it, so the card would blink into inspect mode on the way
-// to ⌘F, ⌘, or ⌘-Tab.
+// Space carries the solid blow-up because the macOS idiom for "show me this
+// bigger" is Quick Look, and that is the key it lives on; ⌥ carries the contour
+// one because it is the modifier macOS already uses for "reveal the other
+// version of this", and nothing else in the app claims it. ⌘ is unusable for
+// either: it precedes every command in the app and every app-switch outside it,
+// so the card would blink into inspect mode on the way to ⌘F, ⌘, or ⌘-Tab.
 //
 // A *local* monitor only sees events routed to this app, so "the app is
-// frontmost" comes for free. Two more things it handles: the key is swallowed
-// while engaged, or the scroll view underneath would page down on every press;
-// and the app deactivating mid-hold releases the mode, since the matching key-up
-// is delivered to whoever took focus, not to us.
+// frontmost" comes for free. Three more things it handles: the space bar is
+// swallowed while engaged, or the scroll view underneath would page down on
+// every press (⌥ is only observed, never consumed, so modifier state stays sane
+// everywhere else); the app deactivating mid-hold releases the mode, since the
+// matching key-up goes to whoever took focus rather than to us; and ⌥ already
+// held when the app is activated produces no flagsChanged event at all, so the
+// current flags are re-read on activation.
 //
-// Typing is exempt — space is a space when a text field has focus.
+// Typing is exempt for both — a space is a space and ⌥ is a dead key for
+// special characters when a text field has focus.
 @MainActor final class InspectKeyMonitor: ObservableObject {
-    @Published private(set) var down = false
+    // Which style the held key selects; nil when neither is down.
+    @Published private(set) var style: GlyphZoomStyle?
 
-    // Asked before engaging, so the key stays a normal space when the card has
-    // no glyph grid to inspect.
+    // Asked before engaging, so the keys keep their ordinary meaning when the
+    // card has no glyph grid to inspect.
     private var canEngage: () -> Bool = { true }
     private var keyMonitor: Any?
-    private var resignObserver: NSObjectProtocol?
+    private var flagsMonitor: Any?
+    private var observers: [NSObjectProtocol] = []
+
+    private var spaceDown = false
+    private var optionDown = false
+    // Holding both is resolved by whichever was pressed last, so rolling from
+    // one key to the other swaps the style instead of sticking on the first.
+    private var lastPressed: GlyphZoomStyle?
 
     private static let spaceKeyCode: UInt16 = 49
 
     func start(canEngage: @escaping () -> Bool) {
         self.canEngage = canEngage
         guard keyMonitor == nil else { return }
+
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { [weak self] event in
             guard let self, event.keyCode == Self.spaceKeyCode else { return event }
 
@@ -1071,8 +1091,9 @@ struct FontDetailView: View {
             // the key is still down; checking the guards here would skip the
             // release and strand the mode on with no way back.
             if event.type == .keyUp {
-                guard self.down else { return event }
-                self.down = false
+                guard self.spaceDown else { return event }
+                self.spaceDown = false
+                self.refresh()
                 return nil
             }
 
@@ -1081,22 +1102,77 @@ struct FontDetailView: View {
             if NSApp.modalWindow != nil { return event }
             if NSApp.keyWindow?.firstResponder is NSText { return event }
             guard self.canEngage() else { return event }
-            if !self.down { self.down = true }
+            if !self.spaceDown {
+                self.spaceDown = true
+                self.lastPressed = .solid
+                self.refresh()
+            }
             return nil   // engaged: swallow it so nothing scrolls
         }
-        resignObserver = NotificationCenter.default.addObserver(
-            forName: NSApplication.didResignActiveNotification, object: nil, queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in self?.down = false }
+
+        flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
+            self?.updateOption(event.modifierFlags)
+            return event   // observe only — never consume
         }
+
+        let center = NotificationCenter.default
+        observers = [
+            center.addObserver(forName: NSApplication.didResignActiveNotification,
+                               object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor in self?.releaseAll() }
+            },
+            center.addObserver(forName: NSApplication.didBecomeActiveNotification,
+                               object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor in self?.updateOption(NSEvent.modifierFlags) }
+            }
+        ]
     }
 
     func stop() {
         if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
         keyMonitor = nil
-        if let resignObserver { NotificationCenter.default.removeObserver(resignObserver) }
-        resignObserver = nil
-        down = false
+        if let flagsMonitor { NSEvent.removeMonitor(flagsMonitor) }
+        flagsMonitor = nil
+        observers.forEach { NotificationCenter.default.removeObserver($0) }
+        observers = []
+        releaseAll()
+    }
+
+    private func updateOption(_ flags: NSEvent.ModifierFlags) {
+        // Releasing is unconditional for the same reason key-up is; only
+        // engaging consults the guards.
+        let held = flags.contains(.option)
+        if !held {
+            guard optionDown else { return }
+            optionDown = false
+            refresh()
+            return
+        }
+        guard !optionDown,
+              NSApp.modalWindow == nil,
+              !(NSApp.keyWindow?.firstResponder is NSText),
+              canEngage()
+        else { return }
+        optionDown = true
+        lastPressed = .contour
+        refresh()
+    }
+
+    private func releaseAll() {
+        spaceDown = false
+        optionDown = false
+        refresh()
+    }
+
+    private func refresh() {
+        let next: GlyphZoomStyle?
+        switch (spaceDown, optionDown) {
+        case (true, true): next = lastPressed
+        case (true, false): next = .solid
+        case (false, true): next = .contour
+        case (false, false): next = nil
+        }
+        if next != style { style = next }
     }
 }
 

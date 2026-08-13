@@ -300,16 +300,6 @@ struct SettingsOverlay: View {
                     }
                 }
                 choiceRow(
-                    title: "Zoomed glyph",
-                    detail: "How a glyph is drawn when holding space. Contour inverts the fill, outlines the path, and shows nodes."
-                ) {
-                    ForEach(GlyphZoomStyle.allCases, id: \.self) { option in
-                        SettingsChoiceButton(label: option.label, isOn: vm.glyphZoomStyle == option) {
-                            vm.glyphZoomStyle = option
-                        }
-                    }
-                }
-                choiceRow(
                     title: "Motion",
                     detail: "Use animations for major transitions like opening detail cards or sliding panels. Disabling it runs transitions instantly."
                 ) {
@@ -406,7 +396,7 @@ struct SettingsOverlay: View {
                 // Pinned to the version the note actually describes, rather than
                 // tracking appVersion — a patch that ships no user-facing change
                 // would otherwise relabel this text as its own.
-                Text("v 0.8.11.2 : Restored light mode Wallpaper 04 image asset with fine-tuned 0.2 shine overlay opacity.")
+                Text("v 0.8.12 : The zoomed glyph no longer has a setting — the key picks the style. Hold Space over the grid for the solid blow-up, ⌥ for the contour one with its outline and nodes. Rolling from one key to the other swaps between them.")
                     .font(.system(size: SettingsType.small))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -427,6 +417,8 @@ struct SettingsOverlay: View {
                 shortcutRow("K J C L S O", "Toggle script bucket")
                 shortcutRow("U", "Show / hide muted")
                 shortcutRow("I", "Only muted")
+                shortcutRow("Space", "Hold over a glyph — zoom, solid")
+                shortcutRow("⌥", "Hold over a glyph — zoom, contour")
                 shortcutRow("[ ]", "Collapse / expand left · right panel")
                 shortcutRow("⌘ ↑ ↓", "Font size")
                 shortcutRow("⌘ ← →", "Columns")
