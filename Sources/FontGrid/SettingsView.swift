@@ -406,7 +406,7 @@ struct SettingsOverlay: View {
                 // Pinned to the version the note actually describes, rather than
                 // tracking appVersion — a patch that ships no user-facing change
                 // would otherwise relabel this text as its own.
-                Text("v 0.8.10.7 : Fixed a layout constraint bug where instant window resizing (e.g. via Magnet) locked the open detail card to a grid cell's tiny dimensions.")
+                Text("v 0.8.10.8 : Corrected the close button's xmark vertical offset inside the circle for pixel-perfect centering.")
                     .font(.system(size: SettingsType.small))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -771,6 +771,7 @@ private struct CloseButton: View {
             Image(systemName: "xmark")
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(.secondary)
+                .offset(y: -0.5)
                 .frame(width: 32, height: 32)
                 .background(Circle().fill(hovering ? Theme.surfaceFillHover : Theme.surfaceFill))
         }

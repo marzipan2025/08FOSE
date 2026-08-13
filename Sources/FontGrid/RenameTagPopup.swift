@@ -238,6 +238,7 @@ struct PopupCloseButton: View {
             Image(systemName: "xmark")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.secondary)
+                .offset(y: -0.5)
                 .frame(width: 26, height: 26)
                 .background(Circle().fill(hovering ? Theme.surfaceFillHover : Theme.surfaceFill))
         }

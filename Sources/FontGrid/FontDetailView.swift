@@ -602,6 +602,7 @@ struct FontDetailView: View {
                         // Same color rule as the memo chevron button: secondary
                         // glyph on a surfaceFill background (denser on hover).
                         .foregroundStyle(.secondary)
+                        .offset(y: -0.5)
                         .frame(width: 32, height: 32)
                         .background(Circle().fill(closeHovering ? Theme.surfaceFillHover : Theme.surfaceFill))
                 }
