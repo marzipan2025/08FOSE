@@ -291,7 +291,7 @@ struct SettingsOverlay: View {
             VStack(spacing: 18) {
                 choiceRow(
                     title: "Preview weight",
-                    detail: "Which face of each family the grid and the pinned list are drawn in."
+                    detail: "Which face of each family the grid and the pinned list are drawn in. This changes presentation only, not filtering."
                 ) {
                     ForEach(PreviewWeight.allCases, id: \.self) { option in
                         SettingsChoiceButton(label: option.label, isOn: vm.previewWeight == option) {
@@ -311,7 +311,7 @@ struct SettingsOverlay: View {
                 }
                 choiceRow(
                     title: "Motion",
-                    detail: "Use animations for major transitions like opening detail cards or sliding panels."
+                    detail: "Use animations for major transitions like opening detail cards or sliding panels. Disabling it runs transitions instantly."
                 ) {
                     SettingsChoiceButton(label: "On", isOn: vm.useMotion) {
                         vm.useMotion = true
@@ -406,7 +406,7 @@ struct SettingsOverlay: View {
                 // Pinned to the version the note actually describes, rather than
                 // tracking appVersion — a patch that ships no user-facing change
                 // would otherwise relabel this text as its own.
-                Text("v 0.8.10.4 : Refined the Zoomed glyph description length in View Settings for consistent vertical layout spacing. Disabling Motion now instantly stops transition animations.")
+                Text("v 0.8.10.5 : Balanced the descriptions in View Settings to exactly three lines each for a perfectly uniform button layout.")
                     .font(.system(size: SettingsType.small))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
