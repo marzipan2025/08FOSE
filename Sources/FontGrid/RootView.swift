@@ -704,9 +704,9 @@ struct WallpaperOverlay: View {
     }
 
     // Per-wallpaper light-mode top overlay. Wallpaper04 gets an overlay-blended
-    // shine sheet. Tint is intentionally not applied to the overlay.
+    // shine sheet at subtle opacity (0.2).
     private static let lightOverlays: [String: Overlay] = [
-        "Wallpaper04": Overlay(imageName: "shine", mode: .softLight, opacity: 0.3)
+        "Wallpaper04": Overlay(imageName: "shine", mode: .softLight, opacity: 0.2)
     ]
 
     private var resolvedOverlay: Overlay? {
@@ -714,43 +714,9 @@ struct WallpaperOverlay: View {
         return Self.lightOverlays[name]
     }
 
-    // Per-wallpaper solid-color override. When present (light mode only for now),
-    // a flat Color rectangle is drawn instead of loading an image asset — no
-    // multi-layer blending, no tint, no shine overlay.
-    private struct SolidColorSpec {
-        let color: Color
-        let mode: BlendMode
-        let opacity: Double
-    }
-
-    private static let lightSolidColors: [String: [SolidColorSpec]] = [
-        "Wallpaper04": [
-            SolidColorSpec(
-                color: Color(red: 1.0, green: 0.87, blue: 0.08),  // 따뜻한 금빛 노란색
-                mode: .multiply,
-                opacity: 0.64
-            )
-        ]
-    ]
-
-    private var resolvedSolidColors: [SolidColorSpec]? {
-        guard colorScheme == .light else { return nil }
-        return Self.lightSolidColors[name]
-    }
-
     var body: some View {
         let imageName = resolvedImageName
-        if let solids = resolvedSolidColors {
-            ZStack {
-                ForEach(Array(solids.enumerated()), id: \.offset) { _, solid in
-                    solid.color
-                        .ignoresSafeArea()
-                        .blendMode(solid.mode)
-                        .opacity(solid.opacity)
-                }
-            }
-            .allowsHitTesting(false)
-        } else if !imageName.isEmpty, let img = Self.image(named: imageName, ext: Self.imageExtension) {
+        if !imageName.isEmpty, let img = Self.image(named: imageName, ext: Self.imageExtension) {
             ZStack {
                 ForEach(Array(resolvedLayers.enumerated()), id: \.offset) { _, layer in
                     Image(nsImage: img)
