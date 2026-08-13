@@ -728,7 +728,7 @@ struct WallpaperOverlay: View {
             SolidColorSpec(
                 color: Color(red: 1.0, green: 0.87, blue: 0.08),  // 따뜻한 금빛 노란색
                 mode: .multiply,
-                opacity: 0.6
+                opacity: 0.64
             )
         ]
     ]
