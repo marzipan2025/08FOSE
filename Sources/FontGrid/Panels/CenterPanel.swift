@@ -486,7 +486,7 @@ private struct FontGridScroll: View {
             }
         )
         .opacity(vm.selectedFamily?.id == family.id ? 0 : 1)
-        .matchedGeometryEffect(id: family.id, in: cellHero)
+        .matchedGeometryEffect(id: vm.detailGlyphsVisible ? "dummy-\(family.id)" : family.id, in: cellHero)
     }
 }
 
