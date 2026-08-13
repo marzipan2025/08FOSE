@@ -301,7 +301,7 @@ struct SettingsOverlay: View {
                 }
                 choiceRow(
                     title: "Zoomed glyph",
-                    detail: "How a glyph is drawn when you hold space over the grid. Contour flips the fill, traces the outline in the accent colour, and marks each on-curve node."
+                    detail: "How a glyph is drawn when holding space. Contour inverts the fill, outlines the path, and shows nodes."
                 ) {
                     ForEach(GlyphZoomStyle.allCases, id: \.self) { option in
                         SettingsChoiceButton(label: option.label, isOn: vm.glyphZoomStyle == option) {
@@ -406,7 +406,7 @@ struct SettingsOverlay: View {
                 // Pinned to the version the note actually describes, rather than
                 // tracking appVersion — a patch that ships no user-facing change
                 // would otherwise relabel this text as its own.
-                Text("v 0.8.10.2 : Added a Motion option (On/Off) in View Settings. Disabling it runs all major transitions, including detail card openings and panel slides, instantly for a snappier experience, while keeping micro-animations active.")
+                Text("v 0.8.10.4 : Refined the Zoomed glyph description length in View Settings for consistent vertical layout spacing. Disabling Motion now instantly stops transition animations.")
                     .font(.system(size: SettingsType.small))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
