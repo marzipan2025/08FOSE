@@ -291,7 +291,7 @@ struct SettingsOverlay: View {
             VStack(spacing: 18) {
                 choiceRow(
                     title: "Preview weight",
-                    detail: "Which face of each family the grid and the pinned list are drawn in. This changes presentation only, not filtering."
+                    detail: "Which face of each family the grid and the pinned list are drawn in. Changes presentation only."
                 ) {
                     ForEach(PreviewWeight.allCases, id: \.self) { option in
                         SettingsChoiceButton(label: option.label, isOn: vm.previewWeight == option) {
@@ -406,7 +406,7 @@ struct SettingsOverlay: View {
                 // Pinned to the version the note actually describes, rather than
                 // tracking appVersion — a patch that ships no user-facing change
                 // would otherwise relabel this text as its own.
-                Text("v 0.8.10.5 : Balanced the descriptions in View Settings to exactly three lines each for a perfectly uniform button layout.")
+                Text("v 0.8.10.6 : Fine-tuned the Preview weight description length to wrap to exactly three lines, achieving perfect layout symmetry.")
                     .font(.system(size: SettingsType.small))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
