@@ -99,6 +99,22 @@ struct SettingsOverlay: View {
     // crowded; this keeps them apart however the text wraps.
     private static let rowControlGap: CGFloat = 32
 
+    // Recent user-facing changes, newest first, each pinned to the version that
+    // actually shipped it rather than tracking appVersion — a patch with nothing
+    // user-facing would otherwise relabel someone else's note as its own.
+    //
+    // A list rather than a single line, because a single line is how the Motion
+    // setting came to ship unannounced: the next release simply overwrote its
+    // note before anyone read it.
+    private static let releaseNotes: [(version: String, note: String)] = [
+        ("0.8.12",
+         "The zoomed glyph no longer has a setting — the key picks the style. Hold Space over the grid for the solid blow-up, ⌥ for the contour one with its outline and on-curve nodes."),
+        ("0.8.10.2",
+         "Motion, under View Settings, drops the animation from the major transitions — opening a detail card, sliding the panels, fading this screen in. Off runs them instantly."),
+        ("0.8.10",
+         "The Contour style marks every on-curve node of the outline, the way a type editor does."),
+    ]
+
     var body: some View {
         ZStack {
             // Blur everything behind. Light mode uses the brightest material
@@ -301,7 +317,7 @@ struct SettingsOverlay: View {
                 }
                 choiceRow(
                     title: "Motion",
-                    detail: "Use animations for major transitions like opening detail cards or sliding panels. Disabling it runs transitions instantly."
+                    detail: "Animates the major transitions — opening a card, sliding panels, fading Settings in. Smaller changes animate either way."
                 ) {
                     SettingsChoiceButton(label: "On", isOn: vm.useMotion) {
                         vm.useMotion = true
@@ -393,14 +409,13 @@ struct SettingsOverlay: View {
                 )
                 .fixedSize(horizontal: false, vertical: true)
 
-                // Pinned to the version the note actually describes, rather than
-                // tracking appVersion — a patch that ships no user-facing change
-                // would otherwise relabel this text as its own.
-                Text("v 0.8.12 : The zoomed glyph no longer has a setting — the key picks the style. Hold Space over the grid for the solid blow-up, ⌥ for the contour one with its outline and nodes. Rolling from one key to the other swaps between them.")
-                    .font(.system(size: SettingsType.small))
-                    .foregroundStyle(.tertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 6)
+                ForEach(Self.releaseNotes, id: \.version) { entry in
+                    Text("v \(entry.version) : \(entry.note)")
+                        .font(.system(size: SettingsType.small))
+                        .foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 6)
+                }
             }
         }
     }
