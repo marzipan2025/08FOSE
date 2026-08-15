@@ -141,11 +141,22 @@ struct FontDetailView: View {
             }
         }
         .onPreferenceChange(TitleHeightKey.self) { titleAreaHeight = $0 }
-        // The blown-up glyph sits above everything but inside the card's clip.
-        .overlay {
-            if inspecting, let zoomedGlyph {
-                glyphZoom(zoomedGlyph)
-            }
+        // The blown-up glyph is drawn at the root instead of here, so it lands
+        // above the window-wide wallpaper overlay and keeps its black or white
+        // unmixed. This publishes where the card is and what to draw; RootView
+        // does the drawing. See GlyphZoom.swift.
+        .anchorPreference(key: GlyphZoomKey.self, value: .bounds) { anchor in
+            guard let zoomedGlyph, let style = inspectStyle else { return nil }
+            return GlyphZoomRequest(
+                anchor: anchor,
+                payload: GlyphZoomPayload(
+                    psName: selectedGlyphPS,
+                    glyph: zoomedGlyph,
+                    character: glyphMap[zoomedGlyph],
+                    style: style,
+                    scheme: colorScheme
+                )
+            )
         }
         .animation(.easeInOut(duration: 0.08), value: inspecting)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -852,155 +863,6 @@ struct FontDetailView: View {
             try? await Task.sleep(nanoseconds: 80_000_000)
             guard !Task.isCancelled else { return }
             zoomedGlyph = glyph
-        }
-    }
-
-    // The blown-up glyph. Filled, at full ink strength — the one thing in the
-    // card that isn't receding. Scaled so the font's em box fits the card's
-    // shorter side with a 4% margin, and positioned by the font's own metrics
-    // rather than by its inked bounds: relative size AND relative position hold
-    // across glyphs, so a comma stays a small mark low in the frame while a
-    // CJK ideograph fills it.
-    @ViewBuilder
-    private func glyphZoom(_ glyph: CGGlyph) -> some View {
-        Canvas { ctx, size in
-            // 12% breathing room per side: accents, swashes and tall marks reach
-            // well past the em box, and at a tighter fit they clipped on the
-            // card edge.
-            let em = min(size.width, size.height) * 0.76
-            guard em > 1 else { return }
-            let font = CTFontCreateWithName(selectedGlyphPS as CFString, em, nil)
-            var g = glyph
-            var advance = CGSize.zero
-            CTFontGetAdvancesForGlyphs(font, .horizontal, &g, &advance, 1)
-            let ascent = CTFontGetAscent(font)
-            let descent = CTFontGetDescent(font)
-            // Fully opaque, unlike the 0.85 the grid cells use: at 0.85 the
-            // outlined glyphs underneath showed through the strokes and the big
-            // glyph read as translucent.
-            let ink = colorScheme == .light ? NSColor.black : NSColor.white
-            ctx.withCGContext { cg in
-                cg.textMatrix = .identity
-                cg.translateBy(x: 0, y: size.height)
-                cg.scaleBy(x: 1, y: -1)
-                // Centre the font's ascent-to-descent band in the card, then drop
-                // it 20pt. Splitting the em box by the ascent:descent ratio (the
-                // first attempt) rode high: ascent + descent normally runs past
-                // one em, so normalising them into the box under-allocated the
-                // ascent and pushed the glyph out through the top. Both metrics
-                // are font-level, so relative position still holds across glyphs
-                // — a comma stays low, an apostrophe stays high.
-                let baseline = (size.height - (ascent - descent)) / 2 - 20
-                // Same split as the grid cells: draw through a CTLine when the
-                // glyph maps to a character, so colour fonts come out in their
-                // own colours — this is what lets emoji blow up even though they
-                // have no outline for the grid to trace. Everything else is
-                // drawn by glyph ID.
-                let path = CTFontCreatePathForGlyph(font, glyph, nil)
-
-                // Contour: the fill flips to the opposite ink — white on light,
-                // black on dark — which alone would sink into the card, so the
-                // outline is traced in the accent at 1pt to carry the shape, then
-                // every on-curve node gets its own marker. Needs a path, so
-                // colour bitmap glyphs fall through to solid.
-                if inspectStyle == .contour, let path {
-                    let contourInk = colorScheme == .light ? NSColor.white : NSColor.black
-                    let accent = Theme.accentInk(colorScheme)
-                    cg.saveGState()
-                    cg.translateBy(x: (size.width - advance.width) / 2, y: baseline)
-                    cg.addPath(path)
-                    cg.setFillColor(contourInk.cgColor)
-                    cg.fillPath()
-                    cg.addPath(path)
-                    cg.setStrokeColor(accent.cgColor)
-                    cg.setLineWidth(1)
-                    cg.strokePath()
-                    drawNodeMarkers(path, in: cg, fill: contourInk, edge: accent)
-                    cg.restoreGState()
-                } else if let character = glyphMap[glyph] {
-                    // Bitmap colour fonts top out at their largest strike (Apple
-                    // Color Emoji: 160px), so filling the card upscales several
-                    // times over. No setting recovers detail that isn't there, so
-                    // drop interpolation and let the pixels show rather than
-                    // smear them. Only for those glyphs — vector ones scale
-                    // cleanly and want the default.
-                    // (Antialiasing is left on: it governs vector edges, not
-                    // bitmap scaling, and killing it would only jag the rest.)
-                    if path == nil { cg.interpolationQuality = .none }
-                    let attr = NSAttributedString(string: character,
-                                                  attributes: [.font: font, .foregroundColor: ink])
-                    let line = CTLineCreateWithAttributedString(attr)
-                    let width = CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
-                    cg.textPosition = CGPoint(x: (size.width - width) / 2, y: baseline)
-                    CTLineDraw(line, cg)
-                } else {
-                    var pos = CGPoint(x: (size.width - advance.width) / 2, y: baseline)
-                    cg.setFillColor(ink.cgColor)
-                    CTFontDrawGlyphs(font, &g, &pos, 1, cg)
-                }
-            }
-        }
-        // The overlay must never take the pointer: rollover on the cells beneath
-        // is what drives it, and swallowing events would freeze it on the first
-        // glyph (and kill scrolling through the grid).
-        .allowsHitTesting(false)
-    }
-
-    // A square on each on-curve point of the outline, the way a type editor
-    // marks its nodes. Off-curve control points are skipped: they sit away from
-    // the contour — outside it through a curve — and without the handle lines a
-    // type editor draws to tether them, they read as strays. Dropping them also
-    // roughly halves the count on curve-heavy glyphs.
-    //
-    // A 3×3 core, a 1pt accent edge drawn *outside* it, then a second 1pt ring
-    // of the fill colour beyond that — 7 across in total. Core Graphics centres
-    // a stroke on its path, so each ring's rect is outset by enough to place the
-    // whole width beyond what came before.
-    //
-    // The core takes the glyph's own fill rather than the edge colour, so a
-    // marker reads as a ring rather than a dot.
-    private static let nodeMarkerSize: CGFloat = 3
-    private static let nodeMarkerEdge: CGFloat = 1
-
-    private func drawNodeMarkers(_ path: CGPath, in cg: CGContext,
-                                 fill: NSColor, edge: NSColor) {
-        let size = Self.nodeMarkerSize
-        let width = Self.nodeMarkerEdge
-        var nodes: [CGPoint] = []
-        path.applyWithBlock { element in
-            let p = element.pointee.points
-            switch element.pointee.type {
-            case .moveToPoint, .addLineToPoint:
-                nodes.append(p[0])
-            // Quadratic for TrueType outlines, cubic for CFF — fonts ship both.
-            // Either way the last point is where the curve lands on the contour;
-            // the ones before it are controls, and are dropped.
-            case .addQuadCurveToPoint:
-                nodes.append(p[1])
-            case .addCurveToPoint:
-                nodes.append(p[2])
-            case .closeSubpath:
-                break
-            @unknown default:
-                break
-            }
-        }
-        guard !nodes.isEmpty else { return }
-        cg.setLineWidth(width)
-        for node in nodes {
-            let box = CGRect(x: node.x - size / 2, y: node.y - size / 2,
-                             width: size, height: size)
-            cg.setFillColor(fill.cgColor)
-            cg.fill(box)
-            cg.setStrokeColor(edge.cgColor)
-            cg.stroke(box.insetBy(dx: -width / 2, dy: -width / 2))
-            // A second ring in the glyph's own fill, same weight, just beyond
-            // the accent one. Where a node sits on the contour the marker's edge
-            // would otherwise run into the outline's, both being the accent at
-            // the same weight; this keeps a fill-coloured gap between them so
-            // the marker reads as detached.
-            cg.setStrokeColor(fill.cgColor)
-            cg.stroke(box.insetBy(dx: -width * 1.5, dy: -width * 1.5))
         }
     }
 

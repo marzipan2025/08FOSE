@@ -95,6 +95,25 @@ struct RootView: View {
         // by vm.wallpaper. Image, blend mode and opacity are all picked inside
         // WallpaperOverlay based on the current colorScheme.
         .overlay { WallpaperOverlay(name: vm.wallpaper) }
+        // The blown-up glyph, drawn ABOVE the wallpaper on purpose. The
+        // wallpaper is a window-wide blended layer over the whole app, so a
+        // glyph beneath it picks up the tint — and this one has to read as flat
+        // black or white. It's positioned from the card's own bounds, published
+        // by FontDetailView, so it lands exactly where it did when it was drawn
+        // inside the card. Only ever present once the card has settled open
+        // (detailGlyphsVisible gates it), so it never has to chase the open
+        // animation.
+        .overlayPreferenceValue(GlyphZoomKey.self) { zoom in
+            GeometryReader { proxy in
+                if let zoom {
+                    let rect = proxy[zoom.anchor]
+                    GlyphZoomView(payload: zoom.payload)
+                        .frame(width: rect.width, height: rect.height)
+                        .position(x: rect.midX, y: rect.midY)
+                }
+            }
+            .allowsHitTesting(false)
+        }
         // Floating panel collapse/expand buttons. When a panel is open the
         // button sits at that panel's bottom-inner corner showing "−"; when
         // collapsed it docks at the screen's bottom-outer corner showing "+".

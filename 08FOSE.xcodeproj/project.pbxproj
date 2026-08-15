@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		29F8B7C13C5768C52E0219E6 /* AppResources.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD47A40231ED8024328E4236 /* AppResources.swift */; };
+		AA11000000000000000001 /* GlyphZoom.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11000000000000000002 /* GlyphZoom.swift */; };
 		659E47845C84DD37D4C59F42 /* AppViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FA3C53134652D3A68ECA556 /* AppViewModel.swift */; };
 		F734C2E59D90500EC380781B /* PinsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F2D03923373CBFF708B62B8 /* PinsStore.swift */; };
 		158BFB5A783EF810D345FEA2 /* FlowLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DDC309430396472FFF1060D /* FlowLayout.swift */; };
@@ -41,6 +42,7 @@
 /* Begin PBXFileReference section */
 		AA00000000000000000000F6 /* 08FOSE.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = 08FOSE.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BD47A40231ED8024328E4236 /* AppResources.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppResources.swift; path = Sources/FontGrid/AppResources.swift; sourceTree = SOURCE_ROOT; };
+		AA11000000000000000002 /* GlyphZoom.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GlyphZoom.swift; path = Sources/FontGrid/GlyphZoom.swift; sourceTree = SOURCE_ROOT; };
 		3FA3C53134652D3A68ECA556 /* AppViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppViewModel.swift; path = Sources/FontGrid/AppViewModel.swift; sourceTree = SOURCE_ROOT; };
 		6F2D03923373CBFF708B62B8 /* PinsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PinsStore.swift; path = Sources/FontGrid/PinsStore.swift; sourceTree = SOURCE_ROOT; };
 		5DDC309430396472FFF1060D /* FlowLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = FlowLayout.swift; path = Sources/FontGrid/FlowLayout.swift; sourceTree = SOURCE_ROOT; };
@@ -104,6 +106,7 @@
 			isa = PBXGroup;
 			children = (
 				BD47A40231ED8024328E4236 /* AppResources.swift */,
+				AA11000000000000000002 /* GlyphZoom.swift */,
 				3FA3C53134652D3A68ECA556 /* AppViewModel.swift */,
 				6F2D03923373CBFF708B62B8 /* PinsStore.swift */,
 				5DDC309430396472FFF1060D /* FlowLayout.swift */,
@@ -205,6 +208,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				29F8B7C13C5768C52E0219E6 /* AppResources.swift in Sources */,
+				AA11000000000000000001 /* GlyphZoom.swift in Sources */,
 				659E47845C84DD37D4C59F42 /* AppViewModel.swift in Sources */,
 				F734C2E59D90500EC380781B /* PinsStore.swift in Sources */,
 				158BFB5A783EF810D345FEA2 /* FlowLayout.swift in Sources */,

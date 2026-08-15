@@ -107,12 +107,12 @@ struct SettingsOverlay: View {
     // setting came to ship unannounced: the next release simply overwrote its
     // note before anyone read it.
     private static let releaseNotes: [(version: String, note: String)] = [
+        ("0.8.12.1",
+         "The blown-up glyph is drawn above the wallpaper now, so it reads as flat black or white instead of picking up the tint the wallpaper lays over everything else."),
         ("0.8.12",
          "The zoomed glyph no longer has a setting — the key picks the style. Hold Space over the grid for the solid blow-up, ⌥ for the contour one with its outline and on-curve nodes."),
         ("0.8.10.2",
          "Motion, under View Settings, drops the animation from the major transitions — opening a detail card, sliding the panels, fading this screen in. Off runs them instantly."),
-        ("0.8.10",
-         "The Contour style marks every on-curve node of the outline, the way a type editor does."),
     ]
 
     var body: some View {
