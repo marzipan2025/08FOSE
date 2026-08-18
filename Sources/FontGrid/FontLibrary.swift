@@ -229,6 +229,10 @@ struct FontFamily: Identifiable, Hashable {
     let memberFaces: [FaceTraits]   // parallel to memberFontNames, parsed at load
     let script: ScriptCategory      // primary script bucket
     let isVariable: Bool            // backed by an OpenType variable font (has variation axes)
+    // The face compact previews draw with (see `previewFontName`). Stored, not
+    // computed: resolving it opens every member's OS/2 table, so it is settled
+    // once at load — through the persisted cache — and carried on the value.
+    let previewFace: String?
     var weightCount: Int { memberFontNames.count }
     var id: String { name }
 
@@ -266,16 +270,13 @@ extension FontFamily {
     ///   1. a member whose face is literally named "Regular"
     ///   2. else a member whose OS/2 usWeightClass is 400, then 500
     ///   3. else nil — caller falls back to the family name (previous behavior)
-    var previewFontName: String? {
-        if let cached = FontFamily.previewCache[name] { return cached }
-        let resolved = FontFamily.resolvePreviewName(memberFontNames)
-        FontFamily.previewCache[name] = resolved
-        return resolved
-    }
-
-    // Resolved once per family; the inputs (installed faces) don't change during
-    // a run. Value is Optional so a nil result is cached too.
-    private static var previewCache: [String: String?] = [:]
+    ///
+    /// This used to resolve lazily behind a per-run dictionary, which meant the
+    /// answer was computed TWICE for every family on every launch: once here on
+    /// first read, and once at load time via `previewBaseName(for:)` — a
+    /// separate call that never consulted this cache. Both passes open each
+    /// member's OS/2 table. It is now settled once, at load, and stored.
+    var previewFontName: String? { previewFace }
 
     /// Index into `memberFontNames` of the face the grid should draw, given the
     /// Face filter's selection. Nothing is re-sorted and `memberFontNames` is
@@ -354,12 +355,12 @@ extension FontFamily {
     }
 
     // The face a family previews with — the same base the weight slider/hover
-    // and variable-font detection all key off, so they stay in agreement.
-    static func previewBaseName(for members: [String]) -> String {
-        resolvePreviewName(members) ?? members.first ?? ""
-    }
-
-    private static func resolvePreviewName(_ members: [String]) -> String? {
+    // and variable-font detection all key off, so they stay in agreement. nil
+    // when no member declares itself Regular/400/500; callers pick their own
+    // fallback (the grid falls back to the family name, the variable probe to
+    // the lightest member). Called only from FontLibrary's load, behind the
+    // persisted cache — it opens font tables, so it must not run per read.
+    static func resolvePreviewName(_ members: [String]) -> String? {
         // 1. A face named exactly "Regular".
         for ps in members {
             if let font = NSFont(name: ps, size: 12),
@@ -396,8 +397,18 @@ struct FontLibraryStats {
 final class FontLibrary: ObservableObject {
     @Published private(set) var families: [FontFamily] = []
     @Published private(set) var stats = FontLibraryStats()
+    // True from launch until the last family has been filed. The grid reads it
+    // to tell "still filling" from "genuinely nothing matches", so the empty
+    // state doesn't flash across the first frames.
+    @Published private(set) var isLoading = true
 
-    init() { reload() }
+    // The load no longer runs inside init. It used to, which meant the window
+    // could not draw its FIRST frame until every installed family had been
+    // read — the whole ~2.4s of it on a 2,803-family Mac, all on the main
+    // thread. The Task is scheduled on the main actor and so starts after
+    // SwiftUI's current render pass: the window is on screen, then the grid
+    // fills. See `load()` for how it stays responsive while doing it.
+    init() { Task { await load() } }
 
     // Persisted psName → ScriptCategory rawValue. classify() opens the font
     // file and reads sfnt tables for EVERY family, which is ~40% of the launch
@@ -414,8 +425,40 @@ final class FontLibrary: ObservableObject {
     // weight axis"; v3 judges that by rendered pixels instead of glyph outlines
     // (and so no longer needs to blanket-exclude system fonts).
     private static let variableCacheKey = "FontGrid.variableCache.v3"
+    // And the same for the preview face. Resolving it reads the OS/2 table of
+    // every member — 166ms per launch for 508 families, ~915ms for 2,803 — and
+    // none of that answer can change while a font stays installed.
+    //
+    // Keyed by member COUNT plus the lightest member's PostScript name, not by
+    // family name: installing or removing a face changes the count, which
+    // retires the stale entry on its own. (scriptCache keys off the lightest
+    // member alone; this is the same idea, one notch stricter, because a
+    // family's preview face is the thing a new member is most likely to move.)
+    private static let previewCacheKey = "FontGrid.previewCache.v1"
 
-    func reload() {
+    // How many families are read between yields, and how many are accumulated
+    // before the grid is handed a new batch. They are separate numbers on
+    // purpose: yielding is what keeps the window responsive (the main actor
+    // gets to run events between chunks), while publishing is what costs — each
+    // one re-runs the grid's filter chain over everything loaded so far. So
+    // yield often and publish rarely.
+    private static let chunkSize = 100
+    private static let publishEvery = 400
+
+    /// Read every installed family into `families`, in alphabetical order,
+    /// without blocking the main thread for the duration.
+    ///
+    /// The work itself has to be here: `NSFontManager.availableMembers` is
+    /// AppKit and not documented thread-safe, so it cannot simply be moved to a
+    /// background actor. What it can do is stop being one uninterruptible
+    /// block. The family list is sorted UP FRONT — it costs a Core Text call
+    /// and a string sort, no font is opened — so families can be filed in their
+    /// final order and appended; the grid grows downward and never reshuffles
+    /// what is already on screen.
+    func load() async {
+        // Let the first frame get drawn before the Core Text call below.
+        await Task.yield()
+
         let manager = NSFontManager.shared
         // Core Text for the family list, NSFontManager for everything after.
         //
@@ -440,6 +483,7 @@ final class FontLibrary: ObservableObject {
             ?? manager.availableFontFamilies
         var scriptCache = (UserDefaults.standard.dictionary(forKey: Self.scriptCacheKey) as? [String: String]) ?? [:]
         var variableCache = (UserDefaults.standard.dictionary(forKey: Self.variableCacheKey) as? [String: String]) ?? [:]
+        var previewCache = (UserDefaults.standard.dictionary(forKey: Self.previewCacheKey) as? [String: String]) ?? [:]
         var cacheDirty = false
         func cachedClassify(psName: String) -> ScriptCategory {
             if let raw = scriptCache[psName], let cached = ScriptCategory(rawValue: raw) {
@@ -459,9 +503,26 @@ final class FontLibrary: ObservableObject {
             cacheDirty = true
             return variable
         }
-        let loadedFamilies = names.compactMap { family -> FontFamily? in
-            guard !family.hasPrefix(".") else { return nil }
-            guard let members = manager.availableMembers(ofFontFamily: family) else { return nil }
+        // Empty string stores a nil verdict, so "no Regular/400/500 member" is
+        // remembered too rather than being re-derived every launch.
+        func cachedPreviewFace(_ members: [String]) -> String? {
+            let key = "\(members.count):\(members[0])"
+            if let raw = previewCache[key] { return raw.isEmpty ? nil : raw }
+            let resolved = FontFamily.resolvePreviewName(members)
+            previewCache[key] = resolved ?? ""
+            cacheDirty = true
+            return resolved
+        }
+
+        // Sorted before any font is opened, so the families below can be filed
+        // straight into their final position and appended.
+        let ordered = names
+            .filter { !$0.hasPrefix(".") }
+            .map { (raw: $0, display: decodeFontFamilyName($0)) }
+            .sorted { $0.display.localizedCaseInsensitiveCompare($1.display) == .orderedAscending }
+
+        func read(_ family: (raw: String, display: String)) -> FontFamily? {
+            guard let members = manager.availableMembers(ofFontFamily: family.raw) else { return nil }
 
             // member layout: [postScriptName, faceName, weight(NSNumber), traits(NSNumber)]
             // The face name used to be dropped here; the Face filter needs it,
@@ -482,26 +543,56 @@ final class FontLibrary: ObservableObject {
 
             guard !sorted.isEmpty else { return nil }
             let sortedNames = sorted.map(\.name)
-            let displayName = decodeFontFamilyName(family)
+            let previewFace = cachedPreviewFace(sortedNames)
             return FontFamily(
-                name: displayName,
+                name: family.display,
                 memberFontNames: sortedNames,
                 memberFaces: sorted.map(\.face),
                 script: cachedClassify(psName: sortedNames[0]),
-                isVariable: cachedIsVariable(baseName: FontFamily.previewBaseName(for: sortedNames))
+                // The probe wants a face in hand, so it takes the lightest
+                // member when the family names no Regular — the fallback
+                // `previewBaseName(for:)` used to apply.
+                isVariable: cachedIsVariable(baseName: previewFace ?? sortedNames[0]),
+                previewFace: previewFace
             )
         }
-        .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+
+        var loaded: [FontFamily] = []
+        loaded.reserveCapacity(ordered.count)
+        var counts: [ScriptCategory: Int] = [:]
+        var unpublished = 0
+
+        func publish() {
+            stats = FontLibraryStats(total: loaded.count, counts: counts)
+            families = loaded
+            unpublished = 0
+        }
+
+        var index = 0
+        while index < ordered.count {
+            let end = min(index + Self.chunkSize, ordered.count)
+            for i in index..<end {
+                guard let family = read(ordered[i]) else { continue }
+                loaded.append(family)
+                counts[family.script, default: 0] += 1
+                unpublished += 1
+            }
+            index = end
+            if unpublished >= Self.publishEvery { publish() }
+            // Hands the main actor back between chunks: window drags, key
+            // presses and the panels' own animations all get their turn while
+            // the rest of the library is still being read.
+            await Task.yield()
+        }
+
+        publish()
+        isLoading = false
 
         if cacheDirty {
             UserDefaults.standard.set(scriptCache, forKey: Self.scriptCacheKey)
             UserDefaults.standard.set(variableCache, forKey: Self.variableCacheKey)
+            UserDefaults.standard.set(previewCache, forKey: Self.previewCacheKey)
         }
-
-        var counts: [ScriptCategory: Int] = [:]
-        for family in loadedFamilies { counts[family.script, default: 0] += 1 }
-        stats = FontLibraryStats(total: loadedFamilies.count, counts: counts)
-        families = loadedFamilies
     }
 
     // MARK: - Variable-font detection

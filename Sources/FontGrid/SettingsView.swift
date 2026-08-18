@@ -99,30 +99,20 @@ struct SettingsOverlay: View {
     // crowded; this keeps them apart however the text wraps.
     private static let rowControlGap: CGFloat = 32
 
-    // Recent user-facing changes, newest first, each pinned to the version that
-    // actually shipped it rather than tracking appVersion — a patch with nothing
-    // user-facing would otherwise relabel someone else's note as its own.
+    // The single most recent user-facing change, pinned to the version that
+    // actually shipped it rather than tracking appVersion — a patch with
+    // nothing user-facing would otherwise relabel someone else's note as its
+    // own.
     //
-    // A list rather than a single line, because a single line is how the Motion
-    // setting came to ship unannounced: the next release simply overwrote its
-    // note before anyone read it.
+    // Kept as a list, and read as one, even while only one entry is in it: the
+    // shape is what lets a release ADD a note instead of overwriting the last
+    // one. That matters — a single overwritten line is how the Motion setting
+    // came to ship unannounced. History is trimmed here deliberately, because
+    // About had grown into a changelog; trim it again when it does, rather than
+    // collapsing this to a lone string.
     private static let releaseNotes: [(version: String, note: String)] = [
-        ("0.8.15.2",
-         "The card's outline no longer trails behind it. It was being carried by the same delayed fade as the contents, and that delay was re-timing the border's position as well as its opacity — so it stood still while the card moved out from under it. It is cut at the first frame of the collapse now."),
-        ("0.8.15.1",
-         "Launch is about 1.8 seconds shorter. The family list is read through Core Text now instead of NSFontManager, which answered its first question by building a model this app never reads — same 2,803 families, same faces, same order, a tenth of the wait."),
-        ("0.8.15",
-         "Opening a card is steadier. The motion now holds one speed whatever the window size, stops without the overshoot it used to rebound from, and waits for the card to arrive before the glyph grid lands on it — a placeholder holds that space meanwhile. Closing drops the glyphs, fades the contents late in the collapse, and returns an empty cell-shaped box."),
-        ("0.8.14",
-         "Preview weight is gone from here. In its place, More under Filters: pick a weight from the pull-down and the grid keeps only the families that ship one, each cell drawn in that cut. Italic and Oblique narrow it further, and combine with a weight rather than replacing it."),
-        ("0.8.13",
-         "Wallpaper 04 in light mode is a deeper golden yellow. It is one multiply pass now — the soft-light and shine layers that were washing it toward lemon are gone — and the detail card sits on pure white, so it takes the tint at the same strength as the grid instead of a step darker."),
-        ("0.8.12.1",
-         "The blown-up glyph is drawn above the wallpaper now, so it reads as flat black or white instead of picking up the tint the wallpaper lays over everything else."),
-        ("0.8.12",
-         "The zoomed glyph no longer has a setting — the key picks the style. Hold Space over the grid for the solid blow-up, ⌥ for the contour one with its outline and on-curve nodes."),
-        ("0.8.10.2",
-         "Motion, under View Settings, drops the animation from the major transitions — opening a detail card, sliding the panels, fading this screen in. Off runs them instantly."),
+        ("0.8.15.3",
+         "Opening the app no longer waits for your fonts. The window is on screen first and the grid fills into it, alphabetically, staying responsive while it does — and the face each family previews with is now worked out once and remembered instead of being re-read from every font file on every launch."),
     ]
 
     var body: some View {

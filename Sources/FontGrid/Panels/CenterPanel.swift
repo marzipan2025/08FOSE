@@ -238,7 +238,9 @@ struct CenterPanel: View {
 
     @ViewBuilder
     private func emptyOverlay(_ displayedFamilies: [FontFamily]) -> some View {
-        if displayedFamilies.isEmpty {
+        // Not while the library is still filling — an empty grid means "not
+        // there yet" during those first frames, not "nothing matches".
+        if displayedFamilies.isEmpty && !vm.library.isLoading {
             Text("Nothing found")
                 .font(.custom(emptyStateFontName ?? "Helvetica", size: vm.gridFontSize))
                 .foregroundStyle(Color.primary.opacity(0.10))
