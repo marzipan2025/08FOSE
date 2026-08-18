@@ -107,6 +107,8 @@ struct SettingsOverlay: View {
     // setting came to ship unannounced: the next release simply overwrote its
     // note before anyone read it.
     private static let releaseNotes: [(version: String, note: String)] = [
+        ("0.8.13",
+         "Wallpaper 04 in light mode is a deeper golden yellow. It is one multiply pass now — the soft-light and shine layers that were washing it toward lemon are gone — and the detail card sits on pure white, so it takes the tint at the same strength as the grid instead of a step darker."),
         ("0.8.12.1",
          "The blown-up glyph is drawn above the wallpaper now, so it reads as flat black or white instead of picking up the tint the wallpaper lays over everything else."),
         ("0.8.12",

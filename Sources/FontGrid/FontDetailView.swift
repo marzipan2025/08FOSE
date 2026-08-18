@@ -162,9 +162,11 @@ struct FontDetailView: View {
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                // Light mode: card body is brighter than the global panel bg
-                // (0.92 → 0.952, white-ward 40%) so the card lifts off the grid.
-                .fill(colorScheme == .light ? Color(white: 0.952) : Theme.panelBackground)
+                // Light mode: pure white. The wallpaper is a multiply pass, so
+                // a white surface lands on exactly the wallpaper color; at the
+                // old 0.952 the card body read a step darker than the grid
+                // cells it sits among. The stroke below still separates it.
+                .fill(colorScheme == .light ? Color(white: 1.0) : Theme.panelBackground)
                 .shadow(color: .black.opacity(0.55 * shadowScale), radius: 14, x: 0, y: 10)
                 .shadow(color: .black.opacity(0.75 * shadowScale), radius: 32, x: 0, y: 38)
         )
