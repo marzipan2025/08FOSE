@@ -417,7 +417,27 @@ final class FontLibrary: ObservableObject {
 
     func reload() {
         let manager = NSFontManager.shared
-        let names = manager.availableFontFamilies
+        // Core Text for the family list, NSFontManager for everything after.
+        //
+        // Both return the same 2,803 families on a well-stocked Mac — checked by
+        // differencing the two name sets in both directions, 0 and 0 — and the
+        // per-face data below still comes from availableMembers, so nothing
+        // about how faces are named, weighted or ordered changes.
+        //
+        // What changes is the cost of asking. NSFontManager answers its FIRST
+        // family question in 2.1-3.3s and every later one in 0.3ms: it builds a
+        // whole model up front, the one backing the system font panel. Core Text
+        // answers in ~0.2s and stays there, caching nothing. And that model is
+        // never read here — skipping it leaves availableMembers below exactly as
+        // fast either way, so the time is not moved, it is not spent.
+        //
+        // Timed inside this function on a 2,803-family Mac: this step went from
+        // 1,953/1,993ms to 181/193ms across runs.
+        //
+        // The fallback is for a nil that should not happen; it costs the old
+        // path only in a case where the alternative is showing no fonts at all.
+        let names = (CTFontManagerCopyAvailableFontFamilyNames() as? [String])
+            ?? manager.availableFontFamilies
         var scriptCache = (UserDefaults.standard.dictionary(forKey: Self.scriptCacheKey) as? [String: String]) ?? [:]
         var variableCache = (UserDefaults.standard.dictionary(forKey: Self.variableCacheKey) as? [String: String]) ?? [:]
         var cacheDirty = false

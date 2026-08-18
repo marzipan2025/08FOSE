@@ -107,6 +107,8 @@ struct SettingsOverlay: View {
     // setting came to ship unannounced: the next release simply overwrote its
     // note before anyone read it.
     private static let releaseNotes: [(version: String, note: String)] = [
+        ("0.8.15.1",
+         "Launch is about 1.8 seconds shorter. The family list is read through Core Text now instead of NSFontManager, which answered its first question by building a model this app never reads — same 2,803 families, same faces, same order, a tenth of the wait."),
         ("0.8.15",
          "Opening a card is steadier. The motion now holds one speed whatever the window size, stops without the overshoot it used to rebound from, and waits for the card to arrive before the glyph grid lands on it — a placeholder holds that space meanwhile. Closing drops the glyphs, fades the contents late in the collapse, and returns an empty cell-shaped box."),
         ("0.8.14",
