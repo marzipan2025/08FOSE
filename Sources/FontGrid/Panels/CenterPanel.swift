@@ -164,10 +164,8 @@ struct CenterPanel: View {
         // segment the full word is used; with 2+ segments (≥1 middle dot)
         // everything abbreviates: PIN / MEM / MUT and KR / JP / LTN / ETC.
         let scripts = ScriptCategory.allCases.filter { vm.scriptFilter.contains($0) }
-        let total = (vm.pinnedOnly ? 1 : 0) + (vm.memoOnly ? 1 : 0)
-            + (vm.mutedOnly ? 1 : 0) + (vm.variablesOnly ? 1 : 0) + scripts.count
-        if total == 0 { return "\(count) fonts" }
-        let abbr = total >= 2
+        if otherFilterCount == 0 { return "\(count) fonts" }
+        let abbr = useAbbreviations
 
         var segments: [String] = []
         if vm.pinnedOnly { segments.append(abbr ? "PIN" : "Pinned") }
@@ -192,26 +190,50 @@ struct CenterPanel: View {
     // `+`, the outer `.foregroundStyle(.tertiary)` still reaches the first run
     // (it sets no colour of its own) while the second run keeps the explicit one.
     private func statsLabel(_ count: Int) -> Text {
-        let base = Text(statsText(count))
-        guard vm.selectedFamily == nil, vm.activeTag == nil, vm.hasFaceSelection else { return base }
-        return base + Text(Self.statsSeparator + faceStatsText).foregroundColor(Theme.statsSubtle)
+        guard vm.selectedFamily == nil, vm.activeTag == nil, vm.hasFaceSelection else {
+            return Text(statsText(count))
+        }
+        // With no other filter running, statsText falls back to "50 fonts" — but
+        // the face segments are about to name what those 50 are, and "50 fonts ·
+        // Lt · It" reads as a list with a stray noun in it. The count alone
+        // carries it: "50 · Lt · It".
+        // With no other filter the count stands alone and the face segments are
+        // the first thing after it, so they get the plain space that "34 Korean"
+        // uses. Behind an existing segment they are one more item in the list,
+        // and take the middle dot.
+        let bare = otherFilterCount == 0
+        let base = bare ? "\(count)" : statsText(count)
+        let joint = bare ? " " : Self.statsSeparator
+        return Text(base) + Text(joint + faceStatsText).foregroundColor(Theme.statsSubtle)
     }
 
-    // Follows the same rule as the filter segments above: a lone segment spells
-    // itself out, two or more abbreviate. Counted across the WHOLE line, so
-    // "21 KR · Lt" abbreviates even though each half holds only one.
+    // Active filters other than the Face box.
+    private var otherFilterCount: Int {
+        (vm.pinnedOnly ? 1 : 0) + (vm.memoOnly ? 1 : 0) + (vm.mutedOnly ? 1 : 0)
+            + (vm.variablesOnly ? 1 : 0) + vm.scriptFilter.count
+    }
+
+    // Face segments, but only when they are actually on the line — a detail card
+    // or a tag filter replaces the whole label.
+    private var faceSegmentCount: Int {
+        guard vm.selectedFamily == nil, vm.activeTag == nil else { return 0 }
+        return (vm.faceWeight != nil ? 1 : 0) + (vm.faceSlant != nil ? 1 : 0)
+    }
+
+    // ONE decision for the whole line. It used to be made twice — statsText
+    // counted only the filters it drew itself, faceStatsText counted everything —
+    // so a single script plus a single face rung came out "21 Korean · Lt", one
+    // half spelled and the other clipped. The rule is about how crowded the line
+    // is, so it can only be answered by the line as a whole.
+    private var useAbbreviations: Bool { otherFilterCount + faceSegmentCount >= 2 }
+
+    // Shares useAbbreviations with the filter segments above, so the two halves
+    // of the line can never disagree.
     private var faceStatsText: String {
         var segments: [String] = []
-        if let w = vm.faceWeight { segments.append(w.label) }
-        if let s = vm.faceSlant { segments.append(s.label) }
-        let scripts = ScriptCategory.allCases.filter { vm.scriptFilter.contains($0) }
-        let others = (vm.pinnedOnly ? 1 : 0) + (vm.memoOnly ? 1 : 0)
-            + (vm.mutedOnly ? 1 : 0) + (vm.variablesOnly ? 1 : 0) + scripts.count
-        guard others + segments.count >= 2 else { return segments.joined() }
-        var abbreviated: [String] = []
-        if let w = vm.faceWeight { abbreviated.append(w.abbreviation) }
-        if let s = vm.faceSlant { abbreviated.append(s.abbreviation) }
-        return abbreviated.joined(separator: Self.statsSeparator)
+        if let w = vm.faceWeight { segments.append(useAbbreviations ? w.abbreviation : w.label) }
+        if let s = vm.faceSlant { segments.append(useAbbreviations ? s.abbreviation : s.label) }
+        return segments.joined(separator: Self.statsSeparator)
     }
 
     @ViewBuilder
@@ -271,6 +293,16 @@ struct CenterPanel: View {
         if vm.selectedFamily != nil {
             Theme.panelBackground
                 .ignoresSafeArea(edges: .top)
+                // Fades in, so the grid stays visible under the opening card
+                // instead of being cut away the instant a cell is tapped.
+                //
+                // This was briefly made .identity while chasing a dark cast on
+                // the opening card. That was the wrong suspect: the cast came
+                // from the card's own drop shadows, which are absolute in size
+                // and so blanket a still-cell-sized card (see
+                // FontDetailView.shadowStrength). With those held back until the
+                // card is full size, this fade has nothing to reveal and can go
+                // back to doing its actual job.
                 .transition(.opacity)
                 .zIndex(20)
         }
@@ -305,6 +337,7 @@ struct CenterPanel: View {
             )
             .onAppear {
                 vm.maxColumns = computed
+                vm.gridViewportHeight = geo.size.height
                 if vm.columnCount > computed { vm.columnCount = computed }
             }
             .onChange(of: geo.size.width) { newWidth in
@@ -312,6 +345,9 @@ struct CenterPanel: View {
                 vm.maxColumns = m
                 if vm.columnCount > m { vm.columnCount = m }
             }
+            // The detail card's travel is measured against this, so it has to
+            // track the window rather than only the first layout.
+            .onChange(of: geo.size.height) { vm.gridViewportHeight = $0 }
         }
     }
 

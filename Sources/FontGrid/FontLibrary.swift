@@ -110,7 +110,7 @@ enum FaceWeight: String, CaseIterable, Hashable {
         case .ultralight: return ["ultralight", "ultlt", "ul"]
         case .extraLight: return ["extralight", "el", "xlt"]
         case .light:      return ["light", "lt"]
-        case .book:       return ["book", "bk"]
+        case .book:       return ["book"]   // "bk" is ambiguous — see FaceTraits
         case .regular:    return ["regular", "rg", "reg", "roman"]
         case .normal:     return ["normal", "nm"]
         case .medium:     return ["medium", "md"]
@@ -163,7 +163,7 @@ struct FaceTraits: Hashable {
     /// real families ship — "Demi Bold" (Avenir Next), "Semi Bold" (Nohemi),
     /// "Extra Light" — resolve to one rung instead of matching twice. Without
     /// the pair pass, "Demi Bold" would register as BOTH SemiBold and Bold.
-    static func parse(faceName: String) -> FaceTraits {
+    static func parse(faceName: String, declaredWeight: Int) -> FaceTraits {
         let tokens = faceName.split(whereSeparator: { $0.isWhitespace }).map { $0.lowercased() }
         var weight: FaceWeight?
         var slant: FaceSlant?
@@ -175,15 +175,35 @@ struct FaceTraits: Hashable {
                 i += 2
                 continue
             }
-            if let match = weightMap[tokens[i]] {
+            let token = tokens[i]
+            if let choice = ambiguousTokens[token] {
+                if weight == nil {
+                    weight = declaredWeight >= ambiguousThreshold ? choice.heavy : choice.light
+                }
+            } else if let match = weightMap[token] {
                 if weight == nil { weight = match }
-            } else if let match = slantMap[tokens[i]] {
+            } else if let match = slantMap[token] {
                 if slant == nil { slant = match }
             }
             i += 1
         }
         return FaceTraits(weight: weight, slant: slant)
     }
+
+    // Tokens two foundries spell identically and mean opposite ends of the
+    // ladder by. "Bk" is Book in Adobe's naming table (Avant Garde Gothic Bk)
+    // and Black at Sandoll/SD, and no amount of case-matching separates them —
+    // both write it exactly "Bk". Picking a side would just choose whose fonts
+    // to misfile.
+    //
+    // The face settles it itself: NSFontManager reports a weight per member,
+    // and the two readings do not overlap there. Across a 2,803-family library
+    // every "Book" face lands at 5-6 and every "Bk" at 11-14, so the split is
+    // wide and 8 sits in the empty middle.
+    private static let ambiguousTokens: [String: (light: FaceWeight, heavy: FaceWeight)] = [
+        "bk": (light: .book, heavy: .black)
+    ]
+    private static let ambiguousThreshold = 8
 
     // Token → rung, flattened once instead of scanning all 13 cases per token.
     private static let weightMap: [String: FaceWeight] = {
@@ -212,12 +232,9 @@ struct FontFamily: Identifiable, Hashable {
     var weightCount: Int { memberFontNames.count }
     var id: String { name }
 
-    // Which rungs and slants this family ships at all. Parsed once when the
-    // library loads (the face names cannot change during a run), so the Face
-    // filter never re-reads a font to answer.
-    var availableWeights: Set<FaceWeight> { Set(memberFaces.compactMap(\.weight)) }
-    var availableSlants: Set<FaceSlant> { Set(memberFaces.compactMap(\.slant)) }
-
+    // Which rungs and slants this family ships. Parsed once when the library
+    // loads (face names cannot change during a run), so the Face filter never
+    // re-reads a font to answer.
     func has(_ weight: FaceWeight) -> Bool { memberFaces.contains { $0.weight == weight } }
     func has(_ slant: FaceSlant) -> Bool { memberFaces.contains { $0.slant == slant } }
 }
@@ -438,7 +455,7 @@ final class FontLibrary: ObservableObject {
                           let weight = row[2] as? Int
                     else { return nil }
                     let faceName = (row.count >= 2 ? row[1] as? String : nil) ?? ""
-                    return (postScript, FaceTraits.parse(faceName: faceName), weight)
+                    return (postScript, FaceTraits.parse(faceName: faceName, declaredWeight: weight), weight)
                 }
                 .sorted { $0.2 < $1.2 }
                 .map { (name: $0.0, face: $0.1) }

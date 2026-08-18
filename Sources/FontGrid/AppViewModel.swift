@@ -342,6 +342,12 @@ final class AppViewModel: ObservableObject {
     static let previewOffsetRange: ClosedRange<Double> = -10...30
 
     var gridFontSize: Double { Self.gridBaseFontSize + previewSizeOffset }
+
+    // Height of the grid viewport, reported by CenterPanel's GeometryReader.
+    // Not @Published on purpose: no view renders from it, and republishing on
+    // every frame of a window drag would invalidate the tree for nothing. It is
+    // read once, at the moment a card opens, to size that card's travel.
+    var gridViewportHeight: CGFloat = 0
     var weightRowFontSize: Double { Self.weightRowBaseFontSize + previewSizeOffset }
 
     @Published var selectedFamily: FontFamily? = nil
@@ -349,6 +355,18 @@ final class AppViewModel: ObservableObject {
     // Gates the heavy Glyphs grid: false during the open/close motion, true once
     // the detail has settled open. Keeps the expand/collapse animation smooth.
     @Published var detailGlyphsVisible: Bool = false
+
+    // True for the duration of a close. The card's CONTENTS fade out late in the
+    // collapse (see FontDetailView.collapseContentOpacity) so the box arrives
+    // back at its cell as an empty cell-shaped card rather than shrinking a
+    // full-detail layout down to thumbnail size.
+    @Published var detailCollapsing: Bool = false
+
+    // Where in the close the contents start going: the card is at roughly a
+    // quarter of its size by here, small enough that its detail has stopped
+    // being readable anyway.
+    static let collapseFadeStart = 0.65
+    static let collapseFadeSpan = 0.35
 
     // Where the open detail view was launched from — decides which ordered list
     // the left/right arrow keys step through.
@@ -359,15 +377,105 @@ final class AppViewModel: ObservableObject {
         self.library = FontLibrary()
     }
 
-    private static let detailOpenSpring = Animation.spring(response: 0.42, dampingFraction: 0.80)
-    private static let detailCloseSpring = Animation.spring(response: 0.38, dampingFraction: 0.82)
+    // Quicker than the 0.42 / 0.38 this card used to open and close with, which
+    // is what lets the glyph reveal wait for a settled card without the wait
+    // being felt: a spring settles at roughly 1.5–2x its response, so cutting
+    // response to 0.32 pulls the settled point from ~0.63–0.84s back to
+    // ~0.48–0.64s. The card arrives sooner AND there is finally room to put the
+    // grid after it. 0.25 was tried first and read as hurried — the gain is in
+    // clearing the overlap, not in being as fast as possible. Close stays a
+    // touch quicker than open, the proportion it has always had.
+    //
+    // dampingFraction is 1.0 — critically damped, so the card stops AT its size
+    // instead of sailing past and easing back. The old 0.80/0.82 always
+    // overshot; at response 0.42 the rebound was spread thin enough to pass for
+    // liveliness, but the same overshoot compressed into a 0.32 response reads
+    // as the card being yanked back, which is a defect, not a flourish.
+    // A timing curve, not a spring.
+    //
+    // A critically damped spring's velocity is w^2*t*e^(-wt): it peaks at
+    // response/2pi — about four frames in — at roughly 3.9x its own average, then
+    // decelerates for the rest of the run. Holding the AVERAGE speed constant
+    // across window sizes did nothing about that peak, so a large card still
+    // jumped ~70pt on an early frame and stuttered getting started.
+    //
+    // easeInOut peaks at about 1.95x average instead, so the worst frame asks
+    // for half the movement. It also has an exact end: `duration` IS when it
+    // arrives, where a spring only ever approaches, which is what let the glyph
+    // gate drift out of step three times over.
+    private static func detailCurve(duration: Double) -> Animation {
+        Animation.easeInOut(duration: duration)
+    }
 
-    // How long the Glyphs grid is held back after the card opens. With motion on
-    // this tracks detailOpenSpring's response, so building the grid can't stutter
-    // the expand. With motion off there's no spring to protect — but the card
-    // should still paint before the grid lands on it, and a tenth of a second
-    // buys that without reading as a stall.
-    private static let glyphsRevealDelay: TimeInterval = 0.35
+    // Close stays a touch quicker than open, the proportion it has always had
+    // (it was 0.38 against 0.42, then 0.29 against 0.32).
+    private static let closeRatio = 0.9
+
+    // A fixed response means a fixed DURATION, so the card's speed rose with the
+    // window: the same 0.32s had to cover a 430pt climb in a small window and a
+    // 1200pt one maximised, and the wider the gap the more ground each frame had
+    // to cover — which is what turns a dropped frame into a visible lurch.
+    //
+    // So the response is derived from the distance instead, holding points-per-
+    // second constant: the card moves at the same rate whatever the window size,
+    // and only takes longer when it genuinely has further to go.
+    //
+    // referenceTravel is the distance that keeps the old 0.32 — a mid-sized
+    // window — so this changes the feel at the extremes, not everywhere.
+    private static let referenceTravel: CGFloat = 640
+    private static let referenceDuration = 0.32
+    // Clamped at both ends: a card opening into a short window should not snap
+    // instantly, and a full-height 5K one should not crawl for two thirds of a
+    // second. Constant speed is the rule; these are the guardrails on it.
+    private static let durationRange = 0.22...0.46
+
+    // Vertical travel from cell to card: the card fills the grid viewport minus
+    // its own padding, and starts at one cell's height.
+    // Exposed so the detail's removal transition can hold the card opaque for
+    // exactly as long as the close takes, then cut it.
+    var detailCloseDuration: Double { openDuration * Self.closeRatio }
+
+    private var openDuration: Double {
+        let cardHeight = gridViewportHeight - Theme.gridPadding - 67
+        let travel = cardHeight - Theme.cellHeight(fontSize: gridFontSize)
+        guard travel > 0, gridViewportHeight > 0 else { return Self.referenceDuration }
+        let scaled = Self.referenceDuration * Double(travel / Self.referenceTravel)
+        return min(max(scaled, Self.durationRange.lowerBound), Self.durationRange.upperBound)
+    }
+
+    // How long the Glyphs grid is held back after the card opens — derived from
+    // the response above, never a constant.
+    //
+    // It has to outlast the motion because the grid cell drops its
+    // matchedGeometryEffect partner at this instant (CenterPanel keys the cell
+    // on detailGlyphsVisible), and a card that has not arrived yet snaps the
+    // rest of the way in one frame. A critically damped spring is at 99.95% by
+    // 1.6x its response, which is under a pixel of a full-height travel.
+    //
+    // This is the third time this value has drifted out of agreement with the
+    // motion (0.45 against a 0.42 response, then 0.35 against the same, then 0.5
+    // against a response that had become variable). Deriving it removes the
+    // chance of a fourth.
+    //
+    // This has to clear the spring's SETTLE, not its response — the two are not
+    // the same number, and conflating them is exactly how this drifted. v0.4.6
+    // introduced the gate at 0.45s against a 0.42s response and said "shown only
+    // after the open animation settles"; v0.8.10.2 cut it to 0.35s while keeping
+    // that sentence, which put the glyph build back inside the expand and is
+    // what made the card judder. 0.5 sits past the point the faster spring above
+    // has visibly arrived (~0.48s at the outside), so the comment and the value
+    // agree again, with margin to spare rather than margin to the millisecond.
+    //
+    // With motion off there is no spring to protect — but the card should still
+    // paint before the grid lands on it, and a tenth of a second buys that
+    // without reading as a stall.
+    // A timing curve is finished at `duration`, full stop — so this is that plus
+    // a beat, rather than a guess at where a spring's asymptote stops being
+    // visible. One frame of daylight between arriving and being filled.
+    private static let glyphsRevealMargin: TimeInterval = 0.08
+    private var glyphsRevealDelay: TimeInterval {
+        openDuration + Self.glyphsRevealMargin
+    }
     private static let glyphsRevealDelayInstant: TimeInterval = 0.1
 
     // Bumped on every open/close so a pending reveal can be identified as stale.
@@ -378,11 +486,12 @@ final class AppViewModel: ObservableObject {
     func openDetail(_ family: FontFamily, source: DetailSource) {
         detailSource = source
         detailGlyphsVisible = false
+        detailCollapsing = false
         detailOpenToken += 1
         let token = detailOpenToken
         if selectedFamily == nil {
             if useMotion {
-                withAnimation(Self.detailOpenSpring) { selectedFamily = family }
+                withAnimation(Self.detailCurve(duration: openDuration)) { selectedFamily = family }
             } else {
                 selectedFamily = family
             }
@@ -390,7 +499,7 @@ final class AppViewModel: ObservableObject {
             // The token matters: closing and reopening inside the delay window
             // would otherwise let the first open's timer fire into the second
             // one's animation — the exact stutter this delay exists to prevent.
-            let delay = useMotion ? Self.glyphsRevealDelay : Self.glyphsRevealDelayInstant
+            let delay = useMotion ? glyphsRevealDelay : Self.glyphsRevealDelayInstant
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
                 guard let self, token == self.detailOpenToken else { return }
                 if self.selectedFamily != nil { self.detailGlyphsVisible = true }
@@ -407,10 +516,11 @@ final class AppViewModel: ObservableObject {
     // the grid isn't dragged through the collapse, while staying responsive.
     func closeDetail() {
         detailGlyphsVisible = false
+        detailCollapsing = true
         // Retire any reveal still in flight, so it can't land after the close.
         detailOpenToken += 1
         if useMotion {
-            withAnimation(Self.detailCloseSpring) { selectedFamily = nil }
+            withAnimation(Self.detailCurve(duration: detailCloseDuration)) { selectedFamily = nil }
         } else {
             selectedFamily = nil
         }

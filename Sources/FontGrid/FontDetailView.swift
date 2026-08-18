@@ -89,6 +89,18 @@ struct FontDetailView: View {
     // Light mode uses lighter shadows (30% of the dark-mode strength).
     private var shadowScale: Double { colorScheme == .light ? 0.3 : 1.0 }
 
+    // Shadow radii and offsets are absolute, so they do NOT shrink with the card
+    // the way its fill and corners do. While the card is still cell-sized at the
+    // start of the open, the y38/radius32 shadow reaches further below it than
+    // the card is tall — it reads as a dark mass arriving alongside the card
+    // rather than as depth beneath it, which is what makes the opening card look
+    // dimmed.
+    //
+    // So the shadows are held at zero until the card is at full size, then faded
+    // in over 0.22s. Closing drops them at once, which is right: a shrinking card
+    // should not drag a full-size shadow down with it either.
+    private var shadowStrength: Double { vm.detailGlyphsVisible ? 1 : 0 }
+
     private var isPinned: Bool { pins.contains(family.name) }
     private var isMuted: Bool { muted.contains(family.name) }
 
@@ -132,6 +144,19 @@ struct FontDetailView: View {
         )
     }
 
+    // Contents hold full strength for most of the collapse, then fade over its
+    // last third. By then the card is about a quarter of its size — too small
+    // for any of this to be legible — so what lands back on the grid is a plain
+    // cell-shaped box rather than a detail layout squeezed to thumbnail size.
+    // The card's own surface is NOT part of this: it stays solid the whole way.
+    private var collapseContentOpacity: Double { vm.detailCollapsing ? 0 : 1 }
+
+    private var collapseFade: Animation {
+        let d = vm.detailCloseDuration
+        return .easeIn(duration: d * AppViewModel.collapseFadeSpan)
+            .delay(d * AppViewModel.collapseFadeStart)
+    }
+
     var body: some View {
         GeometryReader { geo in
             if geo.size.width >= wideThreshold {
@@ -140,6 +165,8 @@ struct FontDetailView: View {
                 narrowLayout(width: geo.size.width, height: geo.size.height)
             }
         }
+        .opacity(collapseContentOpacity)
+        .animation(collapseFade, value: vm.detailCollapsing)
         .onPreferenceChange(TitleHeightKey.self) { titleAreaHeight = $0 }
         // The blown-up glyph is drawn at the root instead of here, so it lands
         // above the window-wide wallpaper overlay and keeps its black or white
@@ -167,12 +194,20 @@ struct FontDetailView: View {
                 // old 0.952 the card body read a step darker than the grid
                 // cells it sits among. The stroke below still separates it.
                 .fill(colorScheme == .light ? Color(white: 1.0) : Theme.panelBackground)
-                .shadow(color: .black.opacity(0.55 * shadowScale), radius: 14, x: 0, y: 10)
-                .shadow(color: .black.opacity(0.75 * shadowScale), radius: 32, x: 0, y: 38)
+                .shadow(color: .black.opacity(0.55 * shadowScale * shadowStrength), radius: 14, x: 0, y: 10)
+                .shadow(color: .black.opacity(0.75 * shadowScale * shadowStrength), radius: 32, x: 0, y: 38)
+                .animation(.easeInOut(duration: 0.22), value: vm.detailGlyphsVisible)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .stroke(colorScheme == .light ? Color(white: 0.56) : Color.white.opacity(0.8), lineWidth: 1)
+                // Goes with the contents, not with the surface. This stroke sits
+                // OUTSIDE the card in the modifier chain, so the collapse fade
+                // applied to the body never reached it — and at white 0.8 in
+                // dark mode it is the brightest thing on the card, so it stayed
+                // sharp while everything inside it dissolved.
+                .opacity(collapseContentOpacity)
+                .animation(collapseFade, value: vm.detailCollapsing)
         )
         // Tapping the card's empty background drops any text-input focus (search
         // / memo / preview bar) so the ←/→ navigation works again. Buttons and
@@ -261,6 +296,13 @@ struct FontDetailView: View {
                     }
                     weightListContent.inspectDim(inspecting)
                     if vm.detailGlyphsVisible { glyphsSection }
+                    // Skeleton only while OPENING. selectedFamily is already nil
+                    // through the close, and mounting a fresh placeholder grid on
+                    // the first frame of the collapse re-laid the card out just as
+                    // it started shrinking — the content appeared to snap small
+                    // before the box followed it down. Closing only has to drop
+                    // the glyph list; everything else is the open played backwards.
+                    else if vm.selectedFamily != nil { glyphsSkeleton }
                 }
             }
             .frame(maxHeight: .infinity)
@@ -702,6 +744,13 @@ struct FontDetailView: View {
         ScrollView {
             weightListContent.inspectDim(inspecting)
             if vm.detailGlyphsVisible { glyphsSection }
+            // Skeleton only while OPENING. selectedFamily is already nil
+            // through the close, and mounting a fresh placeholder grid on
+            // the first frame of the collapse re-laid the card out just as
+            // it started shrinking — the content appeared to snap small
+            // before the box followed it down. Closing only has to drop
+            // the glyph list; everything else is the open played backwards.
+            else if vm.selectedFamily != nil { glyphsSkeleton }
         }
         // The scroller is drawn by AppKit outside the dimmed subtree, so it
         // stays at full strength while everything else recedes — the one bright
@@ -760,6 +809,93 @@ struct FontDetailView: View {
 
     private var selectedGlyphFace: String {
         glyphMembers.first { $0.ps == selectedGlyphPS }?.face ?? "Regular"
+    }
+
+    // Stand-in for the Glyphs section during the open motion, while the real one
+    // is still gated off (see AppViewModel.glyphsRevealDelay).
+    //
+    // The point is that the card's content has its full shape from the first
+    // frame. Without it the card expands around a section that isn't there yet,
+    // and the reveal half a second later drops a screenful of new height into a
+    // card that had already stopped moving — a second, later jolt on top of
+    // whatever the expand itself did.
+    //
+    // Everything here mirrors glyphsSection's geometry — same divider, same 24pt
+    // paddings, same header, same cell size and spacing — so the swap changes
+    // what the boxes contain, not where anything sits.
+    //
+    // Deliberately static: no shimmer, no pulse. Any animation here would burn
+    // frames during the exact motion this gate exists to protect.
+    private var glyphsSkeleton: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Rectangle().fill(detailDivider).frame(height: 1).padding(.horizontal, 24)
+            HStack(spacing: 8) {
+                Text("Glyphs")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.primary)
+                Spacer()
+                // The face name is known before the grid is — no reason to grey
+                // out a label that costs nothing to draw correctly.
+                Text(selectedGlyphFace)
+                    .font(.system(size: Theme.smallSize))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 24)
+            .padding(.bottom, 20)
+            skeletonGrid
+                .padding(.horizontal, 24)
+                .padding(.bottom, 20)
+        }
+        .opacity(isMuted ? 0.4 : 1)
+    }
+
+    // Placeholder cells on the same column maths glyphGrid uses, so the columns
+    // land in the same places. Row count is fixed rather than read from the
+    // font's glyph count: this fills a hole for half a second, and a Korean
+    // family would otherwise ask for thousands of placeholder views — the very
+    // cost being deferred.
+    //
+    // The width is read straight from a GeometryReader rather than routed
+    // through a preference into @State the way the real grid does it. That
+    // round-trip costs a state write and a rebuild every time the width moves —
+    // and this view exists ONLY while the card is expanding, so the width moves
+    // every single frame. Reading it inline resolves in the same layout pass and
+    // invalidates nothing.
+    // Six rows, fading 0.35 → 0.10 from top to bottom.
+    private static let skeletonRows = 6
+    private static let skeletonTopOpacity = 0.35
+    private static let skeletonRowFade = 0.05
+
+    private var skeletonGrid: some View {
+        let cell = glyphCellSize
+        let spacing: CGFloat = 8
+        let rows = Self.skeletonRows
+        // Fixed height, because a GeometryReader does not size to its content.
+        let blockHeight = cell * CGFloat(rows) + spacing * CGFloat(rows - 1)
+        return GeometryReader { geo in
+        let columnCount = max(1, Int((geo.size.width + spacing) / (cell + spacing)))
+        let columns = Array(repeating: GridItem(.flexible(), spacing: spacing), count: columnCount)
+        LazyVGrid(columns: columns, alignment: .leading, spacing: spacing) {
+            ForEach(0..<(columnCount * rows), id: \.self) { index in
+                // The resting glyph tile exactly (see GlyphCell.glyphBox): same
+                // radius, same fill, and the top row at the same 0.35. A
+                // placeholder that reads louder than the thing it stands in for
+                // draws the eye to the wait.
+                //
+                // Each row then drops 0.05, so the block fades out downward
+                // instead of ending on a hard edge six rows down. The card is
+                // taller than six rows on most windows, and a fade reads as
+                // "more below, still coming" where a clean cut reads as "this
+                // is all there is".
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Theme.surfaceFill)
+                    .opacity(Self.skeletonTopOpacity - Self.skeletonRowFade * Double(index / columnCount))
+                    .frame(height: cell)
+            }
+        }
+        }
+        .frame(height: blockHeight)
     }
 
     private var glyphsSection: some View {
