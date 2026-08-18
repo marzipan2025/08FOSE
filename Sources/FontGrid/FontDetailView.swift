@@ -201,13 +201,19 @@ struct FontDetailView: View {
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .stroke(colorScheme == .light ? Color(white: 0.56) : Color.white.opacity(0.8), lineWidth: 1)
-                // Goes with the contents, not with the surface. This stroke sits
-                // OUTSIDE the card in the modifier chain, so the collapse fade
-                // applied to the body never reached it — and at white 0.8 in
-                // dark mode it is the brightest thing on the card, so it stayed
-                // sharp while everything inside it dissolved.
-                .opacity(collapseContentOpacity)
-                .animation(collapseFade, value: vm.detailCollapsing)
+                // Cut at the first frame of the collapse, not faded.
+                //
+                // It cannot share the contents' late fade: .animation(_:value:)
+                // re-times EVERY animatable property of the view it is attached
+                // to, and this stroke's geometry comes from matchedGeometryEffect.
+                // Giving it a curve delayed to 65% of the close left the border
+                // standing still while the card shrank out from under it, then
+                // snapping across to catch up.
+                //
+                // Dropping it outright is invisible in practice: at the moment
+                // the card starts shrinking there is a full-size card under the
+                // cursor, and a 1px outline is the last thing the eye is holding.
+                .opacity(vm.detailCollapsing ? 0 : 1)
         )
         // Tapping the card's empty background drops any text-input focus (search
         // / memo / preview bar) so the ←/→ navigation works again. Buttons and

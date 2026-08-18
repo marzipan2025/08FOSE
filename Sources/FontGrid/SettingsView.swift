@@ -107,6 +107,8 @@ struct SettingsOverlay: View {
     // setting came to ship unannounced: the next release simply overwrote its
     // note before anyone read it.
     private static let releaseNotes: [(version: String, note: String)] = [
+        ("0.8.15.2",
+         "The card's outline no longer trails behind it. It was being carried by the same delayed fade as the contents, and that delay was re-timing the border's position as well as its opacity — so it stood still while the card moved out from under it. It is cut at the first frame of the collapse now."),
         ("0.8.15.1",
          "Launch is about 1.8 seconds shorter. The family list is read through Core Text now instead of NSFontManager, which answered its first question by building a model this app never reads — same 2,803 families, same faces, same order, a tenth of the wait."),
         ("0.8.15",
