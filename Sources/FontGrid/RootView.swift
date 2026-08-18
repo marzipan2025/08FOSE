@@ -70,7 +70,8 @@ struct RootView: View {
                         toasts.show(Toast(
                             style: .success,
                             title: "Tag renamed",
-                            detail: "#\(tag) → #\(newName) · \(count) font\(count == 1 ? "" : "s")"
+                            detail: "#\(tag) → #\(newName) · \(count) font\(count == 1 ? "" : "s")",
+                            emphasis: .detail
                         ))
                     },
                     onDelete: {
@@ -82,7 +83,8 @@ struct RootView: View {
                             style: .success,
                             title: "Tag deleted",
                             detail: "#\(tag) removed from \(count) font\(count == 1 ? "" : "s")",
-                            icon: "tag.slash"
+                            icon: "tag.slash",
+                            emphasis: .detail
                         ))
                     }
                 )
@@ -196,6 +198,43 @@ struct RootView: View {
             UpdateCheck.showPostUpdateToastIfNeeded(toasts: toasts)
             UpdateCheck.checkOnLaunch(toasts: toasts)
         }
+        // Fonts were installed or removed while the app was running. The grid
+        // itself needs no help — it is keyed by family name, so the replaced
+        // array leaves the viewport where it was. What does need help is a
+        // detail card left standing on a font that is gone: it would keep
+        // drawing from the struct it captured, and every glyph in it would
+        // quietly fall back to the system face under the original font's name.
+        // So it closes, and the toast says why.
+        .onReceive(vm.library.$lastChange) { change in
+            guard let change, !change.isEmpty else { return }
+            if let open = vm.selectedFamily, change.removed.contains(open.name) {
+                vm.closeDetail()
+            }
+            toasts.show(fontChangeToast(change))
+        }
+    }
+
+    // "Gotham added" reads better than "1 font added" when it is a single
+    // font, because the name is the useful part; past one, the count is.
+    private func fontChangeToast(_ change: FontLibrary.Change) -> Toast {
+        func phrase(_ names: [String], _ verb: String) -> String? {
+            switch names.count {
+            case 0:  return nil
+            case 1:  return "\(names[0]) \(verb)"
+            default: return "\(names.count) fonts \(verb)"
+            }
+        }
+        let parts = [phrase(change.added, "added"),
+                     phrase(change.removed.sorted(), "removed")].compactMap { $0 }
+        return Toast(
+            style: .info,
+            title: "Font library updated",
+            detail: parts.joined(separator: " · "),
+            icon: "textformat",
+            // The font's name is the news here, not the fact that something
+            // changed — so it gets the weight.
+            emphasis: .detail
+        )
     }
 
     // Horizontal offset for the left toggle (anchored bottom-leading):

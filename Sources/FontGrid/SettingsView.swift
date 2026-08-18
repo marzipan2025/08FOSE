@@ -111,8 +111,8 @@ struct SettingsOverlay: View {
     // About had grown into a changelog; trim it again when it does, rather than
     // collapsing this to a lone string.
     private static let releaseNotes: [(version: String, note: String)] = [
-        ("0.8.15.3",
-         "Opening the app no longer waits for your fonts. The window is on screen first and the grid fills into it, alphabetically, staying responsive while it does — and the face each family previews with is now worked out once and remembered instead of being re-read from every font file on every launch."),
+        ("0.8.15.4",
+         "Install or remove a font while the app is open and the grid now keeps up on its own, without a relaunch. Only the fonts that actually changed are read, so the list updates in place — your scroll position stays where it was — and a detail card standing on a font that has just been uninstalled closes rather than quietly redrawing itself in a substitute face."),
     ]
 
     var body: some View {
@@ -549,7 +549,9 @@ struct SettingsOverlay: View {
                 style: .success,
                 title: "Backup exported",
                 detail: url.lastPathComponent,
-                icon: "square.and.arrow.up"
+                icon: "square.and.arrow.up",
+                actionLabel: "Show in Finder",
+                action: { NSWorkspace.shared.activateFileViewerSelecting([url]) }
             ))
         } catch {
             toasts.show(Toast(
@@ -630,13 +632,14 @@ struct SettingsOverlay: View {
         incoming.formUnion(payload.muted ?? [])
         let missing = incoming.subtracting(installed).count
         if missing > 0 {
-            detail += " — \(missing) kept for fonts not installed here"
+            detail += " — \(missing) not installed"
         }
 
         toasts.show(Toast(
             style: .success,
             title: replace ? "Backup imported (replaced)" : "Backup imported",
-            detail: detail
+            detail: detail,
+            emphasis: .detail
         ))
     }
 

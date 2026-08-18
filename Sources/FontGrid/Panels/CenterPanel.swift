@@ -515,6 +515,16 @@ private struct FontGridScroll: View {
         // preference updates the relayout triggers.
         .onChange(of: vm.columnCount) { _ in keepTopInView(proxy) }
         .onChange(of: vm.previewSizeOffset) { _ in keepTopInView(proxy) }
+        // A font that was uninstalled while hovered leaves its id behind here,
+        // and the shadow drawn for that id has nothing left to sit on.
+        .onReceive(vm.library.$lastChange) { change in
+            if let id = hoveredFamilyID, change?.removed.contains(id) == true {
+                hoveredFamilyID = nil
+            }
+            if let id = topVisibleFamily, change?.removed.contains(id) == true {
+                topVisibleFamily = nil
+            }
+        }
         } // ScrollViewReader
     }
 

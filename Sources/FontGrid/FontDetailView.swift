@@ -1019,7 +1019,8 @@ struct FontDetailView: View {
                 kCTFontURLAttribute) as? URL
         else {
             toasts.show(Toast(style: .error, title: "Couldn't locate the font file",
-                              detail: "\(family.name) has no resolvable file path."))
+                              detail: "\(family.name) has no resolvable file path.",
+                              emphasis: .detail))
             return
         }
         NSWorkspace.shared.activateFileViewerSelecting([url])
@@ -1661,7 +1662,8 @@ enum WeightArtwork {
                 style: .success,
                 title: "\(format) exported",
                 detail: url.lastPathComponent,
-                icon: "square.and.arrow.up"
+                icon: "square.and.arrow.up",
+                emphasis: .detail
             ))
         } catch {
             toasts.show(Toast(style: .error, title: "\(format) export failed",

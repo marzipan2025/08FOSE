@@ -14,6 +14,15 @@ struct Toast: Identifiable, Equatable {
     var detail: String? = nil
     // SF Symbol override; nil falls back to the style's default glyph.
     var icon: String? = nil
+    // Which of the two lines carries the news, and so gets the larger, brighter
+    // type. Most toasts announce the event on the first line and qualify it on
+    // the second ("Export failed" / "Couldn't write to Backup.json"), which is
+    // the default. A few are the other way round: the first line names a
+    // CATEGORY of event and the second is what the reader actually came for
+    // ("Font library updated" / "Gotham added"). Emphasising the category there
+    // buries the one word that matters.
+    enum Emphasis { case title, detail }
+    var emphasis: Emphasis = .title
     var actionLabel: String? = nil
     var action: (() -> Void)? = nil
     // Never auto-dismisses (e.g. a download in progress); errors are always
@@ -116,12 +125,12 @@ struct ToastView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(toast.title)
-                    .font(.system(size: 13))
-                    .foregroundStyle(Self.titleText)
+                    .font(.system(size: size(for: .title)))
+                    .foregroundStyle(colour(for: .title))
                 if let detail = toast.detail {
                     Text(detail)
-                        .font(.system(size: Theme.smallSize))
-                        .foregroundStyle(Self.detailText)
+                        .font(.system(size: size(for: .detail)))
+                        .foregroundStyle(colour(for: .detail))
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -174,6 +183,17 @@ struct ToastView: View {
         .contentShape(Rectangle())
         .onTapGesture(perform: onDismiss)
         .onHover(perform: onHover)
+    }
+
+    // The emphasised line takes the larger size and the brighter grey; the other
+    // takes the smaller, dimmer pair. Only which LINE gets which changes — the
+    // two type treatments themselves are the ones the card has always used.
+    private func size(for line: Toast.Emphasis) -> CGFloat {
+        toast.emphasis == line ? 13 : Theme.smallSize
+    }
+
+    private func colour(for line: Toast.Emphasis) -> Color {
+        toast.emphasis == line ? Self.titleText : Self.detailText
     }
 
     // Errors tint the line red so the state reads even before the text does.
