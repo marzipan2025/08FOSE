@@ -678,35 +678,19 @@ struct FontDetailView: View {
                 .help("Close detail")
             }
 
-            HStack(spacing: 8) {
-                ActionButton(
-                    icon: nil,
-                    label: isPinned ? "Pinned" : "Pin",
-                    active: isPinned
-                ) { pins.toggle(family.name) }
-
-                ActionButton(
-                    icon: copied ? "checkmark" : nil,
-                    label: copied ? "Copied" : "Copy name",
-                    active: copied
-                ) {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(family.name, forType: .string)
-                    withAnimation(.easeInOut(duration: 0.15)) { copied = true }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                        withAnimation { copied = false }
-                    }
-                }
-
-                ActionButton(icon: "folder", label: "Show in Finder", active: false) {
-                    openInFinder()
-                }
-
-                ActionButton(
-                    icon: isMuted ? "moon.zzz.fill" : "moon.zzz",
-                    label: isMuted ? "Muted" : "Mute",
-                    active: isMuted
-                ) { toggleMuted() }
+            // Full labels while they fit; the two buttons that CAN lose their
+            // label drop it when they can't. The row used to just run off the
+            // card — every button is .fixedSize(), so a narrow window clipped
+            // Mute instead of compressing anything.
+            //
+            // Pin and Copy name are not candidates: Pin carries no icon at all,
+            // and Copy name only grows one when it flips to Copied, so neither
+            // has a glyph that could stand alone. Show in Finder and Mute do,
+            // and they are also the two widest — collapsing them recovers about
+            // 130pt, which is the whole overflow.
+            ViewThatFits(in: .horizontal) {
+                actionRow(compactTrailing: false)
+                actionRow(compactTrailing: true)
             }
         }
         .padding(.horizontal, 24)
@@ -1011,6 +995,44 @@ struct FontDetailView: View {
     }
 
     // MARK: - Actions
+
+    @ViewBuilder
+    private func actionRow(compactTrailing: Bool) -> some View {
+        HStack(spacing: 8) {
+            ActionButton(
+                icon: nil,
+                label: isPinned ? "Pinned" : "Pin",
+                active: isPinned
+            ) { pins.toggle(family.name) }
+
+            ActionButton(
+                icon: copied ? "checkmark" : nil,
+                label: copied ? "Copied" : "Copy name",
+                active: copied
+            ) {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(family.name, forType: .string)
+                withAnimation(.easeInOut(duration: 0.15)) { copied = true }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    withAnimation { copied = false }
+                }
+            }
+
+            ActionButton(
+                icon: "folder",
+                label: "Show in Finder",
+                active: false,
+                iconOnly: compactTrailing
+            ) { openInFinder() }
+
+            ActionButton(
+                icon: isMuted ? "moon.zzz.fill" : "moon.zzz",
+                label: isMuted ? "Muted" : "Mute",
+                active: isMuted,
+                iconOnly: compactTrailing
+            ) { toggleMuted() }
+        }
+    }
 
     private func openInFinder() {
         guard let psName = family.memberFontNames.first,
@@ -1963,8 +1985,14 @@ private struct ActionButton: View {
     let icon: String?
     let label: String
     let active: Bool
+    // Drop the label and stand on the glyph alone, for a row too narrow to
+    // spell everything out. Only honoured when there IS an icon — a button
+    // with neither would be a blank pill.
+    var iconOnly: Bool = false
     let action: () -> Void
     @State private var hovering = false
+
+    private var showsLabel: Bool { !(iconOnly && icon != nil) }
 
     var body: some View {
         Button(action: action) {
@@ -1972,10 +2000,12 @@ private struct ActionButton: View {
                 if let icon {
                     Image(systemName: icon).font(.system(size: Theme.bodySize))
                 }
-                Text(label).font(.system(size: Theme.bodySize))
+                if showsLabel {
+                    Text(label).font(.system(size: Theme.bodySize))
+                }
             }
             .foregroundStyle(active ? Theme.accent : Color.secondary)
-            .padding(.horizontal, 12)
+            .padding(.horizontal, showsLabel ? 12 : 9)
             .padding(.vertical, 7)
             .background(
                 RoundedRectangle(cornerRadius: 7).fill(fillColor)
@@ -1989,6 +2019,10 @@ private struct ActionButton: View {
         .buttonStyle(.plain)
         .fixedSize()
         .onHover { hovering = $0 }
+        // The label is what names the button; with it gone the tooltip has to
+        // carry the name instead.
+        .help(showsLabel ? "" : label)
+        .accessibilityLabel(label)
     }
 
     private var fillColor: Color {
