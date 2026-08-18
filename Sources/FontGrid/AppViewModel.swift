@@ -1,23 +1,5 @@
 import SwiftUI
 
-// Which face of a family the grid cells and pinned rows draw with.
-//
-// `memberFontNames` is already sorted light → heavy, so the two ends are just
-// its first and last elements — no extra sorting or metric probing. `.normal`
-// keeps the existing rule (a face literally named "Regular", else usWeightClass
-// 400 / 500) so it means the same thing for variable and static families alike.
-enum PreviewWeight: String, CaseIterable {
-    case thin, normal, heavy
-
-    var label: String {
-        switch self {
-        case .thin: return "Thin"
-        case .normal: return "Normal"
-        case .heavy: return "Heavy"
-        }
-    }
-}
-
 // How the blown-up glyph is drawn while a key is held over the grid. Not a
 // stored preference — the key chosen picks the style, space for one and ⌥ for
 // the other, since in practice both get reached for constantly.
@@ -64,7 +46,8 @@ final class AppViewModel: ObservableObject {
     private static let memoOnlyKey = "memoOnly"
     private static let variablesOnlyKey = "variablesOnly"
     private static let scriptFilterKey = "scriptFilter"
-    private static let previewWeightKey = "previewWeight"
+    private static let faceWeightKey = "faceWeight"
+    private static let faceSlantKey = "faceSlant"
     private static let activeTagKey = "activeTag"
     private static let columnCountKey = "columnCount"
     private static let previewSizeOffsetKey = "previewSizeOffset"
@@ -91,11 +74,38 @@ final class AppViewModel: ObservableObject {
     @Published var variablesOnly: Bool = UserDefaults.standard.bool(forKey: AppViewModel.variablesOnlyKey) {
         didSet { UserDefaults.standard.set(variablesOnly, forKey: Self.variablesOnlyKey) }
     }
-    // Which face of each family the *lists* render — the grid cells and the
-    // pinned rows. Purely presentational: it picks a face to draw with, and
-    // changes nothing about ordering, filtering or what the detail card shows.
-    @Published var previewWeight: PreviewWeight = AppViewModel.loadPreviewWeight() {
-        didSet { UserDefaults.standard.set(previewWeight.rawValue, forKey: Self.previewWeightKey) }
+    // The Face filter: which cut of each family to keep, and to draw with. Unlike
+    // every other control in the left panel this one reaches INTO the cell —
+    // it filters the grid AND changes the face each surviving cell renders — so
+    // it lives in its own collapsible box rather than among the plain chips.
+    //
+    // Single-select: nil is "Any Weight", the pull-down's resting state.
+    @Published var faceWeight: FaceWeight? = AppViewModel.loadFaceWeight() {
+        didSet { UserDefaults.standard.set(faceWeight?.rawValue ?? "", forKey: Self.faceWeightKey) }
+    }
+    // Italic and Oblique are mutually exclusive (no family on record ships both),
+    // and combine with faceWeight as an intersection.
+    @Published var faceSlant: FaceSlant? = AppViewModel.loadFaceSlant() {
+        didSet { UserDefaults.standard.set(faceSlant?.rawValue ?? "", forKey: Self.faceSlantKey) }
+    }
+
+    // True once the Face box holds anything — drives its clear button and the
+    // extra segments on the center panel's stats line.
+    var hasFaceSelection: Bool { faceWeight != nil || faceSlant != nil }
+
+    func clearFaceSelection() {
+        faceWeight = nil
+        faceSlant = nil
+    }
+
+    /// A family passes the Face filter when it ships every part that is asked
+    /// for. Weight and slant are checked INDEPENDENTLY — a family with a Light
+    /// and a separate Regular Italic passes "Light + Italic" — because the two
+    /// controls are separate axes, not a single compound face name.
+    func matchesFace(_ family: FontFamily) -> Bool {
+        if let faceWeight, !family.has(faceWeight) { return false }
+        if let faceSlant, !family.has(faceSlant) { return false }
+        return true
     }
     // Whether to use animations for major transitions (opening detail, sliding panels).
     @Published var useMotion: Bool = UserDefaults.standard.object(forKey: AppViewModel.useMotionKey) as? Bool ?? true {
@@ -289,8 +299,12 @@ final class AppViewModel: ObservableObject {
 
     // Defaults to .normal: it's the only setting that resolves the same way for
     // variable and static families, so the grid reads consistently out of the box.
-    private static func loadPreviewWeight() -> PreviewWeight {
-        PreviewWeight(rawValue: UserDefaults.standard.string(forKey: previewWeightKey) ?? "") ?? .normal
+    private static func loadFaceWeight() -> FaceWeight? {
+        FaceWeight(rawValue: UserDefaults.standard.string(forKey: faceWeightKey) ?? "")
+    }
+
+    private static func loadFaceSlant() -> FaceSlant? {
+        FaceSlant(rawValue: UserDefaults.standard.string(forKey: faceSlantKey) ?? "")
     }
 
     private static func loadScriptFilter() -> Set<ScriptCategory> {
@@ -429,7 +443,8 @@ final class AppViewModel: ObservableObject {
         memoOnly = false
         variablesOnly = false
         scriptFilter = []
-        previewWeight = .normal
+        faceWeight = nil
+        faceSlant = nil
         mutedFilter = .shown
         mutedOnly = false
         searchQuery = ""

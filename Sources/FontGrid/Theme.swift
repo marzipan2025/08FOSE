@@ -3,7 +3,7 @@ import AppKit
 
 enum Theme {
     // App
-    static let appVersion = "0.8.13"
+    static let appVersion = "0.8.14"
 
     // Panels
     static let panelDefaultWidth: CGFloat = 240
@@ -80,6 +80,13 @@ enum Theme {
     static let surfaceFillHover = adaptive(dark: NSColor(white: 1, alpha: 0.12),
                                            light: NSColor(white: 0, alpha: 0.07))
     // Pin row hover fill — brighter than the sidebar so the row lifts.
+    // One step fainter than the stats line's own `.tertiary`, for the Face
+    // segments appended to it. Deliberately a small step: the bar floats over
+    // the wallpaper, and SwiftUI's `.quaternary` all but vanishes on the
+    // lighter ones.
+    static let statsSubtle = adaptive(dark: NSColor(white: 1, alpha: 0.18),
+                                      light: NSColor(white: 0, alpha: 0.22))
+
     static let rowHoverFill = adaptive(dark: NSColor(white: 0.22, alpha: 1),
                                        light: NSColor(white: 1.0, alpha: 1))
     static let memoSurface = adaptive(dark: NSColor(white: 1, alpha: 0.05),

@@ -58,6 +58,7 @@ struct CenterPanel: View {
                     || memos.note(for: family.name).localizedCaseInsensitiveContains(vm.searchQuery)
             }
             .filter { vm.matchesWeightGroup($0) }
+            .filter { vm.matchesFace($0) }
             .filter { !vm.pinnedOnly || pins.contains($0.name) }
             .filter { !vm.memoOnly || memos.hasNote(for: $0.name) }
             .filter { vm.scriptFilter.isEmpty || vm.scriptFilter.contains($0.script) }
@@ -132,7 +133,7 @@ struct CenterPanel: View {
                     .font(.system(size: Theme.sectionHeaderSize + 2, weight: .bold))
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 8)
-                Text(statsText(count))
+                statsLabel(count)
                     .font(.system(size: Theme.sectionHeaderSize + 2))
                     .foregroundStyle(.tertiary)
                     .monospacedDigit()
@@ -176,7 +177,41 @@ struct CenterPanel: View {
         segments.append(contentsOf: scripts.map { abbr ? $0.abbreviation : $0.label })
 
         // Thin spaces (U+2009) around the middle dot keep the separators tight.
-        return "\(count) \(segments.joined(separator: "\u{2009}·\u{2009}"))"
+        return "\(count) \(segments.joined(separator: Self.statsSeparator))"
+    }
+
+    private static let statsSeparator = "\u{2009}·\u{2009}"
+
+    // The stats line, with the Face box's selection appended a shade fainter
+    // than the rest. The Face segments read as a sub-clause of the filter list
+    // rather than another peer of KR / JP: they are the only ones that change
+    // what a cell is DRAWN in, not just which cells survive.
+    //
+    // Two Texts concatenated rather than one styled string: the Text-returning
+    // `foregroundStyle` overload is macOS 14+, and this app targets 13. With
+    // `+`, the outer `.foregroundStyle(.tertiary)` still reaches the first run
+    // (it sets no colour of its own) while the second run keeps the explicit one.
+    private func statsLabel(_ count: Int) -> Text {
+        let base = Text(statsText(count))
+        guard vm.selectedFamily == nil, vm.activeTag == nil, vm.hasFaceSelection else { return base }
+        return base + Text(Self.statsSeparator + faceStatsText).foregroundColor(Theme.statsSubtle)
+    }
+
+    // Follows the same rule as the filter segments above: a lone segment spells
+    // itself out, two or more abbreviate. Counted across the WHOLE line, so
+    // "21 KR · Lt" abbreviates even though each half holds only one.
+    private var faceStatsText: String {
+        var segments: [String] = []
+        if let w = vm.faceWeight { segments.append(w.label) }
+        if let s = vm.faceSlant { segments.append(s.label) }
+        let scripts = ScriptCategory.allCases.filter { vm.scriptFilter.contains($0) }
+        let others = (vm.pinnedOnly ? 1 : 0) + (vm.memoOnly ? 1 : 0)
+            + (vm.mutedOnly ? 1 : 0) + (vm.variablesOnly ? 1 : 0) + scripts.count
+        guard others + segments.count >= 2 else { return segments.joined() }
+        var abbreviated: [String] = []
+        if let w = vm.faceWeight { abbreviated.append(w.abbreviation) }
+        if let s = vm.faceSlant { abbreviated.append(s.abbreviation) }
+        return abbreviated.joined(separator: Self.statsSeparator)
     }
 
     @ViewBuilder

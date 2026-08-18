@@ -54,7 +54,7 @@ struct FontCell: View {
     private var previewFrameHeight: CGFloat {
         // Measure the face actually on screen: a Heavy cut can be taller than the
         // family's lightest, and measuring the wrong one clips it.
-        let name = family.previewName(for: vm.previewWeight)
+        let name = family.previewName(weight: vm.faceWeight, slant: vm.faceSlant)
         let line = previewLineHeight(fontName: name, fontSize: fontSize, text: resolvedPreviewText)
         return min(line + 10, cellHeight - 38)
     }
@@ -76,7 +76,7 @@ struct FontCell: View {
                     if let axis = family.weightAxis {
                         VariableWeightPreviewLabel(
                             text: resolvedPreviewText,
-                            basePSName: family.previewName(for: vm.previewWeight),
+                            basePSName: family.previewName(weight: vm.faceWeight, slant: vm.faceSlant),
                             fontSize: fontSize,
                             axis: axis,
                             isHovering: hovering
@@ -87,7 +87,7 @@ struct FontCell: View {
                             previewText: resolvedPreviewText,
                             fontSize: fontSize,
                             isHovering: hovering,
-                            restingIndex: family.previewIndex(for: vm.previewWeight)
+                            restingIndex: family.previewIndex(weight: vm.faceWeight, slant: vm.faceSlant)
                         )
                     }
                 }

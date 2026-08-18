@@ -49,13 +49,177 @@ enum ScriptCategory: String, CaseIterable, Hashable {
     }
 }
 
+// One rung of the weight ladder, named the way foundries actually name faces.
+// The list is deliberately FLAT — Ultralight is not folded into Thin, Medium is
+// not folded into Bold — because the pull-down exists to reach the exact cut a
+// family ships. Merging rungs would make some of them unreachable, which is the
+// opposite of the point.
+//
+// Ordered light → heavy, which is the order the pull-down lists them in.
+enum FaceWeight: String, CaseIterable, Hashable {
+    case thin, ultralight, extraLight, light, book, regular, normal,
+         medium, semiBold, bold, extraBold, heavy, black
+
+    var label: String {
+        switch self {
+        case .thin:       return "Thin"
+        case .ultralight: return "Ultralight"
+        case .extraLight: return "ExtraLight"
+        case .light:      return "Light"
+        case .book:       return "Book"
+        case .regular:    return "Regular"
+        case .normal:     return "Normal"
+        case .medium:     return "Medium"
+        case .semiBold:   return "SemiBold"
+        case .bold:       return "Bold"
+        case .extraBold:  return "ExtraBold"
+        case .heavy:      return "Heavy"
+        case .black:      return "Black"
+        }
+    }
+
+    // Short form for the compact combined labels, matching ScriptCategory's
+    // KR / JP idiom. Every rung is Uppercase+lowercase, with two deliberate
+    // exceptions that keep the two easily-confused ones apart at 11pt:
+    // Book is all-lowercase "bk", Black is the three-letter "Blk".
+    var abbreviation: String {
+        switch self {
+        case .thin:       return "Th"
+        case .ultralight: return "Ul"
+        case .extraLight: return "El"
+        case .light:      return "Lt"
+        case .book:       return "bk"
+        case .regular:    return "Rg"
+        case .normal:     return "Nm"
+        case .medium:     return "Md"
+        case .semiBold:   return "Sb"
+        case .bold:       return "Bd"
+        case .extraBold:  return "Eb"
+        case .heavy:      return "Hv"
+        case .black:      return "Blk"
+        }
+    }
+
+    // Lowercased tokens that name this rung inside a face name. Matched as WHOLE
+    // space-separated tokens only, never as substrings: "Lt" is Light, but the
+    // "lt" inside "Salt" is not. That is the whole reason abbreviations are safe
+    // to look for at all.
+    var tokens: Set<String> {
+        switch self {
+        case .thin:       return ["thin", "th", "hairline", "hl"]
+        case .ultralight: return ["ultralight", "ultlt", "ul"]
+        case .extraLight: return ["extralight", "el", "xlt"]
+        case .light:      return ["light", "lt"]
+        case .book:       return ["book", "bk"]
+        case .regular:    return ["regular", "rg", "reg", "roman"]
+        case .normal:     return ["normal", "nm"]
+        case .medium:     return ["medium", "md"]
+        case .semiBold:   return ["semibold", "sb", "demibold", "demi"]
+        case .bold:       return ["bold", "bd"]
+        case .extraBold:  return ["extrabold", "eb", "ultrabold"]
+        case .heavy:      return ["heavy", "hv"]
+        case .black:      return ["black", "blk"]
+        }
+    }
+}
+
+// The slanted cuts, kept apart from weight because a family can carry both at
+// once ("Light Italic") and the two are filtered independently.
+enum FaceSlant: String, CaseIterable, Hashable {
+    case italic, oblique
+
+    var label: String {
+        switch self {
+        case .italic:  return "Italic"
+        case .oblique: return "Oblique"
+        }
+    }
+
+    var abbreviation: String {
+        switch self {
+        case .italic:  return "It"
+        case .oblique: return "Obl"
+        }
+    }
+
+    var tokens: Set<String> {
+        switch self {
+        case .italic:  return ["italic", "it", "ita"]
+        case .oblique: return ["oblique", "obl"]
+        }
+    }
+}
+
+/// What one member face of a family declares about itself, read from its face
+/// name (the "Light Italic" half of "Helvetica Neue Light Italic"). Either half
+/// may be nil — plenty of faces name neither, and 179 of the 2,803 families on
+/// a well-stocked Mac name no weight at all.
+struct FaceTraits: Hashable {
+    let weight: FaceWeight?
+    let slant: FaceSlant?
+
+    /// Parse a face name. Tokens are whole words split on whitespace, and
+    /// ADJACENT PAIRS are tried before single tokens so the spaced-out spellings
+    /// real families ship — "Demi Bold" (Avenir Next), "Semi Bold" (Nohemi),
+    /// "Extra Light" — resolve to one rung instead of matching twice. Without
+    /// the pair pass, "Demi Bold" would register as BOTH SemiBold and Bold.
+    static func parse(faceName: String) -> FaceTraits {
+        let tokens = faceName.split(whereSeparator: { $0.isWhitespace }).map { $0.lowercased() }
+        var weight: FaceWeight?
+        var slant: FaceSlant?
+        var i = 0
+        while i < tokens.count {
+            let pair = i + 1 < tokens.count ? tokens[i] + tokens[i + 1] : nil
+            if let pair, let match = weightMap[pair] {
+                if weight == nil { weight = match }
+                i += 2
+                continue
+            }
+            if let match = weightMap[tokens[i]] {
+                if weight == nil { weight = match }
+            } else if let match = slantMap[tokens[i]] {
+                if slant == nil { slant = match }
+            }
+            i += 1
+        }
+        return FaceTraits(weight: weight, slant: slant)
+    }
+
+    // Token → rung, flattened once instead of scanning all 13 cases per token.
+    private static let weightMap: [String: FaceWeight] = {
+        var map: [String: FaceWeight] = [:]
+        for w in FaceWeight.allCases {
+            for t in w.tokens { map[t] = w }
+        }
+        return map
+    }()
+
+    private static let slantMap: [String: FaceSlant] = {
+        var map: [String: FaceSlant] = [:]
+        for s in FaceSlant.allCases {
+            for t in s.tokens { map[t] = s }
+        }
+        return map
+    }()
+}
+
 struct FontFamily: Identifiable, Hashable {
     let name: String
     let memberFontNames: [String]   // PostScript names sorted by weight (light → heavy)
+    let memberFaces: [FaceTraits]   // parallel to memberFontNames, parsed at load
     let script: ScriptCategory      // primary script bucket
     let isVariable: Bool            // backed by an OpenType variable font (has variation axes)
     var weightCount: Int { memberFontNames.count }
     var id: String { name }
+
+    // Which rungs and slants this family ships at all. Parsed once when the
+    // library loads (the face names cannot change during a run), so the Face
+    // filter never re-reads a font to answer.
+    var availableWeights: Set<FaceWeight> { Set(memberFaces.compactMap(\.weight)) }
+    var availableSlants: Set<FaceSlant> { Set(memberFaces.compactMap(\.slant)) }
+
+    func has(_ weight: FaceWeight) -> Bool { memberFaces.contains { $0.weight == weight } }
+    func has(_ slant: FaceSlant) -> Bool { memberFaces.contains { $0.slant == slant } }
 }
 
 // The continuous weight ('wght') axis of a variable font: the animatable range
@@ -96,28 +260,48 @@ extension FontFamily {
     // a run. Value is Optional so a nil result is cached too.
     private static var previewCache: [String: String?] = [:]
 
-    /// The face the grid cells and pinned rows draw with, per the Preview Weight
-    /// setting. `memberFontNames` is sorted light → heavy, so the two extremes
-    /// are just its ends — nothing is re-sorted and the array itself is never
-    /// reversed, which matters because classification, variable detection,
+    /// Index into `memberFontNames` of the face the grid should draw, given the
+    /// Face filter's selection. Nothing is re-sorted and `memberFontNames` is
+    /// never reversed, which matters because classification, variable detection,
     /// metadata and Show in Finder all key off its first element.
-    func previewName(for weight: PreviewWeight) -> String {
-        switch weight {
-        case .thin:   return memberFontNames.first ?? name
-        case .heavy:  return memberFontNames.last ?? name
-        case .normal: return previewFontName ?? memberFontNames.first ?? name
+    ///
+    /// The slant narrows WITHIN the chosen weight rather than competing with it:
+    /// a family that passes "Light + Italic" by shipping a Light and a separate
+    /// Regular Italic has no "Light Italic" to draw, so it falls back to plain
+    /// Light. Weight is the axis the user picked from a list; slant is a
+    /// refinement on top, and refinements yield.
+    func previewIndex(weight: FaceWeight?, slant: FaceSlant?) -> Int {
+        guard !memberFontNames.isEmpty else { return 0 }
+        guard weight != nil || slant != nil else { return defaultPreviewIndex }
+        if let weight {
+            if let slant, let i = firstIndex(weight: weight, slant: slant) { return i }
+            if let i = firstIndex(weight: weight, slant: nil) { return i }
+            if let i = memberFaces.firstIndex(where: { $0.weight == weight }) { return i }
+            return defaultPreviewIndex
         }
+        // Slant alone: the family's usual face, but slanted, if it has one.
+        if let slant, let i = firstIndex(weight: nil, slant: slant) { return i }
+        if let slant, let i = memberFaces.firstIndex(where: { $0.slant == slant }) { return i }
+        return defaultPreviewIndex
     }
 
-    /// Index of `previewName(for:)` within `memberFontNames`, for the cell's
-    /// hover cycle to rest on and return to.
-    func previewIndex(for weight: PreviewWeight) -> Int {
-        guard !memberFontNames.isEmpty else { return 0 }
-        switch weight {
-        case .thin:   return 0
-        case .heavy:  return memberFontNames.count - 1
-        case .normal: return memberFontNames.firstIndex(of: previewName(for: weight)) ?? 0
-        }
+    /// PostScript name for `previewIndex(weight:slant:)`.
+    func previewName(weight: FaceWeight?, slant: FaceSlant?) -> String {
+        let i = previewIndex(weight: weight, slant: slant)
+        return i < memberFontNames.count ? memberFontNames[i] : name
+    }
+
+    // Exact (weight, slant) match — nil slant means "explicitly unslanted", so
+    // an upright Light is preferred over a Light Italic when Italic is off.
+    private func firstIndex(weight: FaceWeight?, slant: FaceSlant?) -> Int? {
+        memberFaces.firstIndex { $0.weight == weight && $0.slant == slant }
+    }
+
+    // Where the grid rests when the Face filter asks for nothing: the same
+    // Regular/400/500 face the pinned rows and variable-font probing use.
+    private var defaultPreviewIndex: Int {
+        guard let base = previewFontName else { return 0 }
+        return memberFontNames.firstIndex(of: base) ?? 0
     }
 
     /// The variable font's weight axis (min/default/max), or nil when the family
@@ -243,22 +427,29 @@ final class FontLibrary: ObservableObject {
             guard let members = manager.availableMembers(ofFontFamily: family) else { return nil }
 
             // member layout: [postScriptName, faceName, weight(NSNumber), traits(NSNumber)]
-            let sortedNames: [String] = members
-                .compactMap { row -> (String, Int)? in
+            // The face name used to be dropped here; the Face filter needs it,
+            // so it is parsed into FaceTraits on the spot. That costs nothing
+            // extra — the row is already in hand — and means no font is ever
+            // reopened to answer "does this family ship a Light?".
+            let sorted: [(name: String, face: FaceTraits)] = members
+                .compactMap { row -> (String, FaceTraits, Int)? in
                     guard row.count >= 3,
                           let postScript = row[0] as? String,
                           let weight = row[2] as? Int
                     else { return nil }
-                    return (postScript, weight)
+                    let faceName = (row.count >= 2 ? row[1] as? String : nil) ?? ""
+                    return (postScript, FaceTraits.parse(faceName: faceName), weight)
                 }
-                .sorted { $0.1 < $1.1 }
-                .map { $0.0 }
+                .sorted { $0.2 < $1.2 }
+                .map { (name: $0.0, face: $0.1) }
 
-            guard !sortedNames.isEmpty else { return nil }
+            guard !sorted.isEmpty else { return nil }
+            let sortedNames = sorted.map(\.name)
             let displayName = decodeFontFamilyName(family)
             return FontFamily(
                 name: displayName,
                 memberFontNames: sortedNames,
+                memberFaces: sorted.map(\.face),
                 script: cachedClassify(psName: sortedNames[0]),
                 isVariable: cachedIsVariable(baseName: FontFamily.previewBaseName(for: sortedNames))
             )

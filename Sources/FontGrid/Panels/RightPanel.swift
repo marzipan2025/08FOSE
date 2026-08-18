@@ -194,9 +194,12 @@ struct RightPanel: View {
     }
 
     // Resolve the deterministic preview face per the weight rule, falling back
-    // to the family name when no Regular / 400 / 500 member exists.
+    // to the family name when no Regular / 400 / 500 member exists. Deliberately
+    // NOT tied to the Face filter: pins are a fixed list that filters never
+    // thin out, so the rows stay on the family's usual face no matter what the
+    // grid is currently showing.
     private func previewFontName(for name: String) -> String {
-        (vm.library.families.first { $0.name == name }?.previewName(for: vm.previewWeight)) ?? name
+        (vm.library.families.first { $0.name == name }?.previewFontName) ?? name
     }
 
     private var pinsList: some View {

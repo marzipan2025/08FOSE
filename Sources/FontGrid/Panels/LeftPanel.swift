@@ -4,6 +4,9 @@ struct LeftPanel: View {
     @EnvironmentObject var vm: AppViewModel
     @FocusState private var searchFocused: Bool
     @State private var settingsHovering = false
+    // The Face box's own disclosure, and the pull-down nested inside it.
+    @State private var faceBoxExpanded = false
+    @State private var weightListOpen = false
 
     // Top row of the Weights grid; "10+" sits on the second row beside Variable.
     // The four buckets partition the range with no gaps: 1 / 2–4 / 5–9 / 10+.
@@ -46,6 +49,7 @@ struct LeftPanel: View {
                             scriptsSection
                         }
                     }
+                    .zIndex(weightListOpen ? 1 : 0)
 
                     PanelHDivider()
 
@@ -150,6 +154,189 @@ struct LeftPanel: View {
                 GridRow {
                     weightPill(wideWeightOption)
                     variablesOnlyToggle.gridCellColumns(2)
+                }
+            }
+            faceBox
+                .padding(.top, 4)
+        }
+        // The open pull-down overlays the groups below, so this group has to
+        // paint after them. VStack draws in declaration order, which would
+        // otherwise put Collections on top of the list.
+        .zIndex(weightListOpen ? 1 : 0)
+    }
+
+
+    // MARK: - Face
+
+    // The Face box: a weight pull-down and the two slant toggles, boxed off from
+    // the chips above it.
+    //
+    // It is boxed because it is the one control in this panel that reaches INTO
+    // the cell — everything else decides which families survive, this also
+    // decides which cut of each survivor gets drawn. Folding it away keeps that
+    // difference from reading as "just three more chips", and keeps a 14-row
+    // pull-down from permanently crowding the panel.
+    //
+    // The header doubles as the title: it shows the current selection, so there
+    // is nothing to name. "Any Weight" is the resting state.
+    private var faceBox: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            faceBoxHeader
+            if faceBoxExpanded {
+                VStack(alignment: .leading, spacing: 6) {
+                    weightPulldown
+                        // Floated, not inserted: the box keeps its height and the
+                        // slant row below it stays put while the list is open.
+                        .overlay(alignment: .topLeading) {
+                            if weightListOpen {
+                                weightList.offset(y: 27)
+                            }
+                        }
+                        // zIndex only orders SIBLINGS, so the open list has to be
+                        // lifted once per container it needs to escape: over the
+                        // slant row here, over Collections/Scripts in the Filters
+                        // stack, and over the whole View section in the scroll
+                        // stack. Miss any one level and the list slides under it.
+                        .zIndex(weightListOpen ? 1 : 0)
+                    slantRow
+                }
+                .padding(.horizontal, 8)
+                .padding(.bottom, 8)
+            }
+        }
+        // Fill AND border both live in the background layer. An .overlay border
+        // paints on top of everything the box contains — including the open
+        // pull-down — so the box's own outline used to cut straight across the
+        // floating list. Content is inset from the edge anyway, so putting the
+        // stroke behind it looks identical everywhere else.
+        .background(
+            RoundedRectangle(cornerRadius: Theme.surfaceRadius, style: .continuous)
+                .fill(Theme.surfaceFill)
+                .overlay(
+                    RoundedRectangle(cornerRadius: Theme.surfaceRadius, style: .continuous)
+                        .stroke(Theme.border, lineWidth: 1)
+                )
+        )
+    }
+
+    private var faceBoxHeader: some View {
+        HStack(spacing: 4) {
+            // Same ink as every other button label in the panel, selected or
+            // not. The accent is spent on the controls inside the box, and the
+            // Clear button appearing is already the "something is set" signal —
+            // colouring the header too made it compete with the pull-down.
+            Text(faceSummary)
+                .font(.system(size: Theme.smallSize))
+                .foregroundStyle(Color.secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Spacer(minLength: 4)
+            // Clear sits left of the chevron and shows in both states, so a
+            // folded box never hides a selection the user cannot undo from here.
+            if vm.hasFaceSelection {
+                FaceClearButton { vm.clearFaceSelection() }
+            }
+            Image(systemName: faceBoxExpanded ? "chevron.up" : "chevron.down")
+                .font(.system(size: 9, weight: .medium))
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            withAnimation(.easeOut(duration: 0.2)) {
+                faceBoxExpanded.toggle()
+                // Folding the box also folds the pull-down, so reopening starts
+                // from the compact state instead of a 14-row list.
+                if !faceBoxExpanded { weightListOpen = false }
+            }
+        }
+        .help(faceBoxExpanded ? "Collapse face options" : "Expand face options")
+    }
+
+    // Collapsed summary. Mirrors the center panel's stats line: one segment
+    // spells itself out, two or more abbreviate.
+    private var faceSummary: String {
+        var full: [String] = []
+        var short: [String] = []
+        if let w = vm.faceWeight { full.append(w.label); short.append(w.abbreviation) }
+        if let s = vm.faceSlant { full.append(s.label); short.append(s.abbreviation) }
+        if full.isEmpty { return "More" }
+        if full.count == 1 { return full[0] }
+        return short.joined(separator: "\u{2009}·\u{2009}")
+    }
+
+    // The pull-down's closed face: a pill like every other button here, with a
+    // triangle added. Drawn by hand rather than with Menu so it opens INLINE —
+    // a floating menu would be clipped by the enclosing ScrollView, and 14 rows
+    // is taller than the space a popover gets in a 240pt panel.
+    private var weightPulldown: some View {
+        Button {
+            withAnimation(.easeOut(duration: 0.18)) { weightListOpen.toggle() }
+        } label: {
+            HStack(spacing: 5) {
+                Text(vm.faceWeight?.label ?? "All")
+                    .font(.system(size: Theme.smallSize,
+                                  weight: vm.faceWeight == nil ? .regular : .medium))
+                Spacer(minLength: 4)
+                Image(systemName: weightListOpen ? "chevron.up" : "chevron.down")
+                    .font(.system(size: 9, weight: .medium))
+            }
+            .foregroundStyle(vm.faceWeight == nil ? Color.secondary : Theme.accent)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(
+                RoundedRectangle(cornerRadius: Theme.pillRadius)
+                    .fill(vm.faceWeight == nil ? Theme.surfaceFill : Theme.accent.opacity(0.15))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.pillRadius)
+                    .stroke(vm.faceWeight == nil ? Theme.border : Theme.accent.opacity(0.6), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+    }
+
+    // Every rung is listed whether or not the current results hold one, so the
+    // list never reshuffles under the cursor. A rung with no matches just lands
+    // on the grid's existing "Nothing found" state.
+    private var weightList: some View {
+        VStack(spacing: 0) {
+            weightRow(nil)
+            ForEach(FaceWeight.allCases, id: \.self) { weightRow($0) }
+        }
+        .padding(.vertical, 3)
+        // Two fills: the panel's own background makes it opaque (Theme.surfaceFill
+        // is translucent and would let the chips behind it read through), then
+        // the usual surface tint sits on top for the same lift as a closed pill.
+        .background(RoundedRectangle(cornerRadius: Theme.pillRadius).fill(Theme.surfaceFill))
+        .background(RoundedRectangle(cornerRadius: Theme.pillRadius).fill(Theme.sidebarBackground))
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.pillRadius)
+                .stroke(Theme.border, lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.22), radius: 7, y: 3)
+    }
+
+    private func weightRow(_ weight: FaceWeight?) -> some View {
+        FaceListRow(
+            label: weight?.label ?? "All",
+            isOn: vm.faceWeight == weight
+        ) {
+            vm.faceWeight = weight
+            withAnimation(.easeOut(duration: 0.18)) { weightListOpen = false }
+        }
+    }
+
+    // Italic / Oblique. Mutually exclusive — tapping the active one clears it —
+    // and independent of the weight above: a family passes when it ships both
+    // parts, even if no single face carries them together.
+    private var slantRow: some View {
+        HStack(spacing: 6) {
+            ForEach(FaceSlant.allCases, id: \.self) { slant in
+                filterPill(label: slant.label, icon: nil, isOn: vm.faceSlant == slant) {
+                    vm.faceSlant = vm.faceSlant == slant ? nil : slant
                 }
             }
         }
@@ -413,6 +600,56 @@ struct LeftPanel: View {
         let i = Int(value.rounded())
         if i > 0 { return "+\(i)" }
         return "\(i)"
+    }
+}
+
+// One row of the weight pull-down. Plain text with a hover wash — the list is
+// already inside two nested surfaces, so a third border per row would be noise.
+private struct FaceListRow: View {
+    let label: String
+    let isOn: Bool
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Text(label)
+                .font(.system(size: Theme.smallSize, weight: isOn ? .medium : .regular))
+                .foregroundStyle(isOn ? Theme.accent : Color.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(hovering ? Theme.surfaceFillHover : Color.clear)
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .onHover { hovering = $0 }
+    }
+}
+
+// The Face box's Clear. A word rather than an ✕ because it sits beside a
+// chevron that already means "this control does something to the box" — two
+// bare glyphs there read as a pair of unlabelled switches. Kept as its own
+// button so tapping it does not also fold the box.
+private struct FaceClearButton: View {
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Text("Clear")
+                .font(.system(size: Theme.smallSize))
+                .foregroundStyle(Theme.accent.opacity(hovering ? 1 : 0.8))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .help("Clear face selection")
+        .onHover { hovering = $0 }
     }
 }
 

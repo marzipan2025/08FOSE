@@ -107,6 +107,8 @@ struct SettingsOverlay: View {
     // setting came to ship unannounced: the next release simply overwrote its
     // note before anyone read it.
     private static let releaseNotes: [(version: String, note: String)] = [
+        ("0.8.14",
+         "Preview weight is gone from here. In its place, More under Filters: pick a weight from the pull-down and the grid keeps only the families that ship one, each cell drawn in that cut. Italic and Oblique narrow it further, and combine with a weight rather than replacing it."),
         ("0.8.13",
          "Wallpaper 04 in light mode is a deeper golden yellow. It is one multiply pass now — the soft-light and shine layers that were washing it toward lemon are gone — and the detail card sits on pure white, so it takes the tint at the same strength as the grid instead of a step darker."),
         ("0.8.12.1",
@@ -307,16 +309,6 @@ struct SettingsOverlay: View {
     private var viewSettingsSection: some View {
         SettingsSection("View Settings") {
             VStack(spacing: 18) {
-                choiceRow(
-                    title: "Preview weight",
-                    detail: "Which face of each family the grid and the pinned list are drawn in. Changes presentation only."
-                ) {
-                    ForEach(PreviewWeight.allCases, id: \.self) { option in
-                        SettingsChoiceButton(label: option.label, isOn: vm.previewWeight == option) {
-                            vm.previewWeight = option
-                        }
-                    }
-                }
                 choiceRow(
                     title: "Motion",
                     detail: "Animates the major transitions — opening a card, sliding panels, fading Settings in. Smaller changes animate either way."
