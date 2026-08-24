@@ -111,6 +111,8 @@ struct SettingsOverlay: View {
     // About had grown into a changelog; trim it again when it does, rather than
     // collapsing this to a lone string.
     private static let releaseNotes: [(version: String, note: String)] = [
+        ("0.8.15.5",
+         "The grid no longer waits to be prodded. Loading the library off the first frame exposed an older gap: views watch the view model, never the library nested inside it, so the finished list arrived with nobody listening and the grid stayed empty until an unrelated click forced a redraw."),
         ("0.8.15.4",
          "Install or remove a font while the app is open and the grid now keeps up on its own, without a relaunch. Only the fonts that actually changed are read, so the list updates in place — your scroll position stays where it was — and a detail card standing on a font that has just been uninstalled closes rather than quietly redrawing itself in a substitute face."),
     ]

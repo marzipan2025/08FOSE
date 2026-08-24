@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 
 // How the blown-up glyph is drawn while a key is held over the grid. Not a
@@ -373,8 +374,33 @@ final class AppViewModel: ObservableObject {
     enum DetailSource { case grid, pins }
     @Published var detailSource: DetailSource = .grid
 
+    // Forwards the library's change notifications as this object's own.
+    //
+    // SwiftUI observes exactly the object a view declares, and never the
+    // ObservableObjects nested inside it. Every view here declares AppViewModel
+    // and reads the font list through `vm.library.families`, so when the library
+    // published a new list its objectWillChange fired into an empty room: no
+    // view had subscribed to it, this object's own publisher stayed silent, and
+    // nothing was re-evaluated.
+    //
+    // That gap was harmless for as long as reload() ran synchronously inside
+    // this initialiser — the list was already complete before any body ran, so
+    // there was never a change to miss. Loading off the first frame turned it
+    // into the visible bug: the grid stayed empty until some unrelated tap on a
+    // filter published a change and forced the redraw that read the list.
+    //
+    // Relaying here rather than injecting FontLibrary separately keeps all
+    // seven `vm.library.…` call sites as they are. The library changes twice in
+    // a session — once on load, and again if fonts are installed or removed —
+    // so the extra invalidations cost nothing.
+    private var libraryRelay: AnyCancellable?
+
     init() {
-        self.library = FontLibrary()
+        let library = FontLibrary()
+        self.library = library
+        libraryRelay = library.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
+        }
     }
 
     // Quicker than the 0.42 / 0.38 this card used to open and close with, which
