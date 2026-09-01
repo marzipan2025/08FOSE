@@ -56,7 +56,41 @@ struct FontDetailView: View {
     // At/above this card width the info section sits in the right of the middle
     // (weight-list) section; below it, the info flows as multiple columns under
     // the header.
-    private let wideThreshold: CGFloat = 640
+    private static let wideThreshold: CGFloat = 640
+    private var wideThreshold: CGFloat { Self.wideThreshold }
+
+    // ONE source for how the card divides its width, used by the layout that
+    // draws it and by the measurement that reserves space in it. These two used
+    // to be the same numbers written twice, which is how a reserved height goes
+    // quietly wrong the day someone tunes the split.
+    static func infoColumnWidth(cardWidth: CGFloat) -> CGFloat {
+        max(180, cardWidth * 0.25)
+    }
+
+    /// Width the weight rows' sample text is laid out in, given the card's
+    /// width. Mirrors wideLayout/narrowLayout below plus WeightRow's own 24pt
+    /// side padding.
+    static func sampleWidth(cardWidth: CGFloat, hasMetadata: Bool) -> CGFloat {
+        let listWidth = (cardWidth >= wideThreshold && hasMetadata)
+            ? cardWidth - infoColumnWidth(cardWidth: cardWidth)
+            : cardWidth
+        return max(1, listWidth - 48)
+    }
+
+    /// The card's final width for the current window, independent of however
+    /// wide it happens to be mid-animation. The card fills the grid viewport
+    /// inset by its own horizontal padding.
+    static func finalCardWidth(gridViewportWidth: CGFloat) -> CGFloat {
+        gridViewportWidth - Theme.gridPadding * 2
+    }
+
+    /// nil until the viewport has been measured — callers then fall back to
+    /// laying out at whatever width they are given, which is the old behaviour.
+    private var finalSampleWidth: CGFloat? {
+        let card = Self.finalCardWidth(gridViewportWidth: vm.gridViewportWidth)
+        guard card > 0 else { return nil }
+        return Self.sampleWidth(cardWidth: card, hasMetadata: !metadata.isEmpty)
+    }
 
     // Expanded-memo layout — the editor grows with content between one line and
     // a cap; everything around it (header, gap, specimen, paddings) is fixed.
@@ -277,7 +311,7 @@ struct FontDetailView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 if !metadata.isEmpty {
                     infoColumn
-                        .frame(width: max(180, width * 0.25))
+                        .frame(width: Self.infoColumnWidth(cardWidth: width))
                         .inspectDim(inspecting)
                 }
             }
@@ -751,6 +785,10 @@ struct FontDetailView: View {
         .id(family.id)
     }
 
+    // The variable row, when there is one, takes reveal slot 0 and pushes the
+    // static rows down by one.
+    private var variableRowOffset: Int { family.weightAxis != nil ? 1 : 0 }
+
     private var weightListContent: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Variable fonts lead with an interactive weight-axis row: a slider
@@ -762,12 +800,17 @@ struct FontDetailView: View {
                     sampleText: sampleText,
                     sampleColor: sampleColor,
                     sampleSize: CGFloat(vm.weightRowFontSize),
-                    axis: axis
+                    axis: axis,
+                    sampleLayoutWidth: finalSampleWidth,
+                    sampleRevealed: vm.revealedSampleRows > 0
                 )
                 Divider().opacity(0.15).padding(.horizontal, 24)
             }
             ForEach(Array(family.memberFontNames.enumerated()), id: \.offset) { index, psName in
-                WeightRow(psName: psName, familyName: family.name, sampleText: sampleText, sampleColor: sampleColor, sampleSize: CGFloat(vm.weightRowFontSize))
+                WeightRow(psName: psName, familyName: family.name, sampleText: sampleText,
+                          sampleColor: sampleColor, sampleSize: CGFloat(vm.weightRowFontSize),
+                          sampleLayoutWidth: finalSampleWidth,
+                          sampleRevealed: vm.revealedSampleRows > index + variableRowOffset)
                 if index < family.memberFontNames.count - 1 {
                     Divider().opacity(0.15).padding(.horizontal, 24)
                 }
@@ -1507,17 +1550,23 @@ private struct VariableWeightRow: View {
     var sampleColor: Color? = nil
     let sampleSize: CGFloat
     let axis: WeightAxis
+    var sampleLayoutWidth: CGFloat? = nil
+    var sampleRevealed: Bool = true
 
     @EnvironmentObject var toasts: ToastCenter
     @State private var weight: Double
 
-    init(basePSName: String, familyName: String, sampleText: String, sampleColor: Color?, sampleSize: CGFloat, axis: WeightAxis) {
+    init(basePSName: String, familyName: String, sampleText: String, sampleColor: Color?,
+         sampleSize: CGFloat, axis: WeightAxis,
+         sampleLayoutWidth: CGFloat? = nil, sampleRevealed: Bool = true) {
         self.basePSName = basePSName
         self.familyName = familyName
         self.sampleText = sampleText
         self.sampleColor = sampleColor
         self.sampleSize = sampleSize
         self.axis = axis
+        self.sampleLayoutWidth = sampleLayoutWidth
+        self.sampleRevealed = sampleRevealed
         _weight = State(initialValue: axis.defaultValue)
     }
 
@@ -1557,9 +1606,13 @@ private struct VariableWeightRow: View {
                 fontSize: sampleSize,
                 color: sampleColor,
                 variationAxisID: axis.id,
-                variationWeight: weight
+                variationWeight: weight,
+                layoutWidth: sampleLayoutWidth,
+                isRevealed: sampleRevealed
             )
             .frame(maxWidth: .infinity, alignment: .leading)
+            .opacity(sampleRevealed ? 1 : 0)
+            .animation(.easeIn(duration: 0.28), value: sampleRevealed)
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 20)
@@ -1585,6 +1638,10 @@ struct WeightRow: View {
     let sampleText: String
     var sampleColor: Color? = nil
     let sampleSize: CGFloat
+    // Final wrap width and reveal state — see WrappingPreviewLabel. Defaulted so
+    // any other caller keeps the plain behaviour.
+    var sampleLayoutWidth: CGFloat? = nil
+    var sampleRevealed: Bool = true
 
     @EnvironmentObject var toasts: ToastCenter
 
@@ -1614,8 +1671,12 @@ struct WeightRow: View {
                 // ▶︎ pinned to the right edge of the row, centered to the line.
                 ExportButton(enabled: canExport, action: exportArtwork)
             }
-            WrappingPreviewLabel(text: sampleText, fontName: psName, fontSize: sampleSize, color: sampleColor)
+            WrappingPreviewLabel(text: sampleText, fontName: psName, fontSize: sampleSize,
+                                 color: sampleColor,
+                                 layoutWidth: sampleLayoutWidth, isRevealed: sampleRevealed)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .opacity(sampleRevealed ? 1 : 0)
+                .animation(.easeIn(duration: 0.28), value: sampleRevealed)
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 20)

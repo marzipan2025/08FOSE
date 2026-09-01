@@ -18,6 +18,16 @@ struct WrappingPreviewLabel: NSViewRepresentable {
     // slider row). nil → render the face as-is.
     var variationAxisID: Int? = nil
     var variationWeight: Double? = nil
+    // Width to lay the text out in, regardless of how wide the view currently
+    // is. The detail card's rows pass their FINAL width here so the wrap — and
+    // therefore the row's height — is settled on the first frame of the open
+    // instead of being recomputed as the card widens. nil keeps the old
+    // behaviour of following the view's own bounds.
+    var layoutWidth: CGFloat? = nil
+    // false draws nothing while still reporting the full height, which is what
+    // reserves each row's space during the card's expansion without paying to
+    // rasterise the text on every frame of it.
+    var isRevealed: Bool = true
 
     private var nsColor: NSColor {
         color.map { NSColor($0) } ?? .labelColor
@@ -25,12 +35,16 @@ struct WrappingPreviewLabel: NSViewRepresentable {
 
     func makeNSView(context: Context) -> WrappingPreviewView {
         let view = WrappingPreviewView()
+        view.layoutWidth = layoutWidth
+        view.isRevealed = isRevealed
         view.update(text: text, fontName: fontName, fontSize: fontSize, color: nsColor,
                     variationAxisID: variationAxisID, variationWeight: variationWeight)
         return view
     }
 
     func updateNSView(_ view: WrappingPreviewView, context: Context) {
+        view.setLayoutWidth(layoutWidth)
+        view.setRevealed(isRevealed)
         view.update(text: text, fontName: fontName, fontSize: fontSize, color: nsColor,
                     variationAxisID: variationAxisID, variationWeight: variationWeight)
     }
@@ -54,6 +68,30 @@ final class WrappingPreviewView: NSView {
     private var framesetter: CTFramesetter?
     private var measuredWidth: CGFloat = -1
     private var measuredHeightForWidth: CGFloat = 0
+    fileprivate var layoutWidth: CGFloat?
+    fileprivate var isRevealed: Bool = true
+
+    // The width the text is actually wrapped in: the pinned one when the caller
+    // supplies it, otherwise whatever the view has been given.
+    private var effectiveWidth: CGFloat {
+        if let layoutWidth, layoutWidth > 0 { return layoutWidth }
+        return bounds.width
+    }
+
+    fileprivate func setLayoutWidth(_ width: CGFloat?) {
+        guard width != layoutWidth else { return }
+        layoutWidth = width
+        invalidateIntrinsicContentSize()
+        needsDisplay = true
+    }
+
+    fileprivate func setRevealed(_ revealed: Bool) {
+        guard revealed != isRevealed else { return }
+        isRevealed = revealed
+        // Height does not change with it — only whether the glyphs are drawn —
+        // so the row does not move when the text arrives.
+        needsDisplay = true
+    }
 
     override var isFlipped: Bool { true }
 
@@ -93,7 +131,7 @@ final class WrappingPreviewView: NSView {
 
     // Height needed to lay out the text at the current width.
     override var intrinsicContentSize: NSSize {
-        let width = bounds.width > 0 ? bounds.width : NSView.noIntrinsicMetric
+        let width = effectiveWidth > 0 ? effectiveWidth : NSView.noIntrinsicMetric
         guard width > 0 else { return NSSize(width: NSView.noIntrinsicMetric, height: 0) }
         let height = measuredHeight(forWidth: width)
         return NSSize(width: NSView.noIntrinsicMetric, height: ceil(height))
@@ -102,7 +140,10 @@ final class WrappingPreviewView: NSView {
     override func setFrameSize(_ newSize: NSSize) {
         let widthChanged = newSize.width != bounds.width
         super.setFrameSize(newSize)
-        if widthChanged { invalidateIntrinsicContentSize() }
+        // With a pinned layout width the wrap cannot change, so a resize is not
+        // a reason to re-measure — and during the card's expansion this fires on
+        // every frame.
+        if widthChanged && layoutWidth == nil { invalidateIntrinsicContentSize() }
         needsDisplay = true
     }
 
@@ -122,7 +163,8 @@ final class WrappingPreviewView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        guard let framesetter,
+        guard isRevealed,
+              let framesetter,
               let ctx = NSGraphicsContext.current?.cgContext else { return }
         color.setFill()
 
@@ -132,7 +174,9 @@ final class WrappingPreviewView: NSView {
         ctx.translateBy(x: 0, y: bounds.height)
         ctx.scaleBy(x: 1, y: -1)
 
-        let path = CGPath(rect: CGRect(origin: .zero, size: bounds.size), transform: nil)
+        let path = CGPath(rect: CGRect(origin: .zero,
+                                       size: CGSize(width: effectiveWidth, height: bounds.height)),
+                          transform: nil)
         let frame = CTFramesetterCreateFrame(
             framesetter, CFRange(location: 0, length: 0), path, nil
         )

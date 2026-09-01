@@ -340,6 +340,7 @@ struct CenterPanel: View {
             .onAppear {
                 vm.maxColumns = computed
                 vm.gridViewportHeight = geo.size.height
+                vm.gridViewportWidth = geo.size.width
                 if vm.columnCount > computed { vm.columnCount = computed }
             }
             .onChange(of: geo.size.width) { newWidth in
@@ -350,6 +351,7 @@ struct CenterPanel: View {
             // The detail card's travel is measured against this, so it has to
             // track the window rather than only the first layout.
             .onChange(of: geo.size.height) { vm.gridViewportHeight = $0 }
+            .onChange(of: geo.size.width) { vm.gridViewportWidth = $0 }
         }
     }
 

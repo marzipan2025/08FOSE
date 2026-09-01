@@ -349,6 +349,10 @@ final class AppViewModel: ObservableObject {
     // every frame of a window drag would invalidate the tree for nothing. It is
     // read once, at the moment a card opens, to size that card's travel.
     var gridViewportHeight: CGFloat = 0
+    // Same, for width. The detail card's sample column is derived from it, so
+    // the samples can be laid out at their FINAL width from the first frame of
+    // the open instead of being re-wrapped as the card widens.
+    var gridViewportWidth: CGFloat = 0
     var weightRowFontSize: Double { Self.weightRowBaseFontSize + previewSizeOffset }
 
     @Published var selectedFamily: FontFamily? = nil
@@ -362,6 +366,18 @@ final class AppViewModel: ObservableObject {
     // back at its cell as an empty cell-shaped card rather than shrinking a
     // full-detail layout down to thumbnail size.
     @Published var detailCollapsing: Bool = false
+
+    // How many weight rows have had their sample text turned on. The rows read
+    // it by index, so raising it one at a time walks the samples in.
+    //
+    // They arrive in sequence rather than together because drawing them is the
+    // expensive part: an 18-weight family would otherwise rasterise eighteen
+    // lines of large type on one frame, right after the card has finished
+    // moving. Spreading them costs a little total time and buys back the frame.
+    @Published var revealedSampleRows: Int = 0
+
+    static let sampleRevealInterval: TimeInterval = 0.025
+    private var sampleRevealTask: Task<Void, Never>?
 
     // Where in the close the contents start going: the card is at roughly a
     // quarter of its size by here, small enough that its detail has stopped
@@ -516,6 +532,13 @@ final class AppViewModel: ObservableObject {
         detailOpenToken += 1
         let token = detailOpenToken
         if selectedFamily == nil {
+            // Blank the samples BEFORE the card exists, not when it arrives.
+            // Left until the arrival callback, this kept whatever count the last
+            // open finished on — so the samples were already showing through the
+            // whole expansion (the exact per-frame cost this is meant to avoid),
+            // and then blinked out and faded back in once the card settled.
+            sampleRevealTask?.cancel()
+            revealedSampleRows = 0
             if useMotion {
                 withAnimation(Self.detailCurve(duration: openDuration)) { selectedFamily = family }
             } else {
@@ -528,19 +551,45 @@ final class AppViewModel: ObservableObject {
             let delay = useMotion ? glyphsRevealDelay : Self.glyphsRevealDelayInstant
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
                 guard let self, token == self.detailOpenToken else { return }
-                if self.selectedFamily != nil { self.detailGlyphsVisible = true }
+                guard self.selectedFamily != nil else { return }
+                self.detailGlyphsVisible = true
+                self.startSampleReveal(rowCount: family.memberFontNames.count + 1, token: token)
             }
         } else {
-            // Already open (← / → or list switch): keep glyphs, just swap.
+            // Already open (← / → or list switch): keep glyphs, just swap. No
+            // expansion is happening, so there is no frame to protect.
             selectedFamily = family
             detailGlyphsVisible = true
+            revealAllSamples()
         }
+    }
+
+    private func startSampleReveal(rowCount: Int, token: Int) {
+        sampleRevealTask?.cancel()
+        guard useMotion else { revealAllSamples(); return }
+        sampleRevealTask = Task { @MainActor [weak self] in
+            for row in 1...max(1, rowCount) {
+                guard let self, token == self.detailOpenToken else { return }
+                self.revealedSampleRows = row
+                try? await Task.sleep(nanoseconds: UInt64(Self.sampleRevealInterval * 1_000_000_000))
+                if Task.isCancelled { return }
+            }
+        }
+    }
+
+    private func revealAllSamples() {
+        sampleRevealTask?.cancel()
+        revealedSampleRows = .max
     }
 
     // Close synchronously so the X / ESC always lands. Removing the glyph grid
     // (detailGlyphsVisible) and clearing selectedFamily in one transaction means
     // the grid isn't dragged through the collapse, while staying responsive.
     func closeDetail() {
+        // The samples are NOT hidden here: they fade out with the rest of the
+        // contents, and blanking them at the first frame of the collapse would
+        // be the "contents snap before the box follows" problem again.
+        sampleRevealTask?.cancel()
         detailGlyphsVisible = false
         detailCollapsing = true
         // Retire any reveal still in flight, so it can't land after the close.

@@ -111,6 +111,8 @@ struct SettingsOverlay: View {
     // About had grown into a changelog; trim it again when it does, rather than
     // collapsing this to a lone string.
     private static let releaseNotes: [(version: String, note: String)] = [
+        ("0.8.16",
+         "Opening a card no longer re-wraps its samples on every frame. Each row's text is laid out once at the width the card will end at, so its height is settled before the card starts moving and nothing shifts when the text appears — and the text is not drawn at all until the card has arrived, then walks in row by row. A family with eighteen weights used to re-measure and redraw all eighteen on each frame of the expansion."),
         ("0.8.15.5",
          "The grid no longer waits to be prodded. Loading the library off the first frame exposed an older gap: views watch the view model, never the library nested inside it, so the finished list arrived with nobody listening and the grid stayed empty until an unrelated click forced a redraw."),
         ("0.8.15.4",
