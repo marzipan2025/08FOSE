@@ -757,8 +757,8 @@ struct CopiedGlyphCard: View {
     private var tooltip: String {
         if entry.usesDefaultFont { return "Default Font" }
         return isMissing
-            ? "\(entry.familyName) — no longer installed"
-            : "\(entry.familyName) — hold to open"
+            ? "\(entry.familyName) : no longer installed"
+            : "\(entry.familyName) : hold to open"
     }
 
     // Tucked fully inside the card, 2pt off the top and right edges. It only
