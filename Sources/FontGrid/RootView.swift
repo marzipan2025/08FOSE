@@ -8,6 +8,7 @@ struct RootView: View {
     @StateObject private var samples = SampleStore()
     @StateObject private var muted = MutedStore()
     @StateObject private var glyphs = GlyphsStore()
+    @StateObject private var clipboard = ClipboardWatcher()
     @StateObject private var inputSource = InputSourceManager()
     @StateObject private var toasts = ToastCenter()
 
@@ -190,6 +191,7 @@ struct RootView: View {
         .environmentObject(samples)
         .environmentObject(muted)
         .environmentObject(glyphs)
+        .environmentObject(clipboard)
         .environmentObject(inputSource)
         .environmentObject(toasts)
         .preferredColorScheme(vm.isLightMode ? .light : .dark)

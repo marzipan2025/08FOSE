@@ -117,8 +117,8 @@ struct SettingsOverlay: View {
     // About had grown into a changelog; trim it again when it does, rather than
     // collapsing this to a lone string.
     private static let releaseNotes: [(version: String, note: String)] = [
-        ("0.8.17",
-         "Glyphs you copy are kept. Click one in a font's detail and it lands in the new Glyphs section at the foot of the right panel, drawn in the face you copied it from — click it again to copy it again, or hold it to reopen that font and scroll straight back to it. They travel with your backups, and a glyph whose font you later uninstall stays put, lettered in the system face until it returns."),
+        ("0.8.18",
+         "A glyph you copied somewhere else can be kept too. Copy a single character in any app and an empty slot appears at the head of Glyphs — click it and the character is kept there in the default font. The slot only shows for a glyph this app didn't copy itself, it goes away once you've taken it, and if you copy that same character again later it returns closed, to say it is already held."),
     ]
 
     var body: some View {

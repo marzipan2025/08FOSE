@@ -5,6 +5,7 @@ struct RightPanel: View {
     @EnvironmentObject var pins: PinsStore
     @EnvironmentObject var memos: MemoStore
     @EnvironmentObject var glyphs: GlyphsStore
+    @EnvironmentObject var clipboard: ClipboardWatcher
     @State private var sortHovering = false
     // Collapsed on arrival: the list is a convenience, not something to keep
     // open, and it sits under two sections that are.
@@ -16,7 +17,7 @@ struct RightPanel: View {
     @State private var tagsChevronHovering = false
 
     private var hasTags: Bool { !memos.tagCounts.isEmpty }
-    private var hasGlyphs: Bool { !glyphs.glyphs.isEmpty }
+    private var hasGlyphs: Bool { !glyphs.glyphs.isEmpty || clipboard.externalGlyph != nil }
 
     // GLYPHS is open and has something to show, so it is holding the space the
     // tags chips were in.
@@ -125,6 +126,18 @@ struct RightPanel: View {
                                        count: Self.glyphColumns),
                         spacing: Self.glyphGridSpacing
                     ) {
+                        // The offer sits at the FRONT, where a kept glyph
+                        // lands, so clicking it fills the space it was holding
+                        // instead of putting the result somewhere off screen.
+                        if let pending = clipboard.externalGlyph {
+                            ClipboardGlyphSlot(
+                                character: pending,
+                                spent: glyphs.containsDefaultFont(pending)
+                            ) {
+                                glyphs.record(character: pending, psName: "", familyName: "")
+                                clipboard.noteKept()
+                            }
+                        }
                         ForEach(glyphs.glyphs) { entry in
                             CopiedGlyphCard(
                                 entry: entry,
@@ -721,13 +734,16 @@ struct CopiedGlyphCard: View {
             // Tap copies, hold opens the font. The hold is what replaced the
             // corner button, so the tooltip has to say so — nothing on the card
             // shows it.
+            //
+            // A glyph kept in the default face has no font to open, so it gets
+            // no hold at all rather than a hold that does nothing. With the
+            // gesture absent, holding one and letting go is simply a click, and
+            // the glyph is copied — which beats the press being swallowed.
             .onTapGesture { if !openedByHold { copy() } }
-            .onLongPressGesture(minimumDuration: Self.holdToOpen) {
-                openedByHold = true
-                if onOpen() { flash(.opened) }
-            } onPressingChanged: { pressing in
-                if pressing { openedByHold = false }
-            }
+            .modifier(HoldToOpen(enabled: !entry.usesDefaultFont,
+                                 duration: Self.holdToOpen,
+                                 openedByHold: $openedByHold,
+                                 open: { if onOpen() { flash(.opened) } }))
             .onHover { hovering = $0 }
             // Not .help(): this card re-renders while the pointer sits on it
             // (the delete button appears), and SwiftUI re-registers .help()'s
@@ -739,7 +755,8 @@ struct CopiedGlyphCard: View {
     }
 
     private var tooltip: String {
-        isMissing
+        if entry.usesDefaultFont { return "Default Font" }
+        return isMissing
             ? "\(entry.familyName) — no longer installed"
             : "\(entry.familyName) — hold to open"
     }
@@ -799,5 +816,116 @@ struct CopiedGlyphCard: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + Theme.copyFlashHold) {
             withAnimation(.easeIn(duration: Theme.copyFlashOut)) { flashWord = nil }
         }
+    }
+}
+
+// Attaches the press-and-hold only when there is something for it to do.
+// Conditioning the gesture itself, rather than its action, is what lets the
+// press fall through to the tap for cards that cannot be opened.
+private struct HoldToOpen: ViewModifier {
+    let enabled: Bool
+    let duration: Double
+    @Binding var openedByHold: Bool
+    let open: () -> Void
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content.onLongPressGesture(minimumDuration: duration) {
+                openedByHold = true
+                open()
+            } onPressingChanged: { pressing in
+                if pressing { openedByHold = false }
+            }
+        } else {
+            content
+        }
+    }
+}
+
+// MARK: - Clipboard Glyph Slot
+
+// An empty place in the saved-glyph grid, offered when the clipboard holds a
+// single glyph that came from somewhere other than this app. Clicking it keeps
+// that glyph in the default face.
+//
+// It is drawn as a slot and not as a card: an outline with nothing in it,
+// because nothing has been kept here yet. The glyph it would take is not
+// previewed in the box — a glyph drawn in the box is what a kept card looks
+// like, and the two must not be mistaken for each other.
+//
+// `spent` is the case where that glyph is already kept in the default face.
+// Rather than vanish — which would read as the app having lost track of a
+// clipboard it can plainly still see — the slot stays and goes quiet.
+struct ClipboardGlyphSlot: View {
+    let character: String
+    let spent: Bool
+    let onAdd: () -> Void
+
+    @State private var hovering = false
+
+    private static let radius: CGFloat = 12
+    private static let height: CGFloat = 64
+    // Light, now that the dash carries the signal and the fill only has to
+    // sit the cell below the kept cards rather than announce anything itself.
+    private static let spentFill: Double = 0.06
+    private static let spentMarkSize: CGFloat = 16
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
+        return Group {
+            // An em dash where the plus would be: a plus invites, and there is
+            // nothing here to accept it. Kept noticeably smaller than the 28pt
+            // the kept cards letter their glyphs at — one of those glyphs can
+            // itself be an em dash, and at the same size the two boxes would be
+            // telling apart by background alone.
+            if spent {
+                Text("\u{2014}")
+                    .font(.system(size: Self.spentMarkSize))
+                    .foregroundStyle(Color.secondary.opacity(0.5))
+            } else {
+                XMark()
+                    .rotation(.degrees(45))
+                    .fill(hovering ? Theme.accent : Color.secondary)
+                    .frame(width: 11, height: 11)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: Self.height)
+        // Spent is drawn DARKER, not fainter. Fading it would read as the slot
+        // receding when in fact it is refusing.
+        //
+        // A literal rather than a token, because the panel's ramp has no step
+        // here: surfaceFillHover (0.07) left it indistinguishable from the kept
+        // cards, and statsSubtle (0.22) — the next one up — filled the cell in
+        // like a tile. This sits between them, and follows the same convention
+        // the ramp does, black over a light panel and white over a dark one.
+        .background(shape.fill(fillColor))
+        .overlay(shape.strokeBorder(borderColor, lineWidth: 1))
+        .contentShape(shape)
+        .onTapGesture { if !spent { onAdd() } }
+        .onHover { hovering = $0 && !spent }
+        .nativeTooltip(tooltip)
+        .accessibilityLabel(tooltip)
+    }
+
+    private var fillColor: Color {
+        if spent { return Color.primary.opacity(Self.spentFill) }
+        return Theme.surfaceFill.opacity(hovering ? 0.5 : 0.18)
+    }
+
+    private var borderColor: Color {
+        if spent { return Theme.border }
+        return hovering ? Theme.accent.opacity(0.5) : Theme.border
+    }
+
+    private var tooltip: String {
+        // The active slot doesn't name the glyph. It is right there on the
+        // clipboard, and a tooltip quoting a character as small and unfamiliar
+        // as the ones that end up here reads as noise — "Keep · in the default
+        // font" asks to be parsed before it can be understood. The spent one
+        // does name it, because there it is the reason the slot is closed.
+        spent
+            ? "\(character) is already taken"
+            : "Paste a glyph"
     }
 }

@@ -14,6 +14,7 @@ struct FontDetailView: View {
     @EnvironmentObject var muted: MutedStore
     @EnvironmentObject var inputSource: InputSourceManager
     @EnvironmentObject var vm: AppViewModel
+    @EnvironmentObject var clipboard: ClipboardWatcher
     @EnvironmentObject var toasts: ToastCenter
     @Environment(\.colorScheme) private var colorScheme
     @State private var copied = false
@@ -1098,6 +1099,7 @@ struct FontDetailView: View {
             ) {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(family.name, forType: .string)
+                clipboard.noteOwnCopy()
                 withAnimation(.easeInOut(duration: 0.15)) { copied = true }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                     withAnimation { copied = false }
@@ -1394,6 +1396,7 @@ private struct GlyphCell: View {
     let focused: Bool
     let onRollover: (CGGlyph?) -> Void
     @EnvironmentObject var glyphs: GlyphsStore
+    @EnvironmentObject var clipboard: ClipboardWatcher
     @Environment(\.colorScheme) private var colorScheme
     @State private var hovering = false
     @State private var showCopied = false
@@ -1551,6 +1554,9 @@ private struct GlyphCell: View {
         guard let character else { return }   // non-copyable: no reaction
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(character, forType: .string)
+        // Ours, so the saved-glyph list doesn't turn around and offer to keep
+        // it a second time in the plain system face.
+        clipboard.noteOwnCopy()
         // Also keep it, so it can be copied again without coming back here.
         glyphs.record(character: character, psName: psName, familyName: familyName)
         withAnimation(.easeOut(duration: Theme.copyFlashIn)) { showCopied = true }

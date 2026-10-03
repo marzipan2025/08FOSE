@@ -15,6 +15,15 @@ struct CopiedGlyph: Codable, Hashable, Identifiable {
     // A glyph is the same entry when it is the same character in the same face.
     // Copying it again moves it back to the front rather than adding a twin.
     var id: String { "\(psName)\u{1}\(character)" }
+
+    /// Kept without a font of its own: taken off the clipboard and lettered in
+    /// the system face. Empty names are the marker, and they cannot collide —
+    /// no installed family has an empty name, and nothing can be opened for it.
+    var usesDefaultFont: Bool { psName.isEmpty }
+
+    static func defaultFont(_ character: String) -> CopiedGlyph {
+        CopiedGlyph(character: character, psName: "", familyName: "")
+    }
 }
 
 @MainActor
@@ -42,6 +51,14 @@ final class GlyphsStore: ObservableObject {
         glyphs.removeAll { $0.id == entry.id }
         glyphs.insert(entry, at: 0)
         save()
+    }
+
+    /// Whether this character is already kept in the default face. Keeping it
+    /// twice there would make two identical cards, so the offer to add it is
+    /// shown spent rather than removed — the clipboard still holds it, and
+    /// saying why is more use than quietly having nowhere to click.
+    func containsDefaultFont(_ character: String) -> Bool {
+        glyphs.contains { $0.usesDefaultFont && $0.character == character }
     }
 
     func remove(_ entry: CopiedGlyph) {
