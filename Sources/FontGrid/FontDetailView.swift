@@ -37,6 +37,18 @@ struct FontDetailView: View {
     // opening the detail doesn't stutter; empty until ready (cells fall back to
     // outline rendering meanwhile).
     @State private var glyphMap: [CGGlyph: String] = [:]
+    // Which face `glyphMap` was built for. The map is rebuilt asynchronously, so
+    // between a face change and the rebuild landing it still holds the PREVIOUS
+    // face's glyph numbers — scrolling by those would land on the wrong glyph.
+    @State private var glyphMapPS: String = ""
+    // The glyph a focus request landed on. Set once the scroll has put it in
+    // view, cleared when it has finished announcing itself — cleared so that
+    // asking for the SAME glyph again blinks it again.
+    @State private var focusedGlyph: CGGlyph? = nil
+    // The request already acted on. Marked by id instead of clearing
+    // `vm.glyphFocus`, because clearing it would move `focusKey` mid-scroll and
+    // cancel the very task doing the scrolling.
+    @State private var handledFocus: UUID? = nil
     // Glyph inspect mode: while the space bar is held, the card recedes to one
     // flat tone, the grid switches to hairline outlines, and rolling over a
     // glyph blows it up to fill the card. See InspectKeyMonitor and inspectDim.
@@ -276,7 +288,19 @@ struct FontDetailView: View {
             infoExpanded = false
             memoExpanded = false
             memoContentHeight = 0
-            glyphFontPS = nil
+            // Normally a new font starts on its own preview face. But when the
+            // switch WAS a focus request — long-pressing a saved glyph while
+            // another font's card is open — the request names the face its
+            // glyph was copied in, and resetting to nil here pulled the face
+            // out from under it: the map then built for the preview face, the
+            // scroll's face check never matched, and nothing moved. Pressing
+            // again appeared to work only because the family no longer changed,
+            // so this never ran a second time.
+            if let focus = vm.glyphFocus, focus.familyName == family.name {
+                glyphFontPS = focus.psName
+            } else {
+                glyphFontPS = nil
+            }
             // Metadata off the main thread: load() parses sfnt tables (file
             // I/O), and running it inline here stalls the first frames of the
             // open/navigation spring. Cached families resolve synchronously;
@@ -329,6 +353,7 @@ struct FontDetailView: View {
         VStack(alignment: .leading, spacing: 0) {
             titleArea.inspectDim(inspecting)
             Rectangle().fill(detailDivider).frame(height: 1)
+            ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     if !metadata.isEmpty {
@@ -349,6 +374,8 @@ struct FontDetailView: View {
             .scrollIndicators(inspecting ? .hidden : .automatic)
             // Reset scroll to top when ←/→ switches fonts.
             .id(family.id)
+            .task(id: focusKey) { await focusOnRequestedGlyph(proxy) }
+            }
             Rectangle().fill(detailDivider).frame(height: 1)
             memoArea(cardHeight: height).inspectDim(inspecting)
         }
@@ -765,6 +792,7 @@ struct FontDetailView: View {
     // Wide layout scrolls the sample list on its own; narrow layout embeds
     // `weightListContent` in a shared scroll with the info section.
     private var weightList: some View {
+        ScrollViewReader { proxy in
         ScrollView {
             weightListContent.inspectDim(inspecting)
             if vm.detailGlyphsVisible { glyphsSection }
@@ -783,6 +811,8 @@ struct FontDetailView: View {
         // Fresh identity per font so ←/→ navigation starts back at the top
         // instead of keeping the previous font's scroll offset.
         .id(family.id)
+        .task(id: focusKey) { await focusOnRequestedGlyph(proxy) }
+        }
     }
 
     // The variable row, when there is one, takes reveal slot 0 and pushes the
@@ -964,14 +994,20 @@ struct FontDetailView: View {
         // first paint (outline) is instant and color/copy light up when ready.
         .task(id: selectedGlyphPS) {
             let ps = selectedGlyphPS
-            if let cached = GlyphReverseMap.cached(ps) { glyphMap = cached; return }
+            if let cached = GlyphReverseMap.cached(ps) {
+                glyphMap = cached
+                glyphMapPS = ps
+                return
+            }
             glyphMap = [:]
+            glyphMapPS = ""
             let map = await Task.detached(priority: .userInitiated) {
                 GlyphReverseMap.build(ps)
             }.value
             guard !Task.isCancelled else { return }
             GlyphReverseMap.store(ps, map)
             glyphMap = map
+            glyphMapPS = ps
         }
     }
 
@@ -1002,12 +1038,19 @@ struct FontDetailView: View {
             ForEach(0..<count, id: \.self) { index in
                 GlyphCell(
                     font: font,
+                    psName: selectedGlyphPS,
+                    familyName: family.name,
                     glyph: CGGlyph(index),
                     character: glyphMap[CGGlyph(index)],
                     inspecting: inspecting,
+                    focused: focusedGlyph == CGGlyph(index),
                     onRollover: { scheduleZoom($0) }
                 )
                 .frame(height: cell)
+                // Its own identity type: the weight rows sharing this scroll are
+                // keyed by Int offsets, and a bare Int would leave scrollTo
+                // unable to tell row 40 from glyph 40.
+                .id(GlyphAnchor(index: index))
             }
         }
         // Fresh layout when the cell size changes: LazyVGrid reuses cells and
@@ -1076,6 +1119,68 @@ struct FontDetailView: View {
             ) { toggleMuted() }
         }
     }
+
+    // MARK: - Taking the card to a saved glyph
+
+    /// Everything the scroll waits on, in one value.
+    ///
+    /// This used to be four separate `onChange`/`onAppear` handlers, which is
+    /// what made long-pressing a glyph from a DIFFERENT font than the open one
+    /// fail: they are attached after `.id(family.id)`, so they belong to the
+    /// wrapper rather than to the view the id replaces, and the appear never
+    /// fired a second time. A `task(id:)` has no such hole — it runs on appear
+    /// AND on every change of its key, so whichever piece arrives last is the
+    /// one that starts the work.
+    private var focusKey: String {
+        [family.id,
+         vm.glyphFocus?.id.uuidString ?? "-",
+         String(vm.detailGlyphsVisible),
+         glyphMapPS].joined(separator: "|")
+    }
+
+    /// Switch to the face the glyph was copied in, scroll it into view, and
+    /// have it blink. Runs again on each piece it needs, and does nothing until
+    /// they are all in hand.
+    private func focusOnRequestedGlyph(_ proxy: ScrollViewProxy) async {
+        guard let focus = vm.glyphFocus,
+              focus.familyName == family.name,
+              focus.id != handledFocus,
+              vm.detailGlyphsVisible
+        else { return }
+
+        // The requested face first: until the grid is showing it, its glyph
+        // numbers are the wrong ones to scroll by. Setting it rebuilds the map,
+        // which moves focusKey and brings us straight back here.
+        guard glyphFontPS == focus.psName else {
+            glyphFontPS = focus.psName
+            return
+        }
+        guard glyphMapPS == focus.psName,
+              let glyph = glyphMap.first(where: { $0.value == focus.character })?.key
+        else { return }
+
+        // Claimed by id rather than by clearing the request, so claiming it
+        // doesn't move focusKey and cancel the work below.
+        handledFocus = focus.id
+
+        // One tick for the grid to lay the row out: LazyVGrid cannot scroll to
+        // a row it has not sized yet.
+        try? await Task.sleep(nanoseconds: 60_000_000)
+        guard !Task.isCancelled else { return }
+        withAnimation(.easeInOut(duration: Self.focusScrollDuration)) {
+            proxy.scrollTo(GlyphAnchor(index: Int(glyph)), anchor: .center)
+        }
+
+        // Only once it has arrived. A cell blinking while it is still
+        // travelling is a blink the eye has to chase.
+        try? await Task.sleep(nanoseconds: UInt64(Self.focusScrollDuration * 1_000_000_000))
+        guard !Task.isCancelled else { return }
+        focusedGlyph = glyph
+        try? await Task.sleep(nanoseconds: UInt64(GlyphCell.focusFlashSpan * 1_000_000_000))
+        if focusedGlyph == glyph { focusedGlyph = nil }
+    }
+
+    private static let focusScrollDuration: Double = 0.28
 
     private func openInFinder() {
         guard let psName = family.memberFontNames.first,
@@ -1274,16 +1379,33 @@ extension View {
 // unmapped glyphs (ligatures, alternates) fall back to an outline by glyph ID.
 private struct GlyphCell: View {
     let font: CTFont
+    // The face this grid is drawing, and the family it belongs to. Both are
+    // recorded on a copy: the glyph has to come back in the face it was seen
+    // in, and reopening the font is a family-level action.
+    let psName: String
+    let familyName: String
     let glyph: CGGlyph
     // Mapped character (nil = unmapped or map not built yet → outline, no copy).
     let character: String?
     // Inspect mode: draw as a hairline outline instead of a filled shape, and
     // report rollover so the card can blow this glyph up.
     let inspecting: Bool
+    // The saved-glyph list has just scrolled the grid here. Says so, twice.
+    let focused: Bool
     let onRollover: (CGGlyph?) -> Void
+    @EnvironmentObject var glyphs: GlyphsStore
     @Environment(\.colorScheme) private var colorScheme
     @State private var hovering = false
     @State private var showCopied = false
+    @State private var focusGlow = false
+
+    // Two blinks: one can pass for a rendering hiccup, three starts nagging.
+    private static let focusBlinks = 2
+    private static let focusOn: Double = 0.19
+    private static let focusOff: Double = 0.24
+    static var focusFlashSpan: Double {
+        Double(focusBlinks) * (focusOn + focusOff)
+    }
 
     // Bitmap colour glyphs (Apple Color Emoji and friends) have no outline to
     // trace, so inspect mode can't draw them as line art — they recede with the
@@ -1380,6 +1502,26 @@ private struct GlyphCell: View {
             guard hovering else { return }
             onRollover(active ? glyph : nil)
         }
+        .overlay {
+            if focusGlow {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Theme.accent.opacity(0.22))
+                    .transition(.opacity)
+                    .allowsHitTesting(false)
+            }
+        }
+        .onChange(of: focused) { isFocused in
+            guard isFocused else { return }
+            for blink in 0..<Self.focusBlinks {
+                let start = Double(blink) * (Self.focusOn + Self.focusOff)
+                DispatchQueue.main.asyncAfter(deadline: .now() + start) {
+                    withAnimation(.easeOut(duration: Self.focusOn)) { focusGlow = true }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + Self.focusOn) {
+                        withAnimation(.easeIn(duration: Self.focusOff)) { focusGlow = false }
+                    }
+                }
+            }
+        }
         .onTapGesture { if !inspecting { handleTap() } }
         // Hover tooltip: the character this glyph maps to. Empty when unmapped,
         // and suppressed entirely in inspect mode — the blown-up glyph is the
@@ -1409,11 +1551,19 @@ private struct GlyphCell: View {
         guard let character else { return }   // non-copyable: no reaction
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(character, forType: .string)
-        withAnimation(.easeOut(duration: 0.15)) { showCopied = true }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-            withAnimation(.easeIn(duration: 0.3)) { showCopied = false }
+        // Also keep it, so it can be copied again without coming back here.
+        glyphs.record(character: character, psName: psName, familyName: familyName)
+        withAnimation(.easeOut(duration: Theme.copyFlashIn)) { showCopied = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + Theme.copyFlashHold) {
+            withAnimation(.easeIn(duration: Theme.copyFlashOut)) { showCopied = false }
         }
     }
+}
+
+// Scroll identity for one glyph tile. A plain Int would collide with the weight
+// rows above it in the same scroll view.
+private struct GlyphAnchor: Hashable {
+    let index: Int
 }
 
 // Reverse cmap (glyph → character) for rendering + click-to-copy, built lazily

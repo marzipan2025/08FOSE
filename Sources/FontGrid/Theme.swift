@@ -3,7 +3,7 @@ import AppKit
 
 enum Theme {
     // App
-    static let appVersion = "0.8.16"
+    static let appVersion = "0.8.17"
 
     // Panels
     static let panelDefaultWidth: CGFloat = 240
@@ -20,6 +20,15 @@ enum Theme {
 
     // Type sizes
     static let sectionHeaderSize: CGFloat = 10
+
+    // The COPIED flash after a glyph is copied, in and out. Taken to 60% of the
+    // timings this started at (0.15 / 0.8 / 0.3): the flash confirms something
+    // the user already knows they did, so it only has to register — lingering
+    // past that reads as the app being slow to catch up. Shared so the glyph
+    // grid and the saved-glyph cards cannot drift apart.
+    static let copyFlashIn: Double = 0.09
+    static let copyFlashHold: Double = 0.48
+    static let copyFlashOut: Double = 0.18
     static let smallSize: CGFloat = 11
     static let bodySize: CGFloat = 12
 

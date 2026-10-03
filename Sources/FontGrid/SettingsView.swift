@@ -24,17 +24,20 @@ struct ExportData: Codable {
     // Added in later versions; optional so older backups still decode.
     var samples: [String: String]?
     var muted: [String]?
+    var glyphs: [CopiedGlyph]?
 
     init(pins: [String], memos: [String: String],
-         samples: [String: String]? = nil, muted: [String]? = nil) {
+         samples: [String: String]? = nil, muted: [String]? = nil,
+         glyphs: [CopiedGlyph]? = nil) {
         self.pins = pins
         self.memos = memos
         self.samples = samples
         self.muted = muted
+        self.glyphs = glyphs
     }
 
     private enum CodingKeys: String, CodingKey {
-        case format, version, exportedAt, pins, memos, samples, muted
+        case format, version, exportedAt, pins, memos, samples, muted, glyphs
         // Pre-rename backups stored the pinned list under "favorites".
         case legacyPins = "favorites"
     }
@@ -52,6 +55,7 @@ struct ExportData: Codable {
         memos = try c.decode([String: String].self, forKey: .memos)
         samples = try c.decodeIfPresent([String: String].self, forKey: .samples)
         muted = try c.decodeIfPresent([String].self, forKey: .muted)
+        glyphs = try c.decodeIfPresent([CopiedGlyph].self, forKey: .glyphs)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -63,6 +67,7 @@ struct ExportData: Codable {
         try c.encode(memos, forKey: .memos)
         try c.encodeIfPresent(samples, forKey: .samples)
         try c.encodeIfPresent(muted, forKey: .muted)
+        try c.encodeIfPresent(glyphs, forKey: .glyphs)
     }
 }
 
@@ -84,6 +89,7 @@ struct SettingsOverlay: View {
     @EnvironmentObject var memos: MemoStore
     @EnvironmentObject var samples: SampleStore
     @EnvironmentObject var muted: MutedStore
+    @EnvironmentObject var glyphs: GlyphsStore
     @EnvironmentObject var toasts: ToastCenter
     @Environment(\.colorScheme) private var colorScheme
 
@@ -111,12 +117,8 @@ struct SettingsOverlay: View {
     // About had grown into a changelog; trim it again when it does, rather than
     // collapsing this to a lone string.
     private static let releaseNotes: [(version: String, note: String)] = [
-        ("0.8.16",
-         "Opening a card no longer re-wraps its samples on every frame. Each row's text is laid out once at the width the card will end at, so its height is settled before the card starts moving and nothing shifts when the text appears — and the text is not drawn at all until the card has arrived, then walks in row by row. A family with eighteen weights used to re-measure and redraw all eighteen on each frame of the expansion."),
-        ("0.8.15.5",
-         "The grid no longer waits to be prodded. Loading the library off the first frame exposed an older gap: views watch the view model, never the library nested inside it, so the finished list arrived with nobody listening and the grid stayed empty until an unrelated click forced a redraw."),
-        ("0.8.15.4",
-         "Install or remove a font while the app is open and the grid now keeps up on its own, without a relaunch. Only the fonts that actually changed are read, so the list updates in place — your scroll position stays where it was — and a detail card standing on a font that has just been uninstalled closes rather than quietly redrawing itself in a substitute face."),
+        ("0.8.17",
+         "Glyphs you copy are kept. Click one in a font's detail and it lands in the new Glyphs section at the foot of the right panel, drawn in the face you copied it from — click it again to copy it again, or hold it to reopen that font and scroll straight back to it. They travel with your backups, and a glyph whose font you later uninstall stays put, lettered in the system face until it returns."),
     ]
 
     var body: some View {
@@ -535,7 +537,8 @@ struct SettingsOverlay: View {
             pins: pins.exportList,
             memos: memos.exportMap,
             samples: samples.exportMap,
-            muted: muted.exportList
+            muted: muted.exportList,
+            glyphs: glyphs.exportList
         )
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
@@ -610,11 +613,13 @@ struct SettingsOverlay: View {
             memos.clearAll()
             samples.clearAll()
             muted.clearAll()
+            glyphs.clearAll()
         }
         pins.merge(payload.pins)
         memos.merge(payload.memos)
         samples.merge(payload.samples ?? [:])
         muted.merge(payload.muted ?? [])
+        glyphs.merge(payload.glyphs ?? [])
 
         var parts: [String] = []
         func add(_ count: Int, _ singular: String, _ plural: String) {
@@ -625,6 +630,7 @@ struct SettingsOverlay: View {
         add(payload.memos.count, "memo", "memos")
         add((payload.samples ?? [:]).count, "specimen", "specimens")
         add((payload.muted ?? []).count, "muted", "muted")
+        add((payload.glyphs ?? []).count, "glyph", "glyphs")
         var detail = parts.isEmpty ? "The backup was empty." : parts.joined(separator: " · ")
 
         // Names in the backup that aren't installed on this Mac — their
@@ -654,6 +660,7 @@ struct SettingsOverlay: View {
         memos.clearAll()
         samples.clearAll()
         muted.clearAll()
+        glyphs.clearAll()
         previewText = Self.defaultPreviewText
         vm.resetToDefaults()                  // removePersistentDomain + live defaults
         UserDefaults.standard.synchronize()   // flush before the new instance reads

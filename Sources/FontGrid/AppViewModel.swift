@@ -355,6 +355,19 @@ final class AppViewModel: ObservableObject {
     var gridViewportWidth: CGFloat = 0
     var weightRowFontSize: Double { Self.weightRowBaseFontSize + previewSizeOffset }
 
+    /// A glyph the saved-glyph list asked to be taken to. The detail card picks
+    /// it up, switches to the face it was copied in, scrolls its grid there and
+    /// clears it. Carries an id so asking for the SAME glyph twice is two
+    /// requests — otherwise a second long press on a card already in view would
+    /// look like nothing happened.
+    struct GlyphFocus: Equatable {
+        let id = UUID()
+        let familyName: String
+        let psName: String
+        let character: String
+    }
+    @Published var glyphFocus: GlyphFocus? = nil
+
     @Published var selectedFamily: FontFamily? = nil
 
     // Gates the heavy Glyphs grid: false during the open/close motion, true once
