@@ -230,6 +230,10 @@ struct RenameTagPopup: View {
 // inside a card corner. Shared by the in-app popup cards (rename tag, import
 // choice).
 struct PopupCloseButton: View {
+    // overImage: the button sits on a picture (the update popup's thumbnail),
+    // where the mode's translucent fill vanishes — use a fixed dark disc and
+    // white glyph instead, legible on any image in either mode.
+    var overImage = false
     let action: () -> Void
     @State private var hovering = false
 
@@ -237,10 +241,12 @@ struct PopupCloseButton: View {
         Button(action: action) {
             Image(systemName: "xmark")
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(overImage ? AnyShapeStyle(Color.white.opacity(0.54)) : AnyShapeStyle(.secondary))
                 .offset(y: -0.5)
                 .frame(width: 26, height: 26)
-                .background(Circle().fill(hovering ? Theme.surfaceFillHover : Theme.surfaceFill))
+                .background(Circle().fill(overImage
+                    ? Color.black.opacity(hovering ? 0.6 : 0.45)
+                    : (hovering ? Theme.surfaceFillHover : Theme.surfaceFill)))
         }
         .buttonStyle(.plain)
         .focusable(false)

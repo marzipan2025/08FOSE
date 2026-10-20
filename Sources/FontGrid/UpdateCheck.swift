@@ -4,7 +4,11 @@ import SwiftUI
 // Result of one update check against the GitHub releases feed.
 enum UpdateStatus: Equatable {
     case upToDate(current: String)
-    case available(latest: String, current: String, dmgURL: URL?)
+    // notes: the release body's first paragraph; thumbnail: the release's
+    // update.png asset (560×236, drawn at 280×118). Either may be missing —
+    // the popup then simply leaves that slot out.
+    case available(latest: String, current: String, dmgURL: URL?,
+                   notes: String?, thumbnail: NSImage?)
     case failed
 }
 
@@ -40,7 +44,7 @@ enum UpdateCheck {
                 // "you're up to date" toast on every launch is just noise —
                 // the launch toast is reserved for when there's an update.
                 break
-            case .available(let latest, let current, let dmgURL):
+            case .available(let latest, let current, let dmgURL, _, _):
                 toasts.show(Toast(
                     style: .info,
                     title: "Update available — v \(latest)",
@@ -64,9 +68,43 @@ enum UpdateCheck {
     static func fetchStatus() async -> UpdateStatus {
         guard let release = await fetchLatestRelease() else { return .failed }
         let latest = release.tag.hasPrefix("v") ? String(release.tag.dropFirst()) : release.tag
-        return isNewer(latest, than: Theme.appVersion)
-            ? .available(latest: latest, current: Theme.appVersion, dmgURL: release.dmgURL)
-            : .upToDate(current: Theme.appVersion)
+        guard isNewer(latest, than: Theme.appVersion) else {
+            return .upToDate(current: Theme.appVersion)
+        }
+        // The thumbnail is fetched before the popup appears so it never pops in
+        // and resizes the card; a slow or failed fetch just drops the image.
+        var thumbnail: NSImage?
+        if let url = release.thumbnailURL { thumbnail = await fetchThumbnail(url) }
+        return .available(latest: latest, current: Theme.appVersion, dmgURL: release.dmgURL,
+                          notes: release.notes, thumbnail: thumbnail)
+    }
+
+    private static func fetchThumbnail(_ url: URL) async -> NSImage? {
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 3
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return NSImage(data: data)
+    }
+
+    // First paragraph of a release body, as plain text: markdown headings and
+    // list markers are dropped, and line breaks inside it are joined.
+    static func firstParagraph(of body: String) -> String? {
+        let lines = body.replacingOccurrences(of: "\r\n", with: "\n")
+            .components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+        var paragraph: [String] = []
+        for line in lines {
+            if line.hasPrefix("#") { if paragraph.isEmpty { continue } else { break } }
+            if line.isEmpty { if paragraph.isEmpty { continue } else { break } }
+            var text = line
+            for marker in ["- ", "* ", "+ "] where text.hasPrefix(marker) {
+                text = String(text.dropFirst(marker.count))
+            }
+            paragraph.append(text)
+        }
+        let joined = paragraph.joined(separator: " ")
+        return joined.isEmpty ? nil : joined
     }
 
     enum UpdateError: Error { case mountFailed }
@@ -251,6 +289,8 @@ enum UpdateCheck {
     private struct LatestRelease {
         let tag: String
         let dmgURL: URL?
+        let notes: String?
+        let thumbnailURL: URL?
     }
 
     // Latest (non-draft, non-prerelease) release: its tag_name plus the first
@@ -268,7 +308,10 @@ enum UpdateCheck {
         let assets = object["assets"] as? [[String: Any]] ?? []
         let dmg = assets.first { ($0["name"] as? String)?.hasSuffix(".dmg") == true }
         let dmgURL = (dmg?["browser_download_url"] as? String).flatMap(URL.init(string:))
-        return LatestRelease(tag: tag, dmgURL: dmgURL)
+        let thumb = assets.first { ($0["name"] as? String)?.lowercased() == "update.png" }
+        let thumbnailURL = (thumb?["browser_download_url"] as? String).flatMap(URL.init(string:))
+        let notes = (object["body"] as? String).flatMap(firstParagraph(of:))
+        return LatestRelease(tag: tag, dmgURL: dmgURL, notes: notes, thumbnailURL: thumbnailURL)
     }
 
     // Numeric component-wise semver compare ("0.7.10" > "0.7.9"); missing
@@ -299,17 +342,61 @@ struct UpdateResultPopup: View {
     @EnvironmentObject private var toasts: ToastCenter
 
     var body: some View {
-        ZStack {
+        // Pinned to the top center (toasts' column, 48pt below their 12pt
+        // top gap) rather than floating mid-window.
+        ZStack(alignment: .top) {
             Color.black.opacity(colorScheme == .light ? 0.15 : 0.35)
                 .contentShape(Rectangle())
                 .onTapGesture { onClose() }
 
             card
+                .padding(.top, 60)
         }
         .ignoresSafeArea()
     }
 
+    private var thumbnail: NSImage? {
+        if case .available(_, _, _, _, let thumbnail?) = status { return thumbnail }
+        return nil
+    }
+
     private var card: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Release thumbnail, only when the release ships one: full-bleed
+            // across the top, its upper corners rounded by the card's clip.
+            if let thumbnail {
+                Image(nsImage: thumbnail)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: Self.cardWidth, height: Self.thumbnailHeight)
+                    .clipped()
+            }
+
+            content
+                .padding(Self.margin)
+                // 2pt tighter under the thumbnail than the plain card's top.
+                .padding(.top, thumbnail == nil ? 0 : -2)
+        }
+        .frame(width: Self.cardWidth, alignment: .leading)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Theme.panelBackground)
+                .shadow(color: .black.opacity(0.4), radius: 24, x: 0, y: 12)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(colorScheme == .light ? Color(white: 0.56) : Color.white.opacity(0.8),
+                        lineWidth: 1)
+        )
+        .overlay(alignment: .topTrailing) {
+            PopupCloseButton(overImage: thumbnail != nil) { onClose() }
+                .padding(.top, 18)
+                .padding(.trailing, 18)   // same corner inset as the other popups
+        }
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Title carries the state, so it reads at a glance.
             Text(statusTitle)
@@ -318,23 +405,25 @@ struct UpdateResultPopup: View {
 
             // The version(s) as a single emphasized line under the title.
             Text(versionLine)
-                .font(.system(size: 13, weight: .medium))
+                .font(.system(size: Theme.smallSize - 2, weight: .light))   // 2pt under the body
                 .foregroundStyle(.primary)
-                .padding(.top, 6)
+                .padding(.top, 3)
 
-            // Number-free explanation.
+            // Release notes when available, otherwise a number-free explanation.
             Text(descLine)
                 .font(.system(size: Theme.smallSize))
                 .foregroundStyle(.secondary)
+                .lineLimit(4)
+                .truncationMode(.tail)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 12)
 
             // Only the available state carries a button (left-aligned); the
             // up-to-date / failed cards close via ✕ / ESC / backdrop only.
-            if case .available(let latest, _, let dmgURL) = status {
+            if case .available(let latest, _, let dmgURL, _, _) = status {
                 HStack {
                     if let dmgURL {
-                        popupButton("Download & Open", tint: Theme.accent, hovering: $primaryHovering) {
+                        popupButton("Download and Install", tint: Theme.accent, hovering: $primaryHovering) {
                             UpdateCheck.downloadAndInstall(dmgURL, version: latest, toasts: toasts)
                             onClose()
                         }
@@ -349,27 +438,15 @@ struct UpdateResultPopup: View {
                 .padding(.top, 16)
             }
         }
-        .padding(20)
-        // leading (not the default center): the up-to-date / failed states have
-        // no width-filling child, so centering would float the text block right
-        // of the padding while the close button stays pinned to the frame edge.
-        .frame(width: 320, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Theme.panelBackground)
-                .shadow(color: .black.opacity(0.4), radius: 24, x: 0, y: 12)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(colorScheme == .light ? Color(white: 0.56) : Color.white.opacity(0.8),
-                        lineWidth: 1)
-        )
-        .overlay(alignment: .topTrailing) {
-            PopupCloseButton { onClose() }
-                .padding(.top, 18)
-                .padding(.trailing, 20)   // match the content's 20 left margin
-        }
     }
+
+    // Text sits inside the popups' usual 20pt margin; the thumbnail runs
+    // edge to edge across the card's full width at a 256:108 ratio
+    // (280×118 — ship update.png at 560×236 for Retina).
+    static let margin: CGFloat = 20
+    static let contentWidth: CGFloat = 240
+    static let cardWidth = contentWidth + margin * 2
+    static let thumbnailHeight = (cardWidth * 108 / 256).rounded()
 
     private var statusTitle: String {
         switch status {
@@ -382,7 +459,7 @@ struct UpdateResultPopup: View {
     private var versionLine: String {
         switch status {
         case .upToDate(let current):        return "v \(current)"
-        case .available(let latest, let current, _): return "v \(current) → v \(latest)"
+        case .available(let latest, let current, _, _, _): return "v \(current) → v \(latest)"
         case .failed:                       return "v \(Theme.appVersion)"
         }
     }
@@ -391,9 +468,10 @@ struct UpdateResultPopup: View {
         switch status {
         case .upToDate:
             return "This is the latest release on GitHub — there's nothing new to download."
-        case .available(_, _, let dmgURL):
+        case .available(_, _, let dmgURL, let notes, _):
+            if let notes { return notes }
             return dmgURL != nil
-                ? "A newer release is ready on GitHub. Download it and the disk image opens by itself."
+                ? "A newer release is ready on GitHub. 08FOSE downloads it, updates itself and reopens."
                 : "A newer release is ready on GitHub. Open the releases page to download it."
         case .failed:
             return "GitHub couldn't be reached. Check your connection and try again."
