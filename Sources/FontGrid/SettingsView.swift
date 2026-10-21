@@ -117,6 +117,8 @@ struct SettingsOverlay: View {
     // About had grown into a changelog; trim it again when it does, rather than
     // collapsing this to a lone string.
     private static let releaseNotes: [(version: String, note: String)] = [
+        ("0.8.22",
+         "Updates now arrive as this card when 08FOSE opens, and install right here — download, then relaunch, without leaving the card."),
         ("0.8.21",
          "Tags can now be combined. Select several, see only fonts that have them all. Clear lets go of all of them at once."),
         ("0.8.20",
