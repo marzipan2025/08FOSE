@@ -67,7 +67,7 @@ struct RootView: View {
                     onCommit: { newName in
                         let count = memos.tagCounts.first { $0.tag == tag }?.count ?? 0
                         memos.renameTag(tag, to: newName)
-                        if vm.activeTag == tag { vm.activeTag = newName }
+                        if vm.activeTags.remove(tag) != nil { vm.activeTags.insert(newName) }
                         vm.renamingTag = nil
                         toasts.show(Toast(
                             style: .success,
@@ -79,7 +79,7 @@ struct RootView: View {
                     onDelete: {
                         let count = memos.tagCounts.first { $0.tag == tag }?.count ?? 0
                         memos.deleteTag(tag)
-                        if vm.activeTag == tag { vm.activeTag = nil }
+                        vm.activeTags.remove(tag)
                         vm.renamingTag = nil
                         toasts.show(Toast(
                             style: .success,
@@ -147,10 +147,20 @@ struct RootView: View {
             }
         }
         .animation(vm.useMotion ? .easeOut(duration: 0.18) : nil, value: vm.showSettings)
+        // Required update: the locked card, above Settings and every panel so
+        // nothing behind it can be reached. Only the toasts sit higher, so the
+        // download progress and "Install & Relaunch" stay visible.
+        .overlay {
+            if let status = vm.requiredUpdate {
+                UpdateResultPopup(status: status, locked: true) {}
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.15), value: vm.requiredUpdate == nil)
         // Silence the tooltips of everything the modals cover — the glyph grid,
         // the font cells, the pin rows. Their tracking rects survive underneath,
         // so without this the pointer pops them over the modal.
-        .environment(\.tooltipsSuppressed, vm.showSettings || vm.renamingTag != nil)
+        .environment(\.tooltipsSuppressed, vm.showSettings || vm.renamingTag != nil || vm.requiredUpdate != nil)
         // Toast layer: topmost (above the wallpaper tint AND the Settings
         // overlay — import/export toasts fire while Settings is open). Aligned
         // to the center panel column's top edge, sliding in from above.
@@ -200,7 +210,13 @@ struct RootView: View {
         // newer release exists.
         .task {
             UpdateCheck.showPostUpdateToastIfNeeded(toasts: toasts)
-            UpdateCheck.checkOnLaunch(toasts: toasts)
+            UpdateCheck.checkOnLaunch(toasts: toasts) { status in
+                // Close what the user may have opened during the check, so the
+                // locked card is the only thing on screen.
+                vm.showSettings = false
+                vm.renamingTag = nil
+                vm.requiredUpdate = status
+            }
         }
         // Fonts were installed or removed while the app was running. The grid
         // itself needs no help — it is keyed by family name, so the replaced
@@ -215,6 +231,15 @@ struct RootView: View {
                 vm.closeDetail()
             }
             toasts.show(fontChangeToast(change))
+        }
+        // A selected tag whose last #token was edited out of the memos has no
+        // chip left to untoggle, yet it would keep the intersection at zero.
+        // Drop it from the selection. Uses the published value itself — the
+        // publisher fires before `notes` is assigned.
+        .onReceive(memos.$notes) { notes in
+            guard !vm.activeTags.isEmpty else { return }
+            let live = notes.values.reduce(into: Set<String>()) { $0.formUnion(MemoStore.parseTags($1)) }
+            if !vm.activeTags.isSubset(of: live) { vm.activeTags.formIntersection(live) }
         }
     }
 
@@ -276,7 +301,7 @@ struct RootView: View {
         // While the rename-tag popup is open, swallow every single-key
         // shortcut (they'd mutate filters/theme behind the modal — e.g. after
         // ESC dropped the text-field focus but before the popup closed).
-        if vm.renamingTag != nil { return true }
+        if vm.renamingTag != nil || vm.requiredUpdate != nil { return true }
         // Same for the import Merge/Replace and update-result popups — they're
         // modal cards, so even the theme/wallpaper preview keys go inert.
         if vm.pendingImport != nil || vm.updateStatus != nil { return true }
@@ -326,6 +351,7 @@ struct RootView: View {
     // ⌘ + arrows: ↑/↓ adjust Font Size, →/← adjust Columns (→ increases).
     // Returns true when handled.
     private func handleCommandArrow(_ keyCode: Int) -> Bool {
+        if vm.requiredUpdate != nil { return true }
         if vm.showSettings { return false }
         switch keyCode {
         case 126: adjustFontSize(+1); return true   // up
@@ -357,6 +383,9 @@ struct RootView: View {
     // ESC cascade step: close the Settings modal if it's open. Returns true
     // when it actually closed something.
     private func closeSettingsIfOpen() -> Bool {
+        // The locked required-update card cannot be dismissed: ESC is eaten
+        // here, at the head of the cascade, before anything behind it closes.
+        if vm.requiredUpdate != nil { return true }
         // The rename-tag popup sits above everything, so it closes first —
         // this is the head of the ESC cascade.
         if vm.renamingTag != nil {
@@ -385,7 +414,7 @@ struct RootView: View {
     // Inert while the rename-tag popup is open — Settings would stack above
     // the modal and tangle the ESC cascade.
     private func toggleSettings() -> Bool {
-        if vm.renamingTag != nil { return true }
+        if vm.renamingTag != nil || vm.requiredUpdate != nil { return true }
         withAnimation(vm.useMotion ? .easeOut(duration: 0.18) : nil) { vm.showSettings.toggle() }
         return true
     }
@@ -402,7 +431,7 @@ struct RootView: View {
     // FocusState binding syncs from the responder change, so the accent
     // highlight still follows.
     private func focusSearch() -> Bool {
-        if vm.showSettings || vm.renamingTag != nil { return true }
+        if vm.showSettings || vm.renamingTag != nil || vm.requiredUpdate != nil { return true }
         if leftPanelOpen {
             Self.makeSearchFieldFirstResponder()
         } else {

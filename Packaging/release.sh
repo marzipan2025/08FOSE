@@ -6,6 +6,12 @@
 #
 #   Packaging/release.sh              전체 실행
 #   Packaging/release.sh --dry-run    빌드/dmg까지만, push·릴리즈 안 함
+#   Packaging/release.sh --required   이번 버전을 필수 업데이트로 (아래 min-version = 이번 버전)
+#   Packaging/release.sh --min-version 0.8.22
+#                                     이 버전보다 낮은 앱은 실행하면 닫을 수 없는
+#                                     업데이트 카드를 띄운다. 릴리즈 본문 끝에
+#                                     <!-- min-version: X.Y.Z --> 로 숨겨 적는다
+#                                     (GitHub 은 HTML 주석을 보여 주지 않는다).
 #
 # 업데이트 팝업 섬네일: Packaging/UpdateImages/X.Y.Z.png (560×236) 가 있으면
 # 릴리즈에 update.png 라는 이름으로 첨부한다. 앱은 그 이름으로 찾는다.
@@ -15,10 +21,21 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "$ROOT_DIR"
 
-DRY_RUN=0
-[ "${1:-}" = "--dry-run" ] && DRY_RUN=1
-
 VERSION="$(grep -m1 'static let appVersion' Sources/FontGrid/Theme.swift | sed -E 's/.*"([^"]+)".*/\1/')"
+
+DRY_RUN=0
+MIN_VERSION=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --dry-run) DRY_RUN=1 ;;
+    --required) MIN_VERSION="$VERSION" ;;
+    --min-version)
+      [ $# -ge 2 ] || { echo "✗ --min-version 뒤에 버전이 없음" >&2; exit 1; }
+      MIN_VERSION="$2"; shift ;;
+    *) echo "✗ 모르는 옵션: $1" >&2; exit 1 ;;
+  esac
+  shift
+done
 TAG="v${VERSION}"
 DMG="dist/08FOSE.dmg"
 
@@ -59,6 +76,16 @@ print(m.group(1).encode().decode('unicode_escape') if m else '', end='')
 PY
 )"
 [ -n "$NOTES" ] || die "SettingsView.releaseNotes 에 ${VERSION} 항목이 없음"
+
+# 필수 업데이트 표시. 최소 버전이 이번 버전보다 높으면 이번 릴리즈를 깔아도
+# 카드가 안 닫히는 앱이 나가므로 막는다.
+if [ -n "$MIN_VERSION" ]; then
+  [[ "$MIN_VERSION" =~ ^[0-9]+(\.[0-9]+)*$ ]] || die "--min-version 형식이 잘못됨: ${MIN_VERSION}"
+  [ "$(printf '%s\n%s\n' "$MIN_VERSION" "$VERSION" | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)" = "$VERSION" ] \
+    || die "min-version ${MIN_VERSION} 이 이번 버전 ${VERSION} 보다 높음"
+  NOTES="${NOTES}"$'\n\n'"<!-- min-version: ${MIN_VERSION} -->"
+  echo "▸ 필수 업데이트: v${MIN_VERSION} 미만은 실행 시 업데이트 카드에서 못 벗어남"
+fi
 
 # 업데이트 팝업 섬네일. 없으면 실수인지 의도인지 사람이 정한다 — 이미지 없는
 # 릴리즈도 팝업은 글만으로 잘 뜨지만, 빠뜨린 걸 모르고 나가면 되돌릴 수 없다.

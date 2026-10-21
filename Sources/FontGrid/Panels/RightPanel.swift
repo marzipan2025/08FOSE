@@ -260,14 +260,17 @@ struct RightPanel: View {
                         TagCapsule(
                             tag: item.tag,
                             count: item.count,
-                            active: vm.selectedFamily == nil && vm.activeTag == item.tag
+                            active: vm.selectedFamily == nil && vm.activeTags.contains(item.tag)
                         ) {
                             // With the detail open, a tag tap appends the tag to
-                            // that font's memo; otherwise it toggles the filter.
+                            // that font's memo; otherwise it toggles that tag
+                            // in the filter.
                             if let family = vm.selectedFamily {
                                 appendTagToMemo(item.tag, family: family)
                             } else {
-                                vm.activeTag = (vm.activeTag == item.tag) ? nil : item.tag
+                                if vm.activeTags.remove(item.tag) == nil {
+                                    vm.activeTags.insert(item.tag)
+                                }
                             }
                         }
                     }
@@ -301,6 +304,12 @@ struct RightPanel: View {
                 .foregroundStyle(.tertiary)
                 .monospacedDigit()
             Spacer(minLength: 8)
+            // Same Clear as the Face box's, left of the chevron: drops every
+            // selected tag at once. Only while a chip is lit — with the detail
+            // open the chips stop showing the filter, so the button goes too.
+            if vm.selectedFamily == nil && !vm.activeTags.isEmpty {
+                ClearButton(help: "Clear tag selection") { vm.activeTags = [] }
+            }
             // Expand/collapse over the pins list. Same chevron as the memo
             // area's toggle, but without the filled background.
             // While GLYPHS is covering the chips, this chevron's job is to get

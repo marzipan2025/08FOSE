@@ -6,9 +6,11 @@ enum UpdateStatus: Equatable {
     case upToDate(current: String)
     // notes: the release body's first paragraph; thumbnail: the release's
     // update.png asset (560×236, drawn at 280×118). Either may be missing —
-    // the popup then simply leaves that slot out.
+    // the popup then simply leaves that slot out. required: the release body
+    // names a minimum version above this build (see minVersionMarker), so the
+    // launch check shows a card that cannot be dismissed.
     case available(latest: String, current: String, dmgURL: URL?,
-                   notes: String?, thumbnail: NSImage?)
+                   notes: String?, thumbnail: NSImage?, required: Bool)
     case failed
 }
 
@@ -24,6 +26,10 @@ enum UpdateStatus: Equatable {
 //  - launch: only a newer release surfaces a toast (carrying a Download
 //    button). Up-to-date and failure both stay silent — an unprompted
 //    "you're current" toast, or an error, is never worth interrupting launch.
+//    A REQUIRED update (this build is below the release's minimum version)
+//    replaces the toast with a locked UpdateResultPopup: no ✕, no ESC, only
+//    Download and Install or Quit. Offline still launches normally — the
+//    check failing is never a reason to keep the app shut.
 //  - Settings "Check" button: the result becomes UpdateResultPopup, where a
 //    failure IS shown (the user explicitly asked).
 @MainActor
@@ -35,16 +41,22 @@ enum UpdateCheck {
         NSWorkspace.shared.open(releasesPageURL)
     }
 
-    // Called once from RootView when the app launches.
-    static func checkOnLaunch(toasts: ToastCenter) {
+    // Called once from RootView when the app launches. `onRequired` receives a
+    // required update's status so RootView can raise the locked card.
+    static func checkOnLaunch(toasts: ToastCenter, onRequired: @escaping (UpdateStatus) -> Void) {
         Task {
-            switch await fetchStatus() {
+            let status = await fetchStatus()
+            if case .available(_, _, _, _, _, true) = status {
+                onRequired(status)
+                return
+            }
+            switch status {
             case .upToDate:
                 // Already on the latest release: stay silent. An unprompted
                 // "you're up to date" toast on every launch is just noise —
                 // the launch toast is reserved for when there's an update.
                 break
-            case .available(let latest, let current, let dmgURL, _, _):
+            case .available(let latest, let current, let dmgURL, _, _, _):
                 toasts.show(Toast(
                     style: .info,
                     title: "Update available — v \(latest)",
@@ -75,8 +87,9 @@ enum UpdateCheck {
         // and resizes the card; a slow or failed fetch just drops the image.
         var thumbnail: NSImage?
         if let url = release.thumbnailURL { thumbnail = await fetchThumbnail(url) }
+        let required = release.minVersion.map { isNewer($0, than: Theme.appVersion) } ?? false
         return .available(latest: latest, current: Theme.appVersion, dmgURL: release.dmgURL,
-                          notes: release.notes, thumbnail: thumbnail)
+                          notes: release.notes, thumbnail: thumbnail, required: required)
     }
 
     private static func fetchThumbnail(_ url: URL) async -> NSImage? {
@@ -95,6 +108,9 @@ enum UpdateCheck {
             .map { $0.trimmingCharacters(in: .whitespaces) }
         var paragraph: [String] = []
         for line in lines {
+            // HTML comments (the min-version marker) are invisible on GitHub
+            // and must stay invisible in the card too.
+            if line.hasPrefix("<!--") { continue }
             if line.hasPrefix("#") { if paragraph.isEmpty { continue } else { break } }
             if line.isEmpty { if paragraph.isEmpty { continue } else { break } }
             var text = line
@@ -113,8 +129,10 @@ enum UpdateCheck {
     // Finder window), verifies the app is inside, and offers a single
     // "Install & Relaunch" confirmation. The actual install runs in a detached
     // helper (see installAndRelaunch). A failure at any step shows an error
-    // toast whose View button falls back to the releases page.
-    static func downloadAndInstall(_ dmgURL: URL, version: String, toasts: ToastCenter) {
+    // toast whose View button falls back to the releases page, and calls
+    // `onFailure` so a locked card can offer its button again.
+    static func downloadAndInstall(_ dmgURL: URL, version: String, toasts: ToastCenter,
+                                   onFailure: (() -> Void)? = nil) {
         Task {
             toasts.show(Toast(
                 style: .info,
@@ -161,6 +179,7 @@ enum UpdateCheck {
                     sticky: true
                 ))
             } catch {
+                onFailure?()
                 toasts.show(Toast(
                     style: .error,
                     title: "Download failed",
@@ -291,6 +310,19 @@ enum UpdateCheck {
         let dmgURL: URL?
         let notes: String?
         let thumbnailURL: URL?
+        let minVersion: String?
+    }
+
+    // Marks a release as required for every build below the given version.
+    // Written into the release body as an HTML comment, which GitHub does not
+    // render: `<!-- min-version: 0.8.22 -->`. Packaging/release.sh adds it
+    // when run with --required or --min-version.
+    static func minVersion(in body: String) -> String? {
+        guard let range = body.range(of: #"<!--\s*min-version:\s*([0-9]+(\.[0-9]+)*)\s*-->"#,
+                                     options: .regularExpression) else { return nil }
+        let marker = body[range]
+        return marker.range(of: #"[0-9]+(\.[0-9]+)*"#, options: .regularExpression)
+            .map { String(marker[$0]) }
     }
 
     // Latest (non-draft, non-prerelease) release: its tag_name plus the first
@@ -310,8 +342,9 @@ enum UpdateCheck {
         let dmgURL = (dmg?["browser_download_url"] as? String).flatMap(URL.init(string:))
         let thumb = assets.first { ($0["name"] as? String)?.lowercased() == "update.png" }
         let thumbnailURL = (thumb?["browser_download_url"] as? String).flatMap(URL.init(string:))
-        let notes = (object["body"] as? String).flatMap(firstParagraph(of:))
-        return LatestRelease(tag: tag, dmgURL: dmgURL, notes: notes, thumbnailURL: thumbnailURL)
+        let body = object["body"] as? String
+        return LatestRelease(tag: tag, dmgURL: dmgURL, notes: body.flatMap(firstParagraph(of:)),
+                             thumbnailURL: thumbnailURL, minVersion: body.flatMap(minVersion(in:)))
     }
 
     // Numeric component-wise semver compare ("0.7.10" > "0.7.9"); missing
@@ -333,30 +366,40 @@ enum UpdateCheck {
 // popups. ESC / ✕ / backdrop close it; the available state adds a button
 // that downloads the dmg and mounts it (or, with no dmg asset, opens the
 // releases page in the browser).
+//
+// `locked` is the required-update card raised at launch: no ✕, the backdrop
+// swallows clicks (RootView swallows ESC and shortcuts), and the only ways
+// out are installing or Quit. It stays up through the download — the
+// progress and "Install & Relaunch" toasts sit above it.
 struct UpdateResultPopup: View {
     let status: UpdateStatus
+    var locked = false
     let onClose: () -> Void
 
     @State private var primaryHovering = false
+    @State private var quitHovering = false
+    @State private var downloading = false
     @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var toasts: ToastCenter
 
     var body: some View {
         // Pinned to the top center (toasts' column, 48pt below their 12pt
-        // top gap) rather than floating mid-window.
-        ZStack(alignment: .top) {
+        // top gap) rather than floating mid-window. The locked card sits dead
+        // centre instead: it is the whole app until it is dealt with, and it
+        // stays clear of the download toasts that slide in at the top.
+        ZStack(alignment: locked ? .center : .top) {
             Color.black.opacity(colorScheme == .light ? 0.15 : 0.35)
                 .contentShape(Rectangle())
-                .onTapGesture { onClose() }
+                .onTapGesture { if !locked { onClose() } }
 
             card
-                .padding(.top, 60)
+                .padding(.top, locked ? 0 : 60)
         }
         .ignoresSafeArea()
     }
 
     private var thumbnail: NSImage? {
-        if case .available(_, _, _, _, let thumbnail?) = status { return thumbnail }
+        if case .available(_, _, _, _, let thumbnail?, _) = status { return thumbnail }
         return nil
     }
 
@@ -390,9 +433,11 @@ struct UpdateResultPopup: View {
                         lineWidth: 1)
         )
         .overlay(alignment: .topTrailing) {
-            PopupCloseButton(overImage: thumbnail != nil) { onClose() }
-                .padding(.top, 18)
-                .padding(.trailing, 18)   // same corner inset as the other popups
+            if !locked {
+                PopupCloseButton(overImage: thumbnail != nil) { onClose() }
+                    .padding(.top, 18)
+                    .padding(.trailing, 18)   // same corner inset as the other popups
+            }
         }
     }
 
@@ -420,17 +465,29 @@ struct UpdateResultPopup: View {
 
             // Only the available state carries a button (left-aligned); the
             // up-to-date / failed cards close via ✕ / ESC / backdrop only.
-            if case .available(let latest, _, let dmgURL, _, _) = status {
-                HStack {
+            if case .available(let latest, _, let dmgURL, _, _, _) = status {
+                HStack(spacing: 8) {
                     if let dmgURL {
-                        popupButton("Download and Install", tint: Theme.accent, hovering: $primaryHovering) {
-                            UpdateCheck.downloadAndInstall(dmgURL, version: latest, toasts: toasts)
-                            onClose()
+                        popupButton(downloading ? "Downloading…" : "Download and Install",
+                                    tint: Theme.accent, hovering: $primaryHovering) {
+                            guard !downloading else { return }
+                            downloading = locked
+                            UpdateCheck.downloadAndInstall(dmgURL, version: latest, toasts: toasts,
+                                                           onFailure: { downloading = false })
+                            if !locked { onClose() }
                         }
+                        .disabled(downloading)
                     } else {
+                        // No dmg: the page is the only way to get it, so a
+                        // locked card stays put behind the browser.
                         popupButton("View Release", tint: Theme.accent, hovering: $primaryHovering) {
                             UpdateCheck.openReleasesPage()
-                            onClose()
+                            if !locked { onClose() }
+                        }
+                    }
+                    if locked {
+                        popupButton("Quit", tint: .secondary, hovering: $quitHovering) {
+                            NSApp.terminate(nil)
                         }
                     }
                     Spacer()
@@ -451,7 +508,8 @@ struct UpdateResultPopup: View {
     private var statusTitle: String {
         switch status {
         case .upToDate:  return "You're up to date."
-        case .available: return "New Update!"
+        case .available(_, _, _, _, _, let required):
+            return required ? "Update Required" : "New Update!"
         case .failed:    return "Error"
         }
     }
@@ -459,7 +517,7 @@ struct UpdateResultPopup: View {
     private var versionLine: String {
         switch status {
         case .upToDate(let current):        return "v \(current)"
-        case .available(let latest, let current, _, _, _): return "v \(current) → v \(latest)"
+        case .available(let latest, let current, _, _, _, _): return "v \(current) → v \(latest)"
         case .failed:                       return "v \(Theme.appVersion)"
         }
     }
@@ -468,8 +526,11 @@ struct UpdateResultPopup: View {
         switch status {
         case .upToDate:
             return "This is the latest release on GitHub — there's nothing new to download."
-        case .available(_, _, let dmgURL, let notes, _):
+        case .available(_, _, let dmgURL, let notes, _, let required):
             if let notes { return notes }
+            if required {
+                return "This version of 08FOSE is no longer supported. Install the update to keep using it."
+            }
             return dmgURL != nil
                 ? "A newer release is ready on GitHub. 08FOSE downloads it, updates itself and reopens."
                 : "A newer release is ready on GitHub. Open the releases page to download it."

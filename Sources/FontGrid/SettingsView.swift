@@ -117,6 +117,8 @@ struct SettingsOverlay: View {
     // About had grown into a changelog; trim it again when it does, rather than
     // collapsing this to a lone string.
     private static let releaseNotes: [(version: String, note: String)] = [
+        ("0.8.21",
+         "Tags can now be combined. Select several, see only fonts that have them all. Clear lets go of all of them at once."),
         ("0.8.20",
          "Update notices now come as a card at the top of the window, with a picture of what's new and a short note from the release. If a release has no picture, the card simply shows the note."),
         ("0.8.18",

@@ -234,7 +234,7 @@ struct LeftPanel: View {
             // Clear sits left of the chevron and shows in both states, so a
             // folded box never hides a selection the user cannot undo from here.
             if vm.hasFaceSelection {
-                FaceClearButton { vm.clearFaceSelection() }
+                ClearButton(help: "Clear face selection") { vm.clearFaceSelection() }
             }
             Image(systemName: faceBoxExpanded ? "chevron.up" : "chevron.down")
                 .font(.system(size: 9, weight: .medium))
@@ -631,11 +631,13 @@ private struct FaceListRow: View {
     }
 }
 
-// The Face box's Clear. A word rather than an ✕ because it sits beside a
-// chevron that already means "this control does something to the box" — two
-// bare glyphs there read as a pair of unlabelled switches. Kept as its own
-// button so tapping it does not also fold the box.
-private struct FaceClearButton: View {
+// The Face box's Clear, also used by the right panel's TAGS header. A word
+// rather than an ✕ because it sits beside a chevron that already means "this
+// control does something to the box" — two bare glyphs there read as a pair
+// of unlabelled switches. Kept as its own button so tapping it does not also
+// fold the box.
+struct ClearButton: View {
+    var help: String
     let action: () -> Void
     @State private var hovering = false
 
@@ -648,7 +650,7 @@ private struct FaceClearButton: View {
         }
         .buttonStyle(.plain)
         .focusable(false)
-        .help("Clear face selection")
+        .help(help)
         .onHover { hovering = $0 }
     }
 }

@@ -49,7 +49,10 @@ final class AppViewModel: ObservableObject {
     private static let scriptFilterKey = "scriptFilter"
     private static let faceWeightKey = "faceWeight"
     private static let faceSlantKey = "faceSlant"
-    private static let activeTagKey = "activeTag"
+    private static let activeTagsKey = "activeTags"
+    // Pre-multi-select key: a single tag string. Read once to carry an old
+    // selection over, then never written again.
+    private static let legacyActiveTagKey = "activeTag"
     private static let columnCountKey = "columnCount"
     private static let previewSizeOffsetKey = "previewSizeOffset"
     private static let useMotionKey = "useMotion"
@@ -170,14 +173,15 @@ final class AppViewModel: ObservableObject {
         return weightFilters.contains { $0.matches(family.weightCount) }
     }
 
-    // Active note tag (lowercased, without '#'). nil = no tag filter. Single
-    // selection: tapping the active tag again clears it.
-    @Published var activeTag: String? = AppViewModel.loadActiveTag() {
-        didSet { UserDefaults.standard.set(activeTag ?? "", forKey: Self.activeTagKey) }
+    // Active note tags (lowercased, without '#'). Empty = no tag filter.
+    // Multi-select: tapping a tag toggles it, and the grid shows only fonts
+    // carrying EVERY selected tag (intersection).
+    @Published var activeTags: Set<String> = AppViewModel.loadActiveTags() {
+        didSet { UserDefaults.standard.set(Array(activeTags), forKey: Self.activeTagsKey) }
     }
 
     // Tag whose rename popup is open (the tag's current name). nil = closed.
-    // Not persisted — a transient UI state, unlike activeTag above.
+    // Not persisted — a transient UI state, unlike activeTags above.
     @Published var renamingTag: String? = nil
 
     @Published var columnCount: Int = AppViewModel.loadColumnCount() {
@@ -225,6 +229,12 @@ final class AppViewModel: ObservableObject {
     // Result of a manual update check (UpdateResultPopup, shown above
     // Settings). Same ESC-cascade contract as pendingImport. nil = closed.
     @Published var updateStatus: UpdateStatus? = nil
+
+    // A required update found by the launch check (this build is below the
+    // release's min-version). While set, RootView shows the locked update card
+    // over everything and swallows ESC and shortcuts. Never cleared — the app
+    // either installs and relaunches, or quits.
+    @Published var requiredUpdate: UpdateStatus? = nil
 
     // Wallpaper "skins" — bundled under Resources/Wallpapers/. The picker writes
     // a logical name (e.g. "Wallpaper02"); WallpaperOverlay resolves the actual
@@ -313,9 +323,12 @@ final class AppViewModel: ObservableObject {
         return Set(raw.compactMap { ScriptCategory(rawValue: $0) })
     }
 
-    private static func loadActiveTag() -> String? {
-        let s = UserDefaults.standard.string(forKey: activeTagKey)
-        return (s?.isEmpty ?? true) ? nil : s
+    private static func loadActiveTags() -> Set<String> {
+        let d = UserDefaults.standard
+        if let raw = d.array(forKey: activeTagsKey) as? [String] { return Set(raw) }
+        let old = d.string(forKey: legacyActiveTagKey) ?? ""
+        d.removeObject(forKey: legacyActiveTagKey)
+        return old.isEmpty ? [] : [old]
     }
 
     // columnCount has a non-zero default (4) so we can't use the plain
@@ -635,7 +648,7 @@ final class AppViewModel: ObservableObject {
         leftPanelWidth = Self.defaultLeftPanelWidth
         rightPanelWidth = Self.defaultRightPanelWidth
         previewSizeOffset = 0
-        activeTag = nil
+        activeTags = []
         weightFilters = []
         pinnedOnly = false
         memoOnly = false

@@ -80,7 +80,7 @@ NSFontManager는 한글 등 비-ASCII family 이름을 `/B9CC/B144/C124/CCB4` �
 - 윈도우 스타일: `.titleBar` + `.fullSizeContentView` (시스템 타이틀바 위로 콘텐츠 확장)
 - **라이트/다크 모드 전환 지원** (기본 다크)
 - 선택 가능한 배경 "Wallpaper" 오버레이 (모드별 개별 기억)
-- 중앙 상단: 좌측 `08FOSE`, 우측 **현재 필터 상태 라벨** — 기본 `NNN fonts`, 필터 시 `NNN Pinned/Memoed/Muted`·스크립트명, 2개 이상이면 가운뎃점으로 결합하며 약어(PIN·MEM·MUT, KR·JP·LTN·ETC), 태그 활성 시 `Tag : XXX`. 좌측 패널 접힘 시 신호등과 안 겹치게 들여쓰기
+- 중앙 상단: 좌측 `08FOSE`, 우측 **현재 필터 상태 라벨** — 기본 `NNN fonts`, 필터 시 `NNN Pinned/Memoed/Muted`·스크립트명, 2개 이상이면 가운뎃점으로 결합하며 약어(PIN·MEM·MUT, KR·JP·LTN·ETC), 태그 활성 시 `Tag : XXX`, 2개 이상이면 `Tags : A · B`(캡슐 순서, 이름 변경 연필은 1개일 때만). 좌측 패널 접힘 시 신호등과 안 겹치게 들여쓰기
 
 ### 세션 상태 복원 (재시작 시)
 앱을 껐다 켜면 마지막 상태를 재현한다 — 윈도우 크기·위치, 좌/우 패널 폭, 좌측 패널의 모든 선택(검색어·Weights·Pinned/Memo only·Script 버킷·Tag·Columns·Font Size), 그리고 **중앙 그리드의 스크롤 위치**. 스크롤은 픽셀 Y로 저장하되 위 항목들이 동일하게 복원되어 레이아웃이 결정적이므로 같은 행에 안착한다(`NSScrollView` introspect, 콘텐츠 높이가 자랄 때까지 재시도). 저장된 폰트 수가 줄어 목표 Y에 못 미치면 가능한 최대 위치로 클램프.
@@ -97,7 +97,7 @@ NSFontManager는 한글 등 비-ASCII family 이름을 `/B9CC/B144/C124/CCB4` �
 - **Weights**: 라벨 `1 / 2+ / 4+ / 6+`, 구간 `1` / `2–3` / `4–5` / `6+` (`.exactly(1)` / `.range(2,3)` / `.range(4,5)` / `.atLeast(6)`), 서로 배타적. All 버튼 없음 — **아무 칩도 선택 안 됨 = All**. 단일 선택(다른 칩 누르면 교체), 선택된 칩 재클릭 시 해제(All). 현재 칩에 없는 옛 저장값은 로드 시 All로 정규화
 - **Collections**: `Pinned` / `Memo` (보유 family만) + `Show/Hide muted` 토글과 `Muted`(muted만 보기) — 항목이 없어도 비활성하지 않고, 누르면 빈 결과("Nothing found")
 - **Script 버킷**: Korean / Japanese / Latin / Other (주력 스크립트 기준, 다중 선택 시 합집합). **Chinese·Symbol은 분류상 Other로 통합**(전용 버튼 없음)
-- **Tag**: 우측 태그 캡슐로 선택 (단일 토글)
+- **Tag**: 우측 태그 캡슐로 선택 (다중 토글, 선택한 태그를 **모두** 가진 폰트만 = 교집합)
 - 검색·모든 필터·태그는 **AND**로 결합 (단 `Muted`(only)는 Show/Hide보다 우선)
 
 ### 3.2a Muted (원하지 않는 폰트)
@@ -178,7 +178,9 @@ NSFontManager는 한글 등 비-ASCII family 이름을 `/B9CC/B144/C124/CCB4` �
   - 샘플 weight는 결정적으로 선택: **Regular 페이스 → 없으면 OS/2 400 → 500 → 그래도 없으면 패밀리 기본**(`FontFamily.previewFontName`)
   - 행 클릭 → 상세 뷰 점프, 비어 있을 때 안내 문구
 - **TAGS** (메모 태그 있을 때만 표시): 캡슐 버튼 = `태그 개수`, **빈도순**, `#` 제거
-  - 단일 토글로 중앙 그리드 필터 (기존 필터와 AND), 활성 시 악센트 강조 (같은 캡슐 재클릭으로 해제)
+  - 캡슐마다 토글로 중앙 그리드 필터, 여러 개 선택 시 **교집합**(기존 필터와도 AND), 활성 시 악센트 강조 (같은 캡슐 재클릭으로 그 태그만 해제)
+  - 하나라도 선택되어 있으면 헤더의 꺾쇠 왼쪽에 **Clear**(Face 박스 Clear와 같은 버튼)가 나타나 전부 한 번에 해제. 상세 뷰가 열려 있을 땐 숨김
+  - 메모 편집으로 사라진 태그는 선택에서 자동으로 빠짐
   - 헤더의 꺾쇠(배경 없음, 호버 시 진해짐)로 **즐겨찾기 목록 위까지 확장/축소**
 - **버전 푸터**: 패널 최하단 고정 36pt, 좌측 정렬 `© pa_st - v{버전}`
 
@@ -255,12 +257,12 @@ NSFontManager는 한글 등 비-ASCII family 이름을 `/B9CC/B144/C124/CCB4` �
 - `selectedWallpaperDark`, `selectedWallpaperLight` (구 `selectedWallpaper`는 마이그레이션용)
 
 **세션 UI 상태 (재시작 시 복원)**
-- 좌측 패널 선택: `searchQuery`, `weightFilter`(문자열 인코딩 `all`/`exactly:N`/`atLeast:N`), `pinnedOnly`, `memoOnly`, `mutedFilter`(`shown`/`hidden`), `mutedOnly`, `scriptFilter`(rawValue 배열), `activeTag`, `columnCount`, `previewSizeOffset`
+- 좌측 패널 선택: `searchQuery`, `weightFilter`(문자열 인코딩 `all`/`exactly:N`/`atLeast:N`), `pinnedOnly`, `memoOnly`, `mutedFilter`(`shown`/`hidden`), `mutedOnly`, `scriptFilter`(rawValue 배열), `activeTags`(배열, 구 `activeTag` 문자열은 첫 실행 때 옮겨 담음), `columnCount`, `previewSizeOffset`
 - 레이아웃: `leftPanelWidth`, `rightPanelWidth`
 - 중앙 그리드 스크롤: `centerGridScrollY`
 - 윈도우 프레임: SwiftUI `WindowGroup` 자동 저장(키 `NSWindow Frame SwiftUI.ModifiedContent…` — AppKit이 자동 관리)
 
-`activeTag`를 포함한 위 세션 UI 상태는 모두 영속(과거 비영속에서 변경됨). **Reset everything**은 `removePersistentDomain`으로 이 모든 키를 한 번에 삭제한다.
+`activeTags`를 포함한 위 세션 UI 상태는 모두 영속(과거 비영속에서 변경됨). **Reset everything**은 `removePersistentDomain`으로 이 모든 키를 한 번에 삭제한다.
 
 ---
 

@@ -62,7 +62,7 @@ struct CenterPanel: View {
             .filter { !vm.pinnedOnly || pins.contains($0.name) }
             .filter { !vm.memoOnly || memos.hasNote(for: $0.name) }
             .filter { vm.scriptFilter.isEmpty || vm.scriptFilter.contains($0.script) }
-            .filter { vm.activeTag == nil || memos.tags(for: $0.name).contains(vm.activeTag!) }
+            .filter { vm.activeTags.isEmpty || memos.tags(for: $0.name).isSuperset(of: vm.activeTags) }
             .filter { family in
                 if vm.mutedOnly { return muted.contains(family.name) }
                 switch vm.mutedFilter {
@@ -90,10 +90,10 @@ struct CenterPanel: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .ignoresSafeArea(edges: .top)
                 // Interactive only while the detail is open (for the prev/next
-                // nav buttons) or a tag filter is active (for the rename
+                // nav buttons) or a single tag is active (for the rename
                 // pencil), and the bar is actually visible; otherwise the
                 // empty band must let grid clicks/scroll pass through.
-                .allowsHitTesting((vm.selectedFamily != nil || vm.activeTag != nil) && !topBarHidden)
+                .allowsHitTesting((vm.selectedFamily != nil || vm.activeTags.count == 1) && !topBarHidden)
                 .zIndex(35)
             PreviewInputBar(text: $previewText)
                 .padding(.horizontal, Theme.gridPadding)
@@ -138,8 +138,9 @@ struct CenterPanel: View {
                     .foregroundStyle(.tertiary)
                     .monospacedDigit()
                 // Pencil next to the "Tag : x" label: renames the active tag
-                // across every memo that carries it.
-                if let tag = vm.activeTag {
+                // across every memo that carries it. With two or more tags
+                // selected there is no single tag to rename, so it hides.
+                if vm.activeTags.count == 1, let tag = vm.activeTags.first {
                     RenameTagButton { vm.renamingTag = tag }
                         // Pull 3px back against the HStack's 8px spacing so
                         // the pencil sits tighter to the tag label.
@@ -158,7 +159,12 @@ struct CenterPanel: View {
     // Right-aligned stats label, reflecting the active list/filter. `count` is
     // the number of families currently shown.
     private func statsText(_ count: Int) -> String {
-        if let tag = vm.activeTag { return "Tag : \(tag)" }
+        if !vm.activeTags.isEmpty {
+            // Same order as the chips in the right panel (by frequency).
+            let tags = memos.tagCounts.map(\.tag).filter { vm.activeTags.contains($0) }
+            if tags.count == 1 { return "Tag : \(tags[0])" }
+            return "Tags : \(tags.joined(separator: Self.statsSeparator))"
+        }
 
         // Collection + script filters joined by middle dots. With a single
         // segment the full word is used; with 2+ segments (≥1 middle dot)
@@ -190,7 +196,7 @@ struct CenterPanel: View {
     // `+`, the outer `.foregroundStyle(.tertiary)` still reaches the first run
     // (it sets no colour of its own) while the second run keeps the explicit one.
     private func statsLabel(_ count: Int) -> Text {
-        guard vm.selectedFamily == nil, vm.activeTag == nil, vm.hasFaceSelection else {
+        guard vm.selectedFamily == nil, vm.activeTags.isEmpty, vm.hasFaceSelection else {
             return Text(statsText(count))
         }
         // With no other filter running, statsText falls back to "50 fonts" — but
@@ -216,7 +222,7 @@ struct CenterPanel: View {
     // Face segments, but only when they are actually on the line — a detail card
     // or a tag filter replaces the whole label.
     private var faceSegmentCount: Int {
-        guard vm.selectedFamily == nil, vm.activeTag == nil else { return 0 }
+        guard vm.selectedFamily == nil, vm.activeTags.isEmpty else { return 0 }
         return (vm.faceWeight != nil ? 1 : 0) + (vm.faceSlant != nil ? 1 : 0)
     }
 
