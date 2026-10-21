@@ -12,24 +12,72 @@ enum UpdateStatus: Equatable {
     case available(latest: String, current: String, dmgURL: URL?,
                    notes: String?, thumbnail: NSImage?, required: Bool)
     case failed
+
+    var isRequired: Bool {
+        if case .available(_, _, _, _, _, true) = self { return true }
+        return false
+    }
+}
+
+// The card's install progress. Owned by the card, so closing it (or the
+// Settings modal it sits in) abandons the download — see UpdateResultPopup.
+@MainActor
+final class UpdateInstaller: ObservableObject {
+    enum Phase: Equatable { case idle, downloading, ready, failed }
+    @Published private(set) var phase: Phase = .idle
+    private var task: Task<Void, Never>?
+    private var staged: UpdateCheck.StagedUpdate?
+
+    func start(_ dmgURL: URL, version: String) {
+        guard phase == .idle || phase == .failed else { return }
+        phase = .downloading
+        task = Task {
+            let result = await UpdateCheck.stage(dmgURL, version: version)
+            if Task.isCancelled {
+                if let result { UpdateCheck.discard(result) }
+                return
+            }
+            staged = result
+            phase = result == nil ? .failed : .ready
+        }
+    }
+
+    // Hands the stage to the installer helper and forgets it, so the card's
+    // onDisappear during quit can't unmount the dmg the helper copies from.
+    func relaunch() {
+        guard let staged else { return }
+        self.staged = nil
+        UpdateCheck.relaunch(into: staged)
+    }
+
+    // The card went away before Relaunch: stop the download, or unmount what
+    // it had already staged.
+    func abandon() {
+        task?.cancel()
+        task = nil
+        if let staged { UpdateCheck.discard(staged) }
+        staged = nil
+        phase = .idle
+    }
 }
 
 // Update check against the public GitHub releases feed. A newer release offers
-// a one-click, self-contained install: the dmg is downloaded to a temp dir and
-// mounted silently (no Finder window); an "Install & Relaunch" toast then lets
-// a detached helper replace the running bundle in place, unmount, and relaunch,
-// after which the fresh instance confirms with an "Updated to vX" toast.
+// a one-click, self-contained install inside UpdateResultPopup: the dmg is
+// downloaded to a temp dir and mounted silently (no Finder window); the card's
+// button then turns into "Relaunch", which lets a detached helper replace the
+// running bundle in place, unmount, and relaunch, after which the fresh
+// instance confirms with an "Updated to vX" toast.
 // Releases without a dmg asset fall back to opening the releases page in the
 // browser.
 //
 // Two entry points share fetchStatus():
-//  - launch: only a newer release surfaces a toast (carrying a Download
-//    button). Up-to-date and failure both stay silent — an unprompted
-//    "you're current" toast, or an error, is never worth interrupting launch.
-//    A REQUIRED update (this build is below the release's minimum version)
-//    replaces the toast with a locked UpdateResultPopup: no ✕, no ESC, only
-//    Download and Install or Quit. Offline still launches normally — the
-//    check failing is never a reason to keep the app shut.
+//  - launch: only a newer release surfaces, as the same UpdateResultPopup card
+//    the Settings check uses (it replaced the old launch toast). Up-to-date and
+//    failure both stay silent — an unprompted "you're current" notice, or an
+//    error, is never worth interrupting launch. A REQUIRED update (this build
+//    is below the release's minimum version) gets the card locked: no ✕, no
+//    ESC, only Download and Install or Quit. Offline still launches normally —
+//    the check failing is never a reason to keep the app shut.
 //  - Settings "Check" button: the result becomes UpdateResultPopup, where a
 //    failure IS shown (the user explicitly asked).
 @MainActor
@@ -41,39 +89,12 @@ enum UpdateCheck {
         NSWorkspace.shared.open(releasesPageURL)
     }
 
-    // Called once from RootView when the app launches. `onRequired` receives a
-    // required update's status so RootView can raise the locked card.
-    static func checkOnLaunch(toasts: ToastCenter, onRequired: @escaping (UpdateStatus) -> Void) {
+    // Called once from RootView when the app launches. `onAvailable` receives
+    // a newer release's status so RootView can raise the card.
+    static func checkOnLaunch(onAvailable: @escaping (UpdateStatus) -> Void) {
         Task {
             let status = await fetchStatus()
-            if case .available(_, _, _, _, _, true) = status {
-                onRequired(status)
-                return
-            }
-            switch status {
-            case .upToDate:
-                // Already on the latest release: stay silent. An unprompted
-                // "you're up to date" toast on every launch is just noise —
-                // the launch toast is reserved for when there's an update.
-                break
-            case .available(let latest, let current, let dmgURL, _, _, _):
-                toasts.show(Toast(
-                    style: .info,
-                    title: "Update available — v \(latest)",
-                    detail: "You're on v \(current).",
-                    icon: "arrow.down.circle",
-                    actionLabel: dmgURL != nil ? "Download" : "View",
-                    action: {
-                        if let dmgURL {
-                            downloadAndInstall(dmgURL, version: latest, toasts: toasts)
-                        } else {
-                            openReleasesPage()
-                        }
-                    }
-                ))
-            case .failed:
-                break
-            }
+            if case .available = status { onAvailable(status) }
         }
     }
 
@@ -125,70 +146,57 @@ enum UpdateCheck {
 
     enum UpdateError: Error { case mountFailed }
 
+    // A downloaded, mounted update waiting for "Relaunch".
+    struct StagedUpdate {
+        let appSource: String
+        let mountPoint: String
+        let dmgPath: String
+        let version: String
+    }
+
     // Downloads the release dmg to a temp location, mounts it silently (no
-    // Finder window), verifies the app is inside, and offers a single
-    // "Install & Relaunch" confirmation. The actual install runs in a detached
-    // helper (see installAndRelaunch). A failure at any step shows an error
-    // toast whose View button falls back to the releases page, and calls
-    // `onFailure` so a locked card can offer its button again.
-    static func downloadAndInstall(_ dmgURL: URL, version: String, toasts: ToastCenter,
-                                   onFailure: (() -> Void)? = nil) {
-        Task {
-            toasts.show(Toast(
-                style: .info,
-                title: "Downloading v \(version)…",
-                detail: "Preparing the update in the background.",
-                icon: "arrow.down.circle",
-                sticky: true
-            ))
-            do {
-                let (tmp, response) = try await URLSession.shared.download(from: dmgURL)
-                if let http = response as? HTTPURLResponse,
-                   !(200..<300).contains(http.statusCode) {
-                    throw URLError(.badServerResponse)
-                }
-                // The dmg lives in a temp dir; the installer deletes it after.
-                let dmgDest = FileManager.default.temporaryDirectory
-                    .appendingPathComponent("08FOSE-\(version).dmg")
-                try? FileManager.default.removeItem(at: dmgDest)
-                try FileManager.default.moveItem(at: tmp, to: dmgDest)
-
-                // Mount without a Finder window and locate the app inside.
-                guard let mountPoint = await attachDMG(at: dmgDest.path) else {
-                    throw UpdateError.mountFailed
-                }
-                let appSource = (mountPoint as NSString).appendingPathComponent("08FOSE.app")
-                guard FileManager.default.fileExists(atPath: appSource) else {
-                    _ = await runProcessData("/usr/bin/hdiutil", ["detach", mountPoint, "-quiet"])
-                    throw UpdateError.mountFailed
-                }
-
-                // Everything staged — one confirmation drives the rest.
-                toasts.show(Toast(
-                    style: .success,
-                    title: "Ready to install — v \(version)",
-                    detail: "08FOSE will quit, update itself and reopen.",
-                    icon: "arrow.down.circle",
-                    actionLabel: "Install & Relaunch",
-                    action: {
-                        installAndRelaunch(appSource: appSource,
-                                           mountPoint: mountPoint,
-                                           dmgPath: dmgDest.path,
-                                           version: version)
-                    },
-                    sticky: true
-                ))
-            } catch {
-                onFailure?()
-                toasts.show(Toast(
-                    style: .error,
-                    title: "Download failed",
-                    detail: "The update couldn't be prepared from GitHub.",
-                    actionLabel: "View",
-                    action: { openReleasesPage() }
-                ))
+    // Finder window) and verifies the app is inside. nil on any failure. The
+    // install itself runs later in a detached helper (see installAndRelaunch).
+    static func stage(_ dmgURL: URL, version: String) async -> StagedUpdate? {
+        do {
+            let (tmp, response) = try await URLSession.shared.download(from: dmgURL)
+            if let http = response as? HTTPURLResponse,
+               !(200..<300).contains(http.statusCode) {
+                throw URLError(.badServerResponse)
             }
+            // The dmg lives in a temp dir; the installer deletes it after.
+            let dmgDest = FileManager.default.temporaryDirectory
+                .appendingPathComponent("08FOSE-\(version).dmg")
+            try? FileManager.default.removeItem(at: dmgDest)
+            try FileManager.default.moveItem(at: tmp, to: dmgDest)
+
+            // Mount without a Finder window and locate the app inside.
+            guard let mountPoint = await attachDMG(at: dmgDest.path) else {
+                throw UpdateError.mountFailed
+            }
+            let appSource = (mountPoint as NSString).appendingPathComponent("08FOSE.app")
+            guard FileManager.default.fileExists(atPath: appSource) else {
+                _ = await runProcessData("/usr/bin/hdiutil", ["detach", mountPoint, "-quiet"])
+                throw UpdateError.mountFailed
+            }
+            return StagedUpdate(appSource: appSource, mountPoint: mountPoint,
+                                dmgPath: dmgDest.path, version: version)
+        } catch {
+            return nil
         }
+    }
+
+    // Undo a stage the user walked away from: unmount and delete the dmg.
+    static func discard(_ staged: StagedUpdate) {
+        Task {
+            _ = await runProcessData("/usr/bin/hdiutil", ["detach", staged.mountPoint, "-quiet"])
+            try? FileManager.default.removeItem(atPath: staged.dmgPath)
+        }
+    }
+
+    static func relaunch(into staged: StagedUpdate) {
+        installAndRelaunch(appSource: staged.appSource, mountPoint: staged.mountPoint,
+                           dmgPath: staged.dmgPath, version: staged.version)
     }
 
     // Writes a detached bash helper that: waits for THIS app to quit, replaces
@@ -222,7 +230,14 @@ enum UpdateCheck {
           fi
         fi
         rm -rf "$STAGE" 2>/dev/null
-        hdiutil detach "$MOUNT" -quiet 2>/dev/null
+        # Right after ditto the volume is often still busy (Spotlight, the
+        # copy's own file handles), and a single detach fails silently and
+        # leaves the dmg mounted for good. Retry, then force.
+        for i in 1 2 3 4 5; do
+          hdiutil detach "$MOUNT" -quiet 2>/dev/null && break
+          sleep 1
+        done
+        [ -d "$MOUNT" ] && hdiutil detach "$MOUNT" -force -quiet 2>/dev/null
         rm -f "$DMG" 2>/dev/null
         if [ "$OK" = "1" ]; then
           open -a "$DEST" --args -updatedTo "$VERSION"
@@ -361,16 +376,17 @@ enum UpdateCheck {
     }
 }
 
-// In-app modal card showing the result of a manual update check (Settings →
-// Updates → Check). Same card language as the rename-tag / import-choice
-// popups. ESC / ✕ / backdrop close it; the available state adds a button
-// that downloads the dmg and mounts it (or, with no dmg asset, opens the
-// releases page in the browser).
+// In-app modal card for an update check: the launch check's notice of a new
+// release (in place of the old toast) and the result of Settings → Updates →
+// Check. Same card language as the rename-tag / import-choice popups. ESC / ✕
+// / backdrop close it. The available state runs the whole install inside the
+// card: Download and Install → Downloading… → Relaunch (Try Again on a
+// failure), or, with no dmg asset, View Release opens the releases page.
+// Closing the card before Relaunch abandons the download.
 //
 // `locked` is the required-update card raised at launch: no ✕, the backdrop
 // swallows clicks (RootView swallows ESC and shortcuts), and the only ways
-// out are installing or Quit. It stays up through the download — the
-// progress and "Install & Relaunch" toasts sit above it.
+// out are installing or Quit.
 struct UpdateResultPopup: View {
     let status: UpdateStatus
     var locked = false
@@ -378,15 +394,13 @@ struct UpdateResultPopup: View {
 
     @State private var primaryHovering = false
     @State private var quitHovering = false
-    @State private var downloading = false
+    @StateObject private var installer = UpdateInstaller()
     @Environment(\.colorScheme) private var colorScheme
-    @EnvironmentObject private var toasts: ToastCenter
 
     var body: some View {
         // Pinned to the top center (toasts' column, 48pt below their 12pt
         // top gap) rather than floating mid-window. The locked card sits dead
-        // centre instead: it is the whole app until it is dealt with, and it
-        // stays clear of the download toasts that slide in at the top.
+        // centre instead: it is the whole app until it is dealt with.
         ZStack(alignment: locked ? .center : .top) {
             Color.black.opacity(colorScheme == .light ? 0.15 : 0.35)
                 .contentShape(Rectangle())
@@ -396,6 +410,7 @@ struct UpdateResultPopup: View {
                 .padding(.top, locked ? 0 : 60)
         }
         .ignoresSafeArea()
+        .onDisappear { installer.abandon() }
     }
 
     private var thumbnail: NSImage? {
@@ -468,15 +483,14 @@ struct UpdateResultPopup: View {
             if case .available(let latest, _, let dmgURL, _, _, _) = status {
                 HStack(spacing: 8) {
                     if let dmgURL {
-                        popupButton(downloading ? "Downloading…" : "Download and Install",
-                                    tint: Theme.accent, hovering: $primaryHovering) {
-                            guard !downloading else { return }
-                            downloading = locked
-                            UpdateCheck.downloadAndInstall(dmgURL, version: latest, toasts: toasts,
-                                                           onFailure: { downloading = false })
-                            if !locked { onClose() }
+                        popupButton(installTitle, tint: Theme.accent, hovering: $primaryHovering) {
+                            switch installer.phase {
+                            case .idle, .failed: installer.start(dmgURL, version: latest)
+                            case .downloading:   break
+                            case .ready:         installer.relaunch()
+                            }
                         }
-                        .disabled(downloading)
+                        .disabled(installer.phase == .downloading)
                     } else {
                         // No dmg: the page is the only way to get it, so a
                         // locked card stays put behind the browser.
@@ -505,6 +519,15 @@ struct UpdateResultPopup: View {
     static let cardWidth = contentWidth + margin * 2
     static let thumbnailHeight = (cardWidth * 108 / 256).rounded()
 
+    private var installTitle: String {
+        switch installer.phase {
+        case .idle:        return "Download and Install"
+        case .downloading: return "Downloading…"
+        case .ready:       return "Relaunch"
+        case .failed:      return "Try Again"
+        }
+    }
+
     private var statusTitle: String {
         switch status {
         case .upToDate:  return "You're up to date."
@@ -527,6 +550,9 @@ struct UpdateResultPopup: View {
         case .upToDate:
             return "This is the latest release on GitHub — there's nothing new to download."
         case .available(_, _, let dmgURL, let notes, _, let required):
+            if installer.phase == .failed {
+                return "The update couldn't be downloaded from GitHub. Check your connection and try again."
+            }
             if let notes { return notes }
             if required {
                 return "This version of 08FOSE is no longer supported. Install the update to keep using it."

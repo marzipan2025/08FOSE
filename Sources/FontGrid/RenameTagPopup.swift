@@ -231,27 +231,42 @@ struct RenameTagPopup: View {
 // choice).
 struct PopupCloseButton: View {
     // overImage: the button sits on a picture (the update popup's thumbnail),
-    // where the mode's translucent fill vanishes — use a fixed dark disc and
-    // white glyph instead, legible on any image in either mode.
+    // where the mode's translucent fill vanishes. Light mode puts a solid disc
+    // of the card's own colour under a dark glyph, so the button reads as a
+    // piece of the card laid over the picture; dark mode keeps a dark disc and
+    // white glyph, the same pairing as the rest of the dark UI.
     var overImage = false
     let action: () -> Void
     @State private var hovering = false
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         Button(action: action) {
             Image(systemName: "xmark")
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(overImage ? AnyShapeStyle(Color.white.opacity(0.54)) : AnyShapeStyle(.secondary))
+                .foregroundStyle(glyphStyle)
                 .offset(y: -0.5)
                 .frame(width: 26, height: 26)
-                .background(Circle().fill(overImage
-                    ? Color.black.opacity(hovering ? 0.6 : 0.45)
-                    : (hovering ? Theme.surfaceFillHover : Theme.surfaceFill)))
+                .background(Circle().fill(discColor))
         }
         .buttonStyle(.plain)
         .focusable(false)
         .onHover { hovering = $0 }
         .accessibilityLabel("Close")
         .help("Close (Esc)")
+    }
+
+    private var glyphStyle: AnyShapeStyle {
+        guard overImage else { return AnyShapeStyle(.secondary) }
+        return colorScheme == .light
+            ? AnyShapeStyle(Color.black.opacity(hovering ? 0.8 : 0.6))
+            : AnyShapeStyle(Color.white.opacity(hovering ? 0.8 : 0.54))
+    }
+
+    private var discColor: Color {
+        guard overImage else { return hovering ? Theme.surfaceFillHover : Theme.surfaceFill }
+        // Fully opaque in both modes, so the picture never shows through. The
+        // disc stays put on hover and the glyph changes instead.
+        return colorScheme == .light ? Theme.panelBackground : Color.black
     }
 }

@@ -147,20 +147,22 @@ struct RootView: View {
             }
         }
         .animation(vm.useMotion ? .easeOut(duration: 0.18) : nil, value: vm.showSettings)
-        // Required update: the locked card, above Settings and every panel so
-        // nothing behind it can be reached. Only the toasts sit higher, so the
-        // download progress and "Install & Relaunch" stay visible.
+        // The launch check's update card, above Settings and every panel.
+        // Locked (centred, no way out but install or Quit) when the release
+        // requires this update; otherwise it closes like any popup.
         .overlay {
-            if let status = vm.requiredUpdate {
-                UpdateResultPopup(status: status, locked: true) {}
-                    .transition(.opacity)
+            if let status = vm.launchUpdate {
+                UpdateResultPopup(status: status, locked: status.isRequired) {
+                    vm.launchUpdate = nil
+                }
+                .transition(.opacity)
             }
         }
-        .animation(.easeOut(duration: 0.15), value: vm.requiredUpdate == nil)
+        .animation(.easeOut(duration: 0.15), value: vm.launchUpdate == nil)
         // Silence the tooltips of everything the modals cover — the glyph grid,
         // the font cells, the pin rows. Their tracking rects survive underneath,
         // so without this the pointer pops them over the modal.
-        .environment(\.tooltipsSuppressed, vm.showSettings || vm.renamingTag != nil || vm.requiredUpdate != nil)
+        .environment(\.tooltipsSuppressed, vm.showSettings || vm.renamingTag != nil || vm.launchUpdate != nil)
         // Toast layer: topmost (above the wallpaper tint AND the Settings
         // overlay — import/export toasts fire while Settings is open). Aligned
         // to the center panel column's top edge, sliding in from above.
@@ -210,12 +212,14 @@ struct RootView: View {
         // newer release exists.
         .task {
             UpdateCheck.showPostUpdateToastIfNeeded(toasts: toasts)
-            UpdateCheck.checkOnLaunch(toasts: toasts) { status in
-                // Close what the user may have opened during the check, so the
-                // locked card is the only thing on screen.
-                vm.showSettings = false
-                vm.renamingTag = nil
-                vm.requiredUpdate = status
+            UpdateCheck.checkOnLaunch { status in
+                // A required update closes what the user may have opened during
+                // the check, so the locked card is the only thing on screen.
+                if status.isRequired {
+                    vm.showSettings = false
+                    vm.renamingTag = nil
+                }
+                vm.launchUpdate = status
             }
         }
         // Fonts were installed or removed while the app was running. The grid
@@ -301,7 +305,7 @@ struct RootView: View {
         // While the rename-tag popup is open, swallow every single-key
         // shortcut (they'd mutate filters/theme behind the modal — e.g. after
         // ESC dropped the text-field focus but before the popup closed).
-        if vm.renamingTag != nil || vm.requiredUpdate != nil { return true }
+        if vm.renamingTag != nil || vm.launchUpdate != nil { return true }
         // Same for the import Merge/Replace and update-result popups — they're
         // modal cards, so even the theme/wallpaper preview keys go inert.
         if vm.pendingImport != nil || vm.updateStatus != nil { return true }
@@ -351,7 +355,7 @@ struct RootView: View {
     // ⌘ + arrows: ↑/↓ adjust Font Size, →/← adjust Columns (→ increases).
     // Returns true when handled.
     private func handleCommandArrow(_ keyCode: Int) -> Bool {
-        if vm.requiredUpdate != nil { return true }
+        if vm.launchUpdate != nil { return true }
         if vm.showSettings { return false }
         switch keyCode {
         case 126: adjustFontSize(+1); return true   // up
@@ -383,9 +387,12 @@ struct RootView: View {
     // ESC cascade step: close the Settings modal if it's open. Returns true
     // when it actually closed something.
     private func closeSettingsIfOpen() -> Bool {
-        // The locked required-update card cannot be dismissed: ESC is eaten
-        // here, at the head of the cascade, before anything behind it closes.
-        if vm.requiredUpdate != nil { return true }
+        // The launch update card sits above everything, so it heads the ESC
+        // cascade. Locked (required), ESC is eaten and nothing behind closes.
+        if let status = vm.launchUpdate {
+            if !status.isRequired { vm.launchUpdate = nil }
+            return true
+        }
         // The rename-tag popup sits above everything, so it closes first —
         // this is the head of the ESC cascade.
         if vm.renamingTag != nil {
@@ -414,7 +421,7 @@ struct RootView: View {
     // Inert while the rename-tag popup is open — Settings would stack above
     // the modal and tangle the ESC cascade.
     private func toggleSettings() -> Bool {
-        if vm.renamingTag != nil || vm.requiredUpdate != nil { return true }
+        if vm.renamingTag != nil || vm.launchUpdate != nil { return true }
         withAnimation(vm.useMotion ? .easeOut(duration: 0.18) : nil) { vm.showSettings.toggle() }
         return true
     }
@@ -431,7 +438,7 @@ struct RootView: View {
     // FocusState binding syncs from the responder change, so the accent
     // highlight still follows.
     private func focusSearch() -> Bool {
-        if vm.showSettings || vm.renamingTag != nil || vm.requiredUpdate != nil { return true }
+        if vm.showSettings || vm.renamingTag != nil || vm.launchUpdate != nil { return true }
         if leftPanelOpen {
             Self.makeSearchFieldFirstResponder()
         } else {

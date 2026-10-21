@@ -230,11 +230,11 @@ final class AppViewModel: ObservableObject {
     // Settings). Same ESC-cascade contract as pendingImport. nil = closed.
     @Published var updateStatus: UpdateStatus? = nil
 
-    // A required update found by the launch check (this build is below the
-    // release's min-version). While set, RootView shows the locked update card
-    // over everything and swallows ESC and shortcuts. Never cleared — the app
-    // either installs and relaunches, or quits.
-    @Published var requiredUpdate: UpdateStatus? = nil
+    // A newer release found by the launch check. While set, RootView shows the
+    // update card over everything and swallows shortcuts. ESC / ✕ clear it —
+    // unless the release requires this update (status.isRequired): then it is
+    // never cleared, and the app either installs and relaunches, or quits.
+    @Published var launchUpdate: UpdateStatus? = nil
 
     // Wallpaper "skins" — bundled under Resources/Wallpapers/. The picker writes
     // a logical name (e.g. "Wallpaper02"); WallpaperOverlay resolves the actual
