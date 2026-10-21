@@ -72,7 +72,10 @@ import re, sys
 v = sys.argv[1]
 src = open('Sources/FontGrid/SettingsView.swift', encoding='utf-8').read()
 m = re.search(r'\("%s",\s*\n\s*"((?:[^"\\]|\\.)*)"\)' % re.escape(v), src)
-print(m.group(1).encode().decode('unicode_escape') if m else '', end='')
+# unicode_escape 는 UTF-8 바이트를 latin-1 로 읽어 — 같은 문자를 깨뜨린다.
+# Swift 문자열의 백슬래시 이스케이프만 직접 푼다.
+esc = {'n': '\n', 't': '\t'}
+print(re.sub(r'\\(.)', lambda e: esc.get(e.group(1), e.group(1)), m.group(1)) if m else '', end='')
 PY
 )"
 [ -n "$NOTES" ] || die "SettingsView.releaseNotes 에 ${VERSION} 항목이 없음"
