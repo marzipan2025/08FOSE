@@ -222,6 +222,7 @@ struct SampleTryEditor: NSViewRepresentable {
         view.isVerticallyResizable = false
         view.isHorizontallyResizable = false
         view.textContainer?.widthTracksTextView = false
+        view.layoutManager?.delegate = view
         view.textColor = .labelColor
         view.string = text
         apply(to: view)
@@ -288,7 +289,7 @@ struct SampleTryEditor: NSViewRepresentable {
     }
 }
 
-final class SampleTryTextView: NSTextView {
+final class SampleTryTextView: NSTextView, NSLayoutManagerDelegate {
     var onEnd: (() -> Void)?
     private var layoutWidth: CGFloat?
     private var focusedOnce = false
@@ -377,5 +378,75 @@ final class SampleTryTextView: NSTextView {
     private func removeClickMonitor() {
         if let clickMonitor { NSEvent.removeMonitor(clickMonitor) }
         clickMonitor = nil
+    }
+
+    // MARK: Matching the label's line metrics
+    //
+    // TextKit and Core Text space lines differently: TextKit adds the font's
+    // leading under every line (the last one too) and keeps fractional
+    // heights, Core Text rounds each line and drops the trailing leading. On
+    // fonts with a large leading (Didot LT Std: 8pt at 40pt) the row jumped
+    // taller the moment it turned into an editor. So each line fragment is
+    // placed where `WrappingPreviewView`'s Core Text frame puts that line —
+    // the same text and width, laid out once per change (it's ≤100 chars).
+
+    private struct CoreTextLines {
+        var starts: [Int] = []        // string index each line begins at
+        var baselines: [CGFloat] = [] // from the top
+        var tops: [CGFloat] = []      // fragment top for each line
+        var height: CGFloat = 0
+    }
+    private var coreTextCache: (string: String, width: CGFloat, font: NSFont?, lines: CoreTextLines)?
+
+    private func coreTextLines(width: CGFloat) -> CoreTextLines? {
+        guard let textStorage, textStorage.length > 0, width > 0 else { return nil }
+        if let c = coreTextCache, c.width == width, c.font == font, c.string == textStorage.string {
+            return c.lines
+        }
+        let attributed = NSAttributedString(attributedString: textStorage)
+        let framesetter = CTFramesetterCreateWithAttributedString(attributed)
+        let pathHeight: CGFloat = 100_000
+        let frame = CTFramesetterCreateFrame(
+            framesetter, CFRange(location: 0, length: 0),
+            CGPath(rect: CGRect(x: 0, y: 0, width: width, height: pathHeight), transform: nil), nil)
+        guard let ctLines = CTFrameGetLines(frame) as? [CTLine], !ctLines.isEmpty else { return nil }
+        var origins = [CGPoint](repeating: .zero, count: ctLines.count)
+        CTFrameGetLineOrigins(frame, CFRange(location: 0, length: 0), &origins)
+        var lines = CoreTextLines()
+        for (i, line) in ctLines.enumerated() {
+            var ascent: CGFloat = 0
+            _ = CTLineGetTypographicBounds(line, &ascent, nil, nil)
+            let baseline = pathHeight - origins[i].y
+            lines.starts.append(CTLineGetStringRange(line).location)
+            lines.baselines.append(baseline)
+            lines.tops.append(i == 0 ? 0 : max(lines.tops[i - 1], baseline - ascent))
+        }
+        let size = CTFramesetterSuggestFrameSizeWithConstraints(
+            framesetter, CFRange(location: 0, length: 0), nil,
+            CGSize(width: width, height: .greatestFiniteMagnitude), nil)
+        lines.height = ceil(size.height)
+        coreTextCache = (textStorage.string, width, font, lines)
+        return lines
+    }
+
+    func layoutManager(_ layoutManager: NSLayoutManager,
+                       shouldSetLineFragmentRect lineFragmentRect: UnsafeMutablePointer<NSRect>,
+                       lineFragmentUsedRect: UnsafeMutablePointer<NSRect>,
+                       baselineOffset: UnsafeMutablePointer<CGFloat>,
+                       in textContainer: NSTextContainer,
+                       forGlyphRange glyphRange: NSRange) -> Bool {
+        guard let lines = coreTextLines(width: textContainer.containerSize.width) else { return false }
+        let start = layoutManager.characterRange(forGlyphRange: glyphRange, actualGlyphRange: nil).location
+        // A line the two engines broke differently keeps TextKit's own metrics.
+        guard let i = lines.starts.firstIndex(of: start) else { return false }
+        let top = lines.tops[i]
+        let bottom = i + 1 < lines.tops.count ? lines.tops[i + 1] : lines.height
+        guard bottom > top else { return false }
+        lineFragmentRect.pointee.origin.y = top
+        lineFragmentRect.pointee.size.height = bottom - top
+        lineFragmentUsedRect.pointee.origin.y = top
+        lineFragmentUsedRect.pointee.size.height = bottom - top
+        baselineOffset.pointee = lines.baselines[i] - top
+        return true
     }
 }
