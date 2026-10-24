@@ -58,6 +58,10 @@ struct FontDetailView: View {
     // Trailing debounce on the rollover, so sweeping the pointer across the grid
     // lands on where it stopped instead of flashing every cell on the way.
     @State private var zoomTask: Task<Void, Never>? = nil
+    // OpenType features toggled from the info column's Features tags. They
+    // shape the weight-row samples (and their export) only, and reset with
+    // the font, like the try-out text.
+    @State private var sampleFeatures = SampleFeatures()
 
     // The drawing style the held key selects, once the card actually has a glyph
     // grid to inspect. nil means neither key is down.
@@ -289,6 +293,7 @@ struct FontDetailView: View {
         .task(id: family.id) {
             infoExpanded = false
             memoExpanded = false
+            sampleFeatures = SampleFeatures()
             memoContentHeight = 0
             // Normally a new font starts on its own preview face. But when the
             // switch WAS a focus request — long-pressing a saved glyph while
@@ -501,11 +506,18 @@ struct FontDetailView: View {
             .textCase(.uppercase)
     }
 
+    // A toggle for the weight-row samples: accent when the feature is applied
+    // (including the ones Core Text applies by default, e.g. kern and liga).
     private func featureTag(_ tag: String) -> some View {
-        Text(tag)
-            .font(.system(size: 13).italic())
-            .foregroundStyle(Theme.memoAccent)
-            .help(OpenTypeFeatureNames.friendly(tag) ?? tag)
+        let on = sampleFeatures.isOn(tag)
+        return Button { sampleFeatures.toggle(tag) } label: {
+            Text(tag)
+                .font(.system(size: 13).italic())
+                .foregroundStyle(on ? Theme.accent : Theme.memoAccent)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("\(OpenTypeFeatureNames.friendly(tag) ?? tag) — \(on ? "on" : "off")")
     }
 
     // MARK: - Memo (collapsed: single-line + expand toggle)
@@ -834,7 +846,8 @@ struct FontDetailView: View {
                     sampleSize: CGFloat(vm.weightRowFontSize),
                     axis: axis,
                     sampleLayoutWidth: finalSampleWidth,
-                    sampleRevealed: vm.revealedSampleRows > 0
+                    sampleRevealed: vm.revealedSampleRows > 0,
+                    features: sampleFeatures
                 )
                 Divider().opacity(0.15).padding(.horizontal, 24)
             }
@@ -842,7 +855,8 @@ struct FontDetailView: View {
                 WeightRow(psName: psName, familyName: family.name, sampleText: sampleText,
                           sampleColor: sampleColor, sampleSize: CGFloat(vm.weightRowFontSize),
                           sampleLayoutWidth: finalSampleWidth,
-                          sampleRevealed: vm.revealedSampleRows > index + variableRowOffset)
+                          sampleRevealed: vm.revealedSampleRows > index + variableRowOffset,
+                          features: sampleFeatures)
                 if index < family.memberFontNames.count - 1 {
                     Divider().opacity(0.15).padding(.horizontal, 24)
                 }
@@ -1709,6 +1723,7 @@ private struct VariableWeightRow: View {
     let axis: WeightAxis
     var sampleLayoutWidth: CGFloat? = nil
     var sampleRevealed: Bool = true
+    var features = SampleFeatures()
 
     @EnvironmentObject var toasts: ToastCenter
     @State private var weight: Double
@@ -1720,7 +1735,8 @@ private struct VariableWeightRow: View {
 
     init(basePSName: String, familyName: String, sampleText: String, sampleColor: Color?,
          sampleSize: CGFloat, axis: WeightAxis,
-         sampleLayoutWidth: CGFloat? = nil, sampleRevealed: Bool = true) {
+         sampleLayoutWidth: CGFloat? = nil, sampleRevealed: Bool = true,
+         features: SampleFeatures = SampleFeatures()) {
         self.basePSName = basePSName
         self.familyName = familyName
         self.sampleText = sampleText
@@ -1729,6 +1745,7 @@ private struct VariableWeightRow: View {
         self.axis = axis
         self.sampleLayoutWidth = sampleLayoutWidth
         self.sampleRevealed = sampleRevealed
+        self.features = features
         _weight = State(initialValue: axis.defaultValue)
     }
 
@@ -1769,6 +1786,7 @@ private struct VariableWeightRow: View {
                 color: sampleColor,
                 variationAxisID: axis.id,
                 variationWeight: weight,
+                features: features,
                 layoutWidth: sampleLayoutWidth,
                 isRevealed: sampleRevealed,
                 tryText: $tryText,
@@ -1790,7 +1808,8 @@ private struct VariableWeightRow: View {
         let w = Int(weight.rounded())
         let baseName = "08FOSE) \(clean(familyName))_VF(\(w))"
         WeightArtwork.export(text: shownText, fontName: basePSName, baseName: baseName,
-                             variation: (axisID: axis.id, value: weight), toasts: toasts)
+                             variation: (axisID: axis.id, value: weight), features: features,
+                             toasts: toasts)
     }
 }
 
@@ -1804,6 +1823,7 @@ private struct TryableSample: View {
     var color: Color? = nil
     var variationAxisID: Int? = nil
     var variationWeight: Double? = nil
+    var features = SampleFeatures()
     var layoutWidth: CGFloat? = nil
     var isRevealed: Bool = true
     @Binding var tryText: String?
@@ -1816,6 +1836,7 @@ private struct TryableSample: View {
             SampleTryEditor(text: Binding(get: { tryText ?? "" }, set: { tryText = $0 }),
                             fontName: fontName, fontSize: fontSize,
                             variationAxisID: variationAxisID, variationWeight: variationWeight,
+                            features: features,
                             layoutWidth: layoutWidth, onEnd: endTry)
         } else {
             // Try-out text is never saved, so it stays in the plain label color
@@ -1823,6 +1844,7 @@ private struct TryableSample: View {
             WrappingPreviewLabel(text: tryText ?? sampleText, fontName: fontName, fontSize: fontSize,
                                  color: tryText == nil ? color : nil,
                                  variationAxisID: variationAxisID, variationWeight: variationWeight,
+                                 features: features,
                                  layoutWidth: layoutWidth, isRevealed: isRevealed)
                 .contentShape(Rectangle())
                 .onTapGesture { beginTry() }
@@ -1863,6 +1885,7 @@ struct WeightRow: View {
     // any other caller keeps the plain behaviour.
     var sampleLayoutWidth: CGFloat? = nil
     var sampleRevealed: Bool = true
+    var features = SampleFeatures()
 
     @EnvironmentObject var toasts: ToastCenter
     // See TryableSample. Row-local so typing re-renders this row only, and the
@@ -1899,7 +1922,7 @@ struct WeightRow: View {
                 ExportButton(enabled: canExport, action: exportArtwork)
             }
             TryableSample(sampleText: sampleText, fontName: psName, fontSize: sampleSize,
-                          color: sampleColor,
+                          color: sampleColor, features: features,
                           layoutWidth: sampleLayoutWidth, isRevealed: sampleRevealed,
                           tryText: $tryText, isTrying: $isTrying)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -1913,7 +1936,8 @@ struct WeightRow: View {
 
     // Flatten this weight's sample text and save as SVG or PNG.
     private func exportArtwork() {
-        WeightArtwork.export(text: shownText, fontName: psName, baseName: artworkBaseName, toasts: toasts)
+        WeightArtwork.export(text: shownText, fontName: psName, baseName: artworkBaseName,
+                             features: features, toasts: toasts)
     }
 
     // e.g. "08FOSE) SDMapssi_Regular"  ("/" sanitized for the filesystem). No
@@ -1932,6 +1956,7 @@ enum WeightArtwork {
     @MainActor
     static func export(text: String, fontName: String, baseName: String,
                        variation: (axisID: Int, value: Double)? = nil,
+                       features: SampleFeatures = SampleFeatures(),
                        toasts: ToastCenter) {
         guard SVGTextExporter.canExport(text: text, fontName: fontName) else { NSSound.beep(); return }
 
@@ -1956,10 +1981,12 @@ enum WeightArtwork {
         switch accessory.format {
         case .svg:
             rendered = SVGTextExporter.svg(text: text, fontName: fontName,
-                                           fill: accessory.colorHex, variation: variation)?.data(using: .utf8)
+                                           fill: accessory.colorHex, variation: variation,
+                                           features: features)?.data(using: .utf8)
         case .png:
             rendered = SVGTextExporter.pngData(text: text, fontName: fontName,
-                                               color: accessory.color, variation: variation)
+                                               color: accessory.color, variation: variation,
+                                               features: features)
         }
         let format = accessory.format == .svg ? "SVG" : "PNG"
         guard let rendered else {

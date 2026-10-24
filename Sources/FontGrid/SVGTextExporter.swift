@@ -60,8 +60,10 @@ enum SVGTextExporter {
     /// to a single filled `<path>`. Honors `\n` as line breaks. Returns nil when
     /// no outlines result (so callers can no-op gracefully).
     static func svg(text: String, fontName: String, fill: String = "#000000",
-                    variation: (axisID: Int, value: Double)? = nil) -> String? {
-        guard let (path, size) = flatten(text: text, fontName: fontName, variation: variation) else { return nil }
+                    variation: (axisID: Int, value: Double)? = nil,
+                    features: SampleFeatures = SampleFeatures()) -> String? {
+        guard let (path, size) = flatten(text: text, fontName: fontName, variation: variation,
+                                         features: features) else { return nil }
         let w = fmt(size.width), h = fmt(size.height)
         return """
         <svg xmlns="http://www.w3.org/2000/svg" width="\(w)" height="\(h)" viewBox="0 0 \(w) \(h)">
@@ -73,8 +75,10 @@ enum SVGTextExporter {
     /// Rasterize the same flattened path used by `svg(...)` to a transparent
     /// PNG, filled with `color`. Returns nil when there are no outlines.
     static func pngData(text: String, fontName: String, color: NSColor, scale: CGFloat = pngScale,
-                        variation: (axisID: Int, value: Double)? = nil) -> Data? {
-        guard let (path, size) = flatten(text: text, fontName: fontName, variation: variation) else { return nil }
+                        variation: (axisID: Int, value: Double)? = nil,
+                        features: SampleFeatures = SampleFeatures()) -> Data? {
+        guard let (path, size) = flatten(text: text, fontName: fontName, variation: variation,
+                                         features: features) else { return nil }
         let w = max(1, Int(ceil(size.width * scale)))
         let h = max(1, Int(ceil(size.height * scale)))
         guard let rep = NSBitmapImageRep(
@@ -106,8 +110,11 @@ enum SVGTextExporter {
     // top-left, y growing down), along with its bounding-box size. Shared by
     // the SVG and PNG paths.
     private static func flatten(text: String, fontName: String,
-                                variation: (axisID: Int, value: Double)? = nil) -> (path: CGPath, size: CGSize)? {
-        let font = exportFont(fontName: fontName, variation: variation)
+                                variation: (axisID: Int, value: Double)? = nil,
+                                features: SampleFeatures = SampleFeatures()) -> (path: CGPath, size: CGSize)? {
+        let font = features.apply(to: exportFont(fontName: fontName, variation: variation) as NSFont) as CTFont
+        var attrs: [NSAttributedString.Key: Any] = [.font: font]
+        attrs.merge(features.textAttributes) { $1 }
         let lineHeight = CTFontGetAscent(font) + CTFontGetDescent(font) + CTFontGetLeading(font)
 
         // Accumulate all glyph outlines in font (y-up) space.
@@ -116,7 +123,7 @@ enum SVGTextExporter {
         for (i, lineStr) in lines.enumerated() {
             let baselineY = -CGFloat(i) * lineHeight   // each line sits lower (y-up → negative)
             let ctLine = CTLineCreateWithAttributedString(
-                NSAttributedString(string: lineStr, attributes: [.font: font]))
+                NSAttributedString(string: lineStr, attributes: attrs))
             guard let runs = CTLineGetGlyphRuns(ctLine) as? [CTRun] else { continue }
             for run in runs {
                 let count = CTRunGetGlyphCount(run)

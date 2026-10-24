@@ -2,6 +2,55 @@ import SwiftUI
 import AppKit
 import CoreText
 
+/// OpenType feature toggles for the detail card's weight-row samples (and
+/// their export). Holds only what differs from how Core Text shapes text on
+/// its own, so the empty value renders exactly as before.
+struct SampleFeatures: Equatable {
+    // tag → on, only where it differs from `isDefaultOn(tag)`.
+    private(set) var overrides: [String: Bool] = [:]
+
+    // Features Core Text applies to horizontal text without being asked:
+    // kerning, the common ligatures/alternates, mark positioning, and the
+    // script shaping features (Hangul jamo, Arabic joining, Indic conjuncts).
+    private static let defaultOn: Set<String> = [
+        "abvf", "abvm", "abvs", "akhn", "blwf", "blwm", "blws", "calt", "ccmp",
+        "cfar", "cjct", "clig", "curs", "dist", "fin2", "fin3", "fina", "half",
+        "haln", "init", "isol", "kern", "liga", "ljmo", "locl", "mark", "med2",
+        "medi", "mkmk", "mset", "nukt", "pref", "pres", "pstf", "psts", "rclt",
+        "rkrf", "rlig", "rphf", "rvrn", "stch", "tjmo", "vatu", "vjmo"
+    ]
+
+    static func isDefaultOn(_ tag: String) -> Bool { defaultOn.contains(tag) }
+
+    func isOn(_ tag: String) -> Bool { overrides[tag] ?? Self.isDefaultOn(tag) }
+
+    mutating func toggle(_ tag: String) {
+        let on = !isOn(tag)
+        overrides[tag] = on == Self.isDefaultOn(tag) ? nil : on
+    }
+
+    // Core Text ignores an OpenType `kern` off setting, so kerning goes off
+    // through the text's kern attribute (0 = no kerning) instead.
+    var kerningOff: Bool { overrides["kern"] == false }
+
+    /// `font` with every overridden feature except kern set explicitly.
+    func apply(to font: NSFont) -> NSFont {
+        let settings = overrides.filter { $0.key != "kern" }.map {
+            [kCTFontOpenTypeFeatureTag: $0.key,
+             kCTFontOpenTypeFeatureValue: $0.value ? 1 : 0] as [CFString: Any]
+        }
+        guard !settings.isEmpty else { return font }
+        let desc = CTFontDescriptorCreateWithAttributes(
+            [kCTFontFeatureSettingsAttribute: settings] as CFDictionary)
+        return CTFontCreateCopyWithAttributes(font as CTFont, font.pointSize, nil, desc) as NSFont
+    }
+
+    /// Extra attributes the sample string needs on top of its font.
+    var textAttributes: [NSAttributedString.Key: Any] {
+        kerningOff ? [.kern: 0] : [:]
+    }
+}
+
 /// Multi-line, word-wrapping font preview drawn with Core Text.
 ///
 /// SwiftUI `Text` positions the baseline from the PRIMARY font's ascent, so a
@@ -18,6 +67,7 @@ struct WrappingPreviewLabel: NSViewRepresentable {
     // slider row). nil → render the face as-is.
     var variationAxisID: Int? = nil
     var variationWeight: Double? = nil
+    var features = SampleFeatures()
     // Width to lay the text out in, regardless of how wide the view currently
     // is. The detail card's rows pass their FINAL width here so the wrap — and
     // therefore the row's height — is settled on the first frame of the open
@@ -38,7 +88,8 @@ struct WrappingPreviewLabel: NSViewRepresentable {
         view.layoutWidth = layoutWidth
         view.isRevealed = isRevealed
         view.update(text: text, fontName: fontName, fontSize: fontSize, color: nsColor,
-                    variationAxisID: variationAxisID, variationWeight: variationWeight)
+                    variationAxisID: variationAxisID, variationWeight: variationWeight,
+                    features: features)
         return view
     }
 
@@ -46,7 +97,8 @@ struct WrappingPreviewLabel: NSViewRepresentable {
         view.setLayoutWidth(layoutWidth)
         view.setRevealed(isRevealed)
         view.update(text: text, fontName: fontName, fontSize: fontSize, color: nsColor,
-                    variationAxisID: variationAxisID, variationWeight: variationWeight)
+                    variationAxisID: variationAxisID, variationWeight: variationWeight,
+                    features: features)
     }
 }
 
@@ -58,6 +110,7 @@ final class WrappingPreviewView: NSView {
     private var color: NSColor = .labelColor
     private var variationAxisID: Int? = nil
     private var variationWeight: Double? = nil
+    private var features = SampleFeatures()
 
     // The framesetter is immutable per attributed string, but during the detail
     // card's open/close spring this view is resized on EVERY animation frame,
@@ -96,13 +149,15 @@ final class WrappingPreviewView: NSView {
     override var isFlipped: Bool { true }
 
     func update(text: String, fontName: String, fontSize: CGFloat, color: NSColor,
-                variationAxisID: Int? = nil, variationWeight: Double? = nil) {
+                variationAxisID: Int? = nil, variationWeight: Double? = nil,
+                features: SampleFeatures = SampleFeatures()) {
         if color != self.color {
             self.color = color
             needsDisplay = true
         }
         guard text != self.text || fontName != self.fontName || fontSize != self.fontSize
-                || variationAxisID != self.variationAxisID || variationWeight != self.variationWeight else {
+                || variationAxisID != self.variationAxisID || variationWeight != self.variationWeight
+                || features != self.features else {
             return
         }
         self.text = text
@@ -110,16 +165,19 @@ final class WrappingPreviewView: NSView {
         self.fontSize = fontSize
         self.variationAxisID = variationAxisID
         self.variationWeight = variationWeight
-        let font: NSFont
+        self.features = features
+        var font: NSFont
         if let axisID = variationAxisID, let weight = variationWeight {
             font = makeVariationFont(psName: fontName, size: fontSize, axisID: axisID, value: weight)
         } else {
             font = NSFont(name: fontName, size: fontSize) ?? .systemFont(ofSize: fontSize)
         }
-        let attrs: [NSAttributedString.Key: Any] = [
+        font = features.apply(to: font)
+        var attrs: [NSAttributedString.Key: Any] = [
             .font: font,
             kCTForegroundColorFromContextAttributeName as NSAttributedString.Key: true
         ]
+        attrs.merge(features.textAttributes) { $1 }
         attributed = NSAttributedString(string: text, attributes: attrs)
         framesetter = attributed.length > 0
             ? CTFramesetterCreateWithAttributedString(attributed)
@@ -199,6 +257,7 @@ struct SampleTryEditor: NSViewRepresentable {
     let fontSize: CGFloat
     var variationAxisID: Int? = nil
     var variationWeight: Double? = nil
+    var features = SampleFeatures()
     var layoutWidth: CGFloat? = nil
     // Fired when the editor gives up focus (click away, ESC via RootView's
     // cascade, or the window losing key).
@@ -241,17 +300,19 @@ struct SampleTryEditor: NSViewRepresentable {
     }
 
     private func apply(to view: SampleTryTextView) {
-        let font: NSFont
+        var font: NSFont
         if let axisID = variationAxisID, let weight = variationWeight {
             font = makeVariationFont(psName: fontName, size: fontSize, axisID: axisID, value: weight)
         } else {
             font = NSFont(name: fontName, size: fontSize) ?? .systemFont(ofSize: fontSize)
         }
+        font = features.apply(to: font)
         if view.font != font {
             view.font = font
             view.typingAttributes[.font] = font
             view.invalidateIntrinsicContentSize()
         }
+        view.setKerningOff(features.kerningOff)
         view.onEnd = onEnd
         view.setLayoutWidth(layoutWidth)
     }
@@ -304,6 +365,22 @@ final class SampleTryTextView: NSTextView, NSLayoutManagerDelegate {
         guard width != layoutWidth else { return }
         layoutWidth = width
         syncContainerWidth()
+    }
+
+    // Kerning is a text attribute, not a font setting (see SampleFeatures), so
+    // it goes on the whole string and on what's typed next.
+    private var kerningOff = false
+    fileprivate func setKerningOff(_ off: Bool) {
+        guard off != kerningOff else { return }
+        kerningOff = off
+        if off { typingAttributes[.kern] = 0 } else { typingAttributes[.kern] = nil }
+        if let textStorage, textStorage.length > 0 {
+            let all = NSRange(location: 0, length: textStorage.length)
+            if off { textStorage.addAttribute(.kern, value: 0, range: all) }
+            else { textStorage.removeAttribute(.kern, range: all) }
+        }
+        coreTextCache = nil
+        invalidateIntrinsicContentSize()
     }
 
     private func syncContainerWidth() {
@@ -400,6 +477,7 @@ final class SampleTryTextView: NSTextView, NSLayoutManagerDelegate {
 
     private func coreTextLines(width: CGFloat) -> CoreTextLines? {
         guard let textStorage, textStorage.length > 0, width > 0 else { return nil }
+        // Kerning changes clear the cache explicitly (setKerningOff).
         if let c = coreTextCache, c.width == width, c.font == font, c.string == textStorage.string {
             return c.lines
         }
