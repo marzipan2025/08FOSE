@@ -184,3 +184,135 @@ final class WrappingPreviewView: NSView {
         ctx.restoreGState()
     }
 }
+
+/// Editable stand-in for `WrappingPreviewLabel`, swapped in while the detail
+/// card's sample is being typed into. An `NSTextView` rather than keystrokes
+/// fed to the Core Text view, so Hangul (and every other input method) composes
+/// natively. Same font, size and wrap width as the label it replaces; it sizes
+/// itself to its laid-out text so the row grows and shrinks as you type.
+struct SampleTryEditor: NSViewRepresentable {
+    @Binding var text: String
+    let fontName: String
+    let fontSize: CGFloat
+    var variationAxisID: Int? = nil
+    var variationWeight: Double? = nil
+    var layoutWidth: CGFloat? = nil
+    // Fired when the editor gives up focus (click away, ESC via RootView's
+    // cascade, or the window losing key).
+    let onEnd: () -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(text: $text) }
+
+    func makeNSView(context: Context) -> SampleTryTextView {
+        let view = SampleTryTextView(usingTextLayoutManager: false)
+        view.delegate = context.coordinator
+        view.isRichText = false
+        view.allowsUndo = true
+        view.drawsBackground = false
+        view.textContainerInset = .zero
+        view.textContainer?.lineFragmentPadding = 0
+        view.isAutomaticQuoteSubstitutionEnabled = false
+        view.isAutomaticDashSubstitutionEnabled = false
+        view.isAutomaticTextReplacementEnabled = false
+        view.isAutomaticSpellingCorrectionEnabled = false
+        view.isContinuousSpellCheckingEnabled = false
+        view.isVerticallyResizable = false
+        view.isHorizontallyResizable = false
+        view.textContainer?.widthTracksTextView = false
+        view.textColor = .labelColor
+        view.string = text
+        apply(to: view)
+        return view
+    }
+
+    func updateNSView(_ view: SampleTryTextView, context: Context) {
+        context.coordinator.text = $text
+        view.onEnd = onEnd
+        apply(to: view)
+        // Don't stomp on an in-flight IME composition with our own echo.
+        if view.string != text && !view.hasMarkedText() {
+            view.string = text
+            view.invalidateIntrinsicContentSize()
+        }
+    }
+
+    private func apply(to view: SampleTryTextView) {
+        let font: NSFont
+        if let axisID = variationAxisID, let weight = variationWeight {
+            font = makeVariationFont(psName: fontName, size: fontSize, axisID: axisID, value: weight)
+        } else {
+            font = NSFont(name: fontName, size: fontSize) ?? .systemFont(ofSize: fontSize)
+        }
+        if view.font != font {
+            view.font = font
+            view.typingAttributes[.font] = font
+            view.invalidateIntrinsicContentSize()
+        }
+        view.onEnd = onEnd
+        view.setLayoutWidth(layoutWidth)
+    }
+
+    final class Coordinator: NSObject, NSTextViewDelegate {
+        var text: Binding<String>
+        init(text: Binding<String>) { self.text = text }
+
+        func textDidChange(_ notification: Notification) {
+            guard let view = notification.object as? SampleTryTextView else { return }
+            text.wrappedValue = view.string
+            view.invalidateIntrinsicContentSize()
+        }
+    }
+}
+
+final class SampleTryTextView: NSTextView {
+    var onEnd: (() -> Void)?
+    private var layoutWidth: CGFloat?
+    private var focusedOnce = false
+
+    fileprivate func setLayoutWidth(_ width: CGFloat?) {
+        guard width != layoutWidth else { return }
+        layoutWidth = width
+        syncContainerWidth()
+    }
+
+    private func syncContainerWidth() {
+        let width = (layoutWidth ?? 0) > 0 ? layoutWidth! : bounds.width
+        guard width > 0, textContainer?.containerSize.width != width else { return }
+        textContainer?.containerSize = NSSize(width: width, height: .greatestFiniteMagnitude)
+        invalidateIntrinsicContentSize()
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        if layoutWidth == nil { syncContainerWidth() }
+    }
+
+    override var intrinsicContentSize: NSSize {
+        guard let layoutManager, let textContainer else { return super.intrinsicContentSize }
+        layoutManager.ensureLayout(for: textContainer)
+        var height = layoutManager.usedRect(for: textContainer).height
+        // An empty field still keeps one line, so the row doesn't collapse.
+        if height <= 0, let font { height = layoutManager.defaultLineHeight(for: font) }
+        return NSSize(width: NSView.noIntrinsicMetric, height: ceil(height))
+    }
+
+    // Take focus as soon as it lands in the window: the click that swapped it
+    // in is the click that means "type here". Caret goes to the end.
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard let window, !focusedOnce else { return }
+        focusedOnce = true
+        syncContainerWidth()
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            window.makeFirstResponder(self)
+            self.setSelectedRange(NSRange(location: (self.string as NSString).length, length: 0))
+        }
+    }
+
+    override func resignFirstResponder() -> Bool {
+        let resigned = super.resignFirstResponder()
+        if resigned { DispatchQueue.main.async { [weak self] in self?.onEnd?() } }
+        return resigned
+    }
+}
