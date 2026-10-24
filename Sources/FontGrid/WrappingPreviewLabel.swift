@@ -191,6 +191,9 @@ final class WrappingPreviewView: NSView {
 /// natively. Same font, size and wrap width as the label it replaces; it sizes
 /// itself to its laid-out text so the row grows and shrinks as you type.
 struct SampleTryEditor: NSViewRepresentable {
+    // Characters (grapheme clusters) a try-out sample may hold.
+    static let maxLength = 100
+
     @Binding var text: String
     let fontName: String
     let fontSize: CGFloat
@@ -256,6 +259,27 @@ struct SampleTryEditor: NSViewRepresentable {
         var text: Binding<String>
         init(text: Binding<String>) { self.text = text }
 
+        // Cap at maxLength. Shrinking edits always pass (the seed may already
+        // be at the cap). A paste that would overflow is cut to what fits;
+        // mid-composition (marked text) an overflowing edit is just refused,
+        // so the input method's own bookkeeping isn't disturbed.
+        func textView(_ textView: NSTextView, shouldChangeTextIn range: NSRange,
+                      replacementString: String?) -> Bool {
+            guard let replacementString else { return true }
+            let current = textView.string as NSString
+            let next = current.replacingCharacters(in: range, with: replacementString)
+            let limit = SampleTryEditor.maxLength
+            if next.count <= limit || next.count <= textView.string.count { return true }
+            guard !textView.hasMarkedText() else { return false }
+            let room = limit - (textView.string.count - current.substring(with: range).count)
+            if room > 0 {
+                textView.insertText(String(replacementString.prefix(room)), replacementRange: range)
+            } else {
+                NSSound.beep()
+            }
+            return false
+        }
+
         func textDidChange(_ notification: Notification) {
             guard let view = notification.object as? SampleTryTextView else { return }
             text.wrappedValue = view.string
@@ -268,6 +292,12 @@ final class SampleTryTextView: NSTextView {
     var onEnd: (() -> Void)?
     private var layoutWidth: CGFloat?
     private var focusedOnce = false
+    // While focused: a click anywhere outside the editor ends the try-out.
+    // AppKit leaves first responder alone when the click lands on something
+    // that doesn't take focus (the card's background, a SwiftUI button), so
+    // without this the caret lingers and keeps single-key shortcuts and ←/→
+    // font stepping switched off.
+    private var clickMonitor: Any?
 
     fileprivate func setLayoutWidth(_ width: CGFloat?) {
         guard width != layoutWidth else { return }
@@ -310,9 +340,42 @@ final class SampleTryTextView: NSTextView {
         }
     }
 
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        if newWindow == nil { removeClickMonitor() }
+        super.viewWillMove(toWindow: newWindow)
+    }
+
+    override func becomeFirstResponder() -> Bool {
+        let became = super.becomeFirstResponder()
+        if became && clickMonitor == nil {
+            clickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) {
+                [weak self] event in
+                guard let self, let window = self.window, event.window === window else { return event }
+                let point = self.convert(event.locationInWindow, from: nil)
+                if !self.bounds.contains(point) {
+                    // Let the click do its own job too (press a button, open
+                    // another row's editor); ending is deferred past it.
+                    DispatchQueue.main.async {
+                        if window.firstResponder === self { window.makeFirstResponder(nil) }
+                    }
+                }
+                return event
+            }
+        }
+        return became
+    }
+
     override func resignFirstResponder() -> Bool {
         let resigned = super.resignFirstResponder()
-        if resigned { DispatchQueue.main.async { [weak self] in self?.onEnd?() } }
+        if resigned {
+            removeClickMonitor()
+            DispatchQueue.main.async { [weak self] in self?.onEnd?() }
+        }
         return resigned
+    }
+
+    private func removeClickMonitor() {
+        if let clickMonitor { NSEvent.removeMonitor(clickMonitor) }
+        clickMonitor = nil
     }
 }

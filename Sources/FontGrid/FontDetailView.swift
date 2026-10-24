@@ -58,12 +58,6 @@ struct FontDetailView: View {
     // Trailing debounce on the rollover, so sweeping the pointer across the grid
     // lands on where it stopped instead of flashing every cell on the way.
     @State private var zoomTask: Task<Void, Never>? = nil
-    // Try-out text typed straight into a weight row's sample, per row (-1 =
-    // the Variable row). Never saved: it overrides the specimen/preview text in
-    // that row only, until the card closes or the font changes.
-    @State private var tryTexts: [Int: String] = [:]
-    // Row whose sample is being typed into (-1 = the Variable row).
-    @State private var tryEditingRow: Int? = nil
 
     // The drawing style the held key selects, once the card actually has a glyph
     // grid to inspect. nil means neither key is down.
@@ -176,33 +170,6 @@ struct FontDetailView: View {
     // nil → default label color; accent when a custom sample is in effect.
     private var sampleColor: Color? { hasCustomSample ? Theme.accent : nil }
 
-    // A row's sample: its own try-out text when it has one, else the shared one.
-    private func rowSampleText(_ row: Int) -> String { tryTexts[row] ?? sampleText }
-
-    // Try-out text is never saved, so it stays in the plain label color to
-    // read differently from the (accent) specimen.
-    private func rowSampleColor(_ row: Int) -> Color? { tryTexts[row] == nil ? sampleColor : nil }
-
-    private func tryBinding(_ row: Int) -> Binding<String> {
-        Binding(get: { tryTexts[row] ?? "" }, set: { tryTexts[row] = $0 })
-    }
-
-    // Clicking a sample starts typing into it, seeded with whatever it showed.
-    private func beginTry(row: Int) {
-        if tryTexts[row] == nil { tryTexts[row] = sampleText }
-        tryEditingRow = row
-    }
-
-    // Only the row that's still editing may end it — a click on another row
-    // can land before or after this one's resign. Emptied text falls back to
-    // the specimen/preview rather than leaving a blank row.
-    private func endTry(row: Int) {
-        guard tryEditingRow == row else { return }
-        tryEditingRow = nil
-        if tryTexts[row]?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true {
-            tryTexts[row] = nil
-        }
-    }
 
     private var sampleBinding: Binding<String> {
         Binding(
@@ -322,8 +289,6 @@ struct FontDetailView: View {
         .task(id: family.id) {
             infoExpanded = false
             memoExpanded = false
-            tryTexts = [:]
-            tryEditingRow = nil
             memoContentHeight = 0
             // Normally a new font starts on its own preview face. But when the
             // switch WAS a focus request — long-pressing a saved glyph while
@@ -864,28 +829,20 @@ struct FontDetailView: View {
                 VariableWeightRow(
                     basePSName: family.previewFontName ?? family.memberFontNames.first ?? family.name,
                     familyName: family.name,
-                    sampleText: rowSampleText(-1),
-                    sampleColor: rowSampleColor(-1),
+                    sampleText: sampleText,
+                    sampleColor: sampleColor,
                     sampleSize: CGFloat(vm.weightRowFontSize),
                     axis: axis,
                     sampleLayoutWidth: finalSampleWidth,
-                    sampleRevealed: vm.revealedSampleRows > 0,
-                    tryText: tryBinding(-1),
-                    isTrying: tryEditingRow == -1,
-                    onBeginTry: { beginTry(row: -1) },
-                    onEndTry: { endTry(row: -1) }
+                    sampleRevealed: vm.revealedSampleRows > 0
                 )
                 Divider().opacity(0.15).padding(.horizontal, 24)
             }
             ForEach(Array(family.memberFontNames.enumerated()), id: \.offset) { index, psName in
-                WeightRow(psName: psName, familyName: family.name, sampleText: rowSampleText(index),
-                          sampleColor: rowSampleColor(index), sampleSize: CGFloat(vm.weightRowFontSize),
+                WeightRow(psName: psName, familyName: family.name, sampleText: sampleText,
+                          sampleColor: sampleColor, sampleSize: CGFloat(vm.weightRowFontSize),
                           sampleLayoutWidth: finalSampleWidth,
-                          sampleRevealed: vm.revealedSampleRows > index + variableRowOffset,
-                          tryText: tryBinding(index),
-                          isTrying: tryEditingRow == index,
-                          onBeginTry: { beginTry(row: index) },
-                          onEndTry: { endTry(row: index) })
+                          sampleRevealed: vm.revealedSampleRows > index + variableRowOffset)
                 if index < family.memberFontNames.count - 1 {
                     Divider().opacity(0.15).padding(.horizontal, 24)
                 }
@@ -1752,19 +1709,18 @@ private struct VariableWeightRow: View {
     let axis: WeightAxis
     var sampleLayoutWidth: CGFloat? = nil
     var sampleRevealed: Bool = true
-    var tryText: Binding<String>? = nil
-    var isTrying: Bool = false
-    var onBeginTry: () -> Void = {}
-    var onEndTry: () -> Void = {}
 
     @EnvironmentObject var toasts: ToastCenter
     @State private var weight: Double
+    // See TryableSample. Row-local so typing re-renders this row only.
+    @State private var tryText: String? = nil
+    @State private var isTrying = false
+
+    private var shownText: String { tryText ?? sampleText }
 
     init(basePSName: String, familyName: String, sampleText: String, sampleColor: Color?,
          sampleSize: CGFloat, axis: WeightAxis,
-         sampleLayoutWidth: CGFloat? = nil, sampleRevealed: Bool = true,
-         tryText: Binding<String>? = nil, isTrying: Bool = false,
-         onBeginTry: @escaping () -> Void = {}, onEndTry: @escaping () -> Void = {}) {
+         sampleLayoutWidth: CGFloat? = nil, sampleRevealed: Bool = true) {
         self.basePSName = basePSName
         self.familyName = familyName
         self.sampleText = sampleText
@@ -1773,15 +1729,11 @@ private struct VariableWeightRow: View {
         self.axis = axis
         self.sampleLayoutWidth = sampleLayoutWidth
         self.sampleRevealed = sampleRevealed
-        self.tryText = tryText
-        self.isTrying = isTrying
-        self.onBeginTry = onBeginTry
-        self.onEndTry = onEndTry
         _weight = State(initialValue: axis.defaultValue)
     }
 
     private var canExport: Bool {
-        SVGTextExporter.canExport(text: sampleText, fontName: basePSName)
+        SVGTextExporter.canExport(text: shownText, fontName: basePSName)
     }
 
     var body: some View {
@@ -1811,7 +1763,7 @@ private struct VariableWeightRow: View {
                 ExportButton(enabled: canExport, action: exportArtwork)
             }
             TryableSample(
-                text: sampleText,
+                sampleText: sampleText,
                 fontName: basePSName,
                 fontSize: sampleSize,
                 color: sampleColor,
@@ -1819,10 +1771,8 @@ private struct VariableWeightRow: View {
                 variationWeight: weight,
                 layoutWidth: sampleLayoutWidth,
                 isRevealed: sampleRevealed,
-                tryText: tryText,
-                isTrying: isTrying,
-                onBeginTry: onBeginTry,
-                onEndTry: onEndTry
+                tryText: $tryText,
+                isTrying: $isTrying
             )
             .frame(maxWidth: .infinity, alignment: .leading)
             .opacity(sampleRevealed ? 1 : 0)
@@ -1839,16 +1789,16 @@ private struct VariableWeightRow: View {
         func clean(_ s: String) -> String { s.replacingOccurrences(of: "/", with: "-") }
         let w = Int(weight.rounded())
         let baseName = "08FOSE) \(clean(familyName))_VF(\(w))"
-        WeightArtwork.export(text: sampleText, fontName: basePSName, baseName: baseName,
+        WeightArtwork.export(text: shownText, fontName: basePSName, baseName: baseName,
                              variation: (axisID: axis.id, value: weight), toasts: toasts)
     }
 }
 
 // A weight row's sample: the Core Text label, or — once clicked — an editor in
-// the same face to try out text in. Each row keeps its own text; nothing is
-// saved.
+// the same face to try out text in. Each row owns its own text (nothing is
+// saved); `tryText` nil means the row shows the shared sample.
 private struct TryableSample: View {
-    let text: String
+    let sampleText: String
     let fontName: String
     let fontSize: CGFloat
     var color: Color? = nil
@@ -1856,28 +1806,29 @@ private struct TryableSample: View {
     var variationWeight: Double? = nil
     var layoutWidth: CGFloat? = nil
     var isRevealed: Bool = true
-    var tryText: Binding<String>? = nil
-    var isTrying: Bool = false
-    var onBeginTry: () -> Void = {}
-    var onEndTry: () -> Void = {}
+    @Binding var tryText: String?
+    @Binding var isTrying: Bool
 
     @State private var cursorPushed = false
 
     var body: some View {
-        if isTrying, let tryText {
-            SampleTryEditor(text: tryText, fontName: fontName, fontSize: fontSize,
+        if isTrying {
+            SampleTryEditor(text: Binding(get: { tryText ?? "" }, set: { tryText = $0 }),
+                            fontName: fontName, fontSize: fontSize,
                             variationAxisID: variationAxisID, variationWeight: variationWeight,
-                            layoutWidth: layoutWidth, onEnd: onEndTry)
+                            layoutWidth: layoutWidth, onEnd: endTry)
         } else {
-            WrappingPreviewLabel(text: text, fontName: fontName, fontSize: fontSize,
-                                 color: color,
+            // Try-out text is never saved, so it stays in the plain label color
+            // to read differently from the (accent) specimen.
+            WrappingPreviewLabel(text: tryText ?? sampleText, fontName: fontName, fontSize: fontSize,
+                                 color: tryText == nil ? color : nil,
                                  variationAxisID: variationAxisID, variationWeight: variationWeight,
                                  layoutWidth: layoutWidth, isRevealed: isRevealed)
                 .contentShape(Rectangle())
-                .onTapGesture { if tryText != nil { onBeginTry() } }
+                .onTapGesture { beginTry() }
                 // I-beam over the sample hints that it can be typed into.
                 .onHover { inside in
-                    guard tryText != nil, inside != cursorPushed else { return }
+                    guard inside != cursorPushed else { return }
                     if inside { NSCursor.iBeam.push() } else { NSCursor.pop() }
                     cursorPushed = inside
                 }
@@ -1885,6 +1836,18 @@ private struct TryableSample: View {
                     if cursorPushed { NSCursor.pop(); cursorPushed = false }
                 }
         }
+    }
+
+    // Seeded with whatever the row showed, clipped to the editor's limit.
+    private func beginTry() {
+        if tryText == nil { tryText = String(sampleText.prefix(SampleTryEditor.maxLength)) }
+        isTrying = true
+    }
+
+    // Emptied text falls back to the shared sample rather than a blank row.
+    private func endTry() {
+        isTrying = false
+        if tryText?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true { tryText = nil }
     }
 }
 
@@ -1900,14 +1863,14 @@ struct WeightRow: View {
     // any other caller keeps the plain behaviour.
     var sampleLayoutWidth: CGFloat? = nil
     var sampleRevealed: Bool = true
-    // Inline try-out typing (see FontDetailView.tryText). nil binding → the
-    // sample is display-only.
-    var tryText: Binding<String>? = nil
-    var isTrying: Bool = false
-    var onBeginTry: () -> Void = {}
-    var onEndTry: () -> Void = {}
 
     @EnvironmentObject var toasts: ToastCenter
+    // See TryableSample. Row-local so typing re-renders this row only, and the
+    // detail's `.id(family.id)` scroll drops it with the font.
+    @State private var tryText: String? = nil
+    @State private var isTrying = false
+
+    private var shownText: String { tryText ?? sampleText }
 
     private var faceName: String {
         guard let font = NSFont(name: psName, size: 12) else { return psName }
@@ -1915,7 +1878,7 @@ struct WeightRow: View {
     }
 
     private var canExport: Bool {
-        SVGTextExporter.canExport(text: sampleText, fontName: psName)
+        SVGTextExporter.canExport(text: shownText, fontName: psName)
     }
 
     var body: some View {
@@ -1935,11 +1898,10 @@ struct WeightRow: View {
                 // ▶︎ pinned to the right edge of the row, centered to the line.
                 ExportButton(enabled: canExport, action: exportArtwork)
             }
-            TryableSample(text: sampleText, fontName: psName, fontSize: sampleSize,
+            TryableSample(sampleText: sampleText, fontName: psName, fontSize: sampleSize,
                           color: sampleColor,
                           layoutWidth: sampleLayoutWidth, isRevealed: sampleRevealed,
-                          tryText: tryText, isTrying: isTrying,
-                          onBeginTry: onBeginTry, onEndTry: onEndTry)
+                          tryText: $tryText, isTrying: $isTrying)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .opacity(sampleRevealed ? 1 : 0)
                 .animation(.easeIn(duration: 0.28), value: sampleRevealed)
@@ -1951,7 +1913,7 @@ struct WeightRow: View {
 
     // Flatten this weight's sample text and save as SVG or PNG.
     private func exportArtwork() {
-        WeightArtwork.export(text: sampleText, fontName: psName, baseName: artworkBaseName, toasts: toasts)
+        WeightArtwork.export(text: shownText, fontName: psName, baseName: artworkBaseName, toasts: toasts)
     }
 
     // e.g. "08FOSE) SDMapssi_Regular"  ("/" sanitized for the filesystem). No
