@@ -83,8 +83,10 @@ enum Theme {
                                  light: NSColor(white: 0, alpha: 0.12))
     static let borderHover = adaptive(dark: NSColor(white: 1, alpha: 0.35),
                                       light: NSColor(white: 0, alpha: 0.30))
-    static let surfaceFill = adaptive(dark: NSColor(white: 1, alpha: 0.06),
-                                      light: NSColor(white: 0, alpha: 0.04))
+    // Halfway between the old fill (0.06 / 0.04) and the bare background — an
+    // overlay at half the alpha lands exactly midway on whatever is behind it.
+    static let surfaceFill = adaptive(dark: NSColor(white: 1, alpha: 0.03),
+                                      light: NSColor(white: 0, alpha: 0.02))
     // Hover state for buttons — a touch denser than surfaceFill.
     static let surfaceFillHover = adaptive(dark: NSColor(white: 1, alpha: 0.12),
                                            light: NSColor(white: 0, alpha: 0.07))

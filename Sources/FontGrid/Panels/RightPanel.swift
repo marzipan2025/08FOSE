@@ -919,7 +919,7 @@ struct ClipboardGlyphSlot: View {
 
     private var fillColor: Color {
         if spent { return Color.primary.opacity(Self.spentFill) }
-        return Theme.surfaceFill.opacity(hovering ? 0.5 : 0.18)
+        return Theme.surfaceFill.opacity(hovering ? 1 : 0.36)
     }
 
     private var borderColor: Color {
