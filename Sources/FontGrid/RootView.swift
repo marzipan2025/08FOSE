@@ -711,7 +711,7 @@ struct WallpaperOverlay: View {
         "Wallpaper01": .exclusion,
         "Wallpaper02": .multiply,
         "Wallpaper03": .overlay,
-        "Wallpaper04": .multiply
+        "Wallpaper04": .color
     ]
 
     // Per-mode opacity. Dark stays at 0.24 (subtle texture over the dark base);
@@ -720,12 +720,10 @@ struct WallpaperOverlay: View {
     private static let darkOpacity: Double = 0.24
     private static let lightOpacity: Double = 0.5
 
-    // Per-wallpaper light-mode opacity override. Wallpaper04 is a flat solid
-    // color, so it needs more strength than the textured assets to read as
-    // a vivid tint rather than a wash. Falls back to lightOpacity otherwise.
+    // Per-wallpaper light-mode opacity override. Falls back to lightOpacity.
     private static let lightOpacityOverrides: [String: Double] = [
         "Wallpaper01": 0.18,
-        "Wallpaper04": 0.8
+        "Wallpaper04": 0.5
     ]
 
     // Per-wallpaper dark-mode opacity override. Falls back to darkOpacity.
@@ -765,11 +763,7 @@ struct WallpaperOverlay: View {
         // 골드를 흰색에 50% 섞어 은은하게 곱한다 (gold ≈ 1.0,0.84,0.0)
         "Wallpaper01": Color(red: 1.0, green: 0.922, blue: 0.5),
         // 핑크를 흰색에 50% 섞어 은은하게 곱한다 (pink ≈ 1.0,0.753,0.796)
-        "Wallpaper02": Color(red: 1.0, green: 0.877, blue: 0.898),
-        // L_Wallpaper04 는 사실상 단색(#FDF229, 픽셀 표준편차 0.01)이라 레몬 쪽으로
-        // 뜬다. 목표 골드 #FBD400 = 에셋색 × 이 틴트. multiply 는 흰 표면을
-        // 정확히 소스색으로 떨어뜨리므로(white × Cs = Cs) 흰 표면이 곧 목표색이 된다.
-        "Wallpaper04": Color(red: 0.992, green: 0.876, blue: 0.0)
+        "Wallpaper02": Color(red: 1.0, green: 0.877, blue: 0.898)
     ]
 
     private var resolvedTint: Color {
@@ -787,15 +781,8 @@ struct WallpaperOverlay: View {
 
     // Per-wallpaper light-mode multi-layer overrides. When present, these stack
     // (bottom-to-top) instead of the single resolvedBlendMode/resolvedOpacity.
-    // Wallpaper04 is one flat multiply pass: the soft-light pass it used to
-    // stack on top pushed green up and blue down, washing the gold toward
-    // lemon. One pass keeps the rendered color exactly predictable — a white
-    // surface lands on the tinted asset color and nothing else.
-    private static let lightLayerOverrides: [String: [BlendLayer]] = [
-        "Wallpaper04": [
-            BlendLayer(mode: .multiply, opacity: 1.0)
-        ]
-    ]
+    // Empty for now; the mechanism stays for wallpapers that want it.
+    private static let lightLayerOverrides: [String: [BlendLayer]] = [:]
 
     private var resolvedLayers: [BlendLayer] {
         if colorScheme == .light, let layers = Self.lightLayerOverrides[name] {
@@ -813,10 +800,8 @@ struct WallpaperOverlay: View {
         let opacity: Double
     }
 
-    // Per-wallpaper light-mode top overlay. Empty for now: Wallpaper04 dropped
-    // its shine sheet when it went to a single multiply pass — the sheet is a
-    // per-pixel soft-light layer, so it broke the flat tint the wallpaper is
-    // supposed to be. The mechanism stays for wallpapers that want it.
+    // Per-wallpaper light-mode top overlay. Empty for now; the mechanism stays
+    // for wallpapers that want it.
     private static let lightOverlays: [String: Overlay] = [:]
 
     private var resolvedOverlay: Overlay? {
