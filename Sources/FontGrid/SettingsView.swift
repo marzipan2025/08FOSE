@@ -117,6 +117,8 @@ struct SettingsOverlay: View {
     // About had grown into a changelog; trim it again when it does, rather than
     // collapsing this to a lone string.
     private static let releaseNotes: [(version: String, note: String)] = [
+        ("0.8.25",
+         "A phone-book index now sits beside the list. Roll over a letter, Hangul initial or number to jump there. X turns it off."),
         ("0.8.24",
          "The Features tags in a font's detail now switch OpenType features on and off for its samples. Orange means applied; kern and the other defaults start on. Exports follow what you see, and everything resets when the detail closes."),
         ("0.8.23",
