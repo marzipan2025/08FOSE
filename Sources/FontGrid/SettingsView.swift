@@ -528,7 +528,7 @@ struct SettingsOverlay: View {
     private var licensesSection: some View {
         SettingsSection("Licenses") {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Fonts shown in 08FOSE are installed on your Mac and remain the property of their respective owners. Each font's own license governs how it may be used — 08FOSE only previews them.")
+                Text("Fonts shown in 08FOSE are installed on your Mac and remain the property of their respective owners. Each font's own license governs how it may be used. 08FOSE includes no fonts; it previews the ones you have and can save the text you type as an image.")
                     .font(.system(size: SettingsType.small))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
