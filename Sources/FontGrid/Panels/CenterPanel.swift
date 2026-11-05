@@ -341,7 +341,8 @@ struct CenterPanel: View {
                 families: displayedFamilies,
                 columns: effective,
                 previewText: previewText,
-                cellHero: cellHero
+                cellHero: cellHero,
+                indexEntries: vm.showFontIndex ? FontIndex.entries(for: displayedFamilies) : nil
             )
             .onAppear {
                 vm.maxColumns = computed
@@ -354,6 +355,13 @@ struct CenterPanel: View {
                 vm.maxColumns = m
                 if vm.columnCount > m { vm.columnCount = m }
             }
+            // The index strip takes width from the grid, so turning it on can
+            // lower the column limit.
+            .onChange(of: vm.showFontIndex) { _ in
+                let m = computeMaxColumns(width: geo.size.width)
+                vm.maxColumns = m
+                if vm.columnCount > m { vm.columnCount = m }
+            }
             // The detail card's travel is measured against this, so it has to
             // track the window rather than only the first layout.
             .onChange(of: geo.size.height) { vm.gridViewportHeight = $0 }
@@ -362,7 +370,10 @@ struct CenterPanel: View {
     }
 
     private func computeMaxColumns(width: CGFloat) -> Int {
-        let usable = max(0, width - Theme.gridPadding * 2)
+        // With the index strip on, the strip stands in for the grid's leading
+        // padding (see FontGridScroll).
+        let leading = vm.showFontIndex ? FontIndexStrip.width : Theme.gridPadding
+        let usable = max(0, width - leading - Theme.gridPadding)
         let n = Int(floor((usable + Theme.gridSpacing) / (Theme.minCellWidth + Theme.gridSpacing)))
         return max(1, n)
     }
@@ -421,6 +432,9 @@ private struct FontGridScroll: View {
     let columns: Int
     let previewText: String
     let cellHero: Namespace.ID
+    // nil = the index strip is switched off. Empty = on, but nothing to index;
+    // the strip keeps its width so the grid doesn't shift as filters change.
+    let indexEntries: [FontIndexEntry]?
 
     // Equal-width flexible columns, matching the manual HStack layout this
     // replaced. LazyVGrid (vs LazyVStack of HStacks) tracks every font as its
@@ -443,11 +457,24 @@ private struct FontGridScroll: View {
     // Bumped on each keep-in-view request so pending passes from a superseded
     // change (e.g. mid-drag) cancel themselves instead of piling up.
     @State private var keepTopToken = 0
+    // The index strip's rolled-over label, shown large over the list.
+    @State private var indexPreview: String? = nil
 
     private var shadowScale: Double { colorScheme == .light ? 0.3 : 1.0 }
 
     var body: some View {
         ScrollViewReader { proxy in
+        HStack(spacing: 0) {
+        if let indexEntries {
+            FontIndexStrip(
+                entries: indexEntries,
+                interactive: vm.selectedFamily == nil && !vm.showSettings
+                    && vm.renamingTag == nil && vm.launchUpdate == nil
+            ) { entry in
+                indexPreview = entry?.label
+                if let entry { settleScroll(proxy, to: entry.familyID) }
+            }
+        }
         ScrollView {
             LazyVGrid(columns: gridColumns, spacing: Theme.gridSpacing) {
                 ForEach(families) { family in
@@ -481,11 +508,21 @@ private struct FontGridScroll: View {
             // moved out of the ScrollView, the probe can't find the scroller
             // and offset restore silently no-ops.
             .background(ScrollOffsetPersistence(key: Self.scrollOffsetKey))
-            .padding(Theme.gridPadding)
+            .padding(.vertical, Theme.gridPadding)
+            .padding(.trailing, Theme.gridPadding)
+            .padding(.leading, indexEntries == nil ? Theme.gridPadding : 0)
             .padding(.bottom, 48)
         }
         .coordinateSpace(name: "fontGridScroll")
         .scrollContentBackground(.hidden)
+        .overlay {
+            if let indexPreview {
+                FontIndexPreview(label: indexPreview)
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.12), value: indexPreview == nil)
         // Shadow for the single hovered cell, drawn above all cells so it is not
         // covered by neighbours (LazyVGrid paints rows in document order and
         // ignores zIndex across rows). HoverShadow is keyed by the cell id, so
@@ -533,12 +570,19 @@ private struct FontGridScroll: View {
                 topVisibleFamily = nil
             }
         }
+        } // HStack
         } // ScrollViewReader
     }
 
     private func keepTopInView(_ proxy: ScrollViewProxy) {
         guard let target = topVisibleFamily else { return }
-        // Re-assert across several frames. A font-size change settles fast, but a
+        settleScroll(proxy, to: target)
+    }
+
+    private func settleScroll(_ proxy: ScrollViewProxy, to target: FontFamily.ID) {
+        // Re-assert across several frames. A long jump lands on the lazy grid's
+        // estimate of the target's position, short of the real one, until the
+        // cells there exist. A font-size change settles fast, but a
         // column-count change restructures the LazyVGrid (and tends to reset the
         // scroll to the top), which settles later — so a single early pass gets
         // overridden. The later passes land the target back once the layout is

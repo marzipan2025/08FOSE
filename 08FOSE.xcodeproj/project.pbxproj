@@ -29,6 +29,7 @@
 		044B0F5A951063D56440F285 /* NativeTooltip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91E7958F5B4E3F0476F98065 /* NativeTooltip.swift */; };
 		8A4B0197F5928B36B6E255EF /* PanelSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A648CF8D34910DBBF3F6DA0 /* PanelSection.swift */; };
 		E0B97F8069EB3A63FF513B1A /* CenterPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBC099FA7B276FAC70DB00A8 /* CenterPanel.swift */; };
+		A1F0C2D3E4B5A69788990A1B /* FontIndexStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2E1D3C4F5A6B7988A9B0C1D /* FontIndexStrip.swift */; };
 		888E43483EFDA13FDDFAB9C7 /* LeftPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A08D8E39858934585906D674 /* LeftPanel.swift */; };
 		E19C3DE20FC9A278169940DF /* RightPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF6E153E09E049BE61FE25AD /* RightPanel.swift */; };
 		21DDA4D85818289DCEDCED22 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F26D72E773B8944F898ADEE5 /* RootView.swift */; };
@@ -65,6 +66,7 @@
 		91E7958F5B4E3F0476F98065 /* NativeTooltip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeTooltip.swift; path = Sources/FontGrid/NativeTooltip.swift; sourceTree = SOURCE_ROOT; };
 		0A648CF8D34910DBBF3F6DA0 /* PanelSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PanelSection.swift; path = Sources/FontGrid/PanelSection.swift; sourceTree = SOURCE_ROOT; };
 		DBC099FA7B276FAC70DB00A8 /* CenterPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CenterPanel.swift; path = Sources/FontGrid/Panels/CenterPanel.swift; sourceTree = SOURCE_ROOT; };
+		B2E1D3C4F5A6B7988A9B0C1D /* FontIndexStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = FontIndexStrip.swift; path = Sources/FontGrid/Panels/FontIndexStrip.swift; sourceTree = SOURCE_ROOT; };
 		A08D8E39858934585906D674 /* LeftPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LeftPanel.swift; path = Sources/FontGrid/Panels/LeftPanel.swift; sourceTree = SOURCE_ROOT; };
 		BF6E153E09E049BE61FE25AD /* RightPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RightPanel.swift; path = Sources/FontGrid/Panels/RightPanel.swift; sourceTree = SOURCE_ROOT; };
 		F26D72E773B8944F898ADEE5 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RootView.swift; path = Sources/FontGrid/RootView.swift; sourceTree = SOURCE_ROOT; };
@@ -131,6 +133,7 @@
 				91E7958F5B4E3F0476F98065 /* NativeTooltip.swift */,
 				0A648CF8D34910DBBF3F6DA0 /* PanelSection.swift */,
 				DBC099FA7B276FAC70DB00A8 /* CenterPanel.swift */,
+				B2E1D3C4F5A6B7988A9B0C1D /* FontIndexStrip.swift */,
 				A08D8E39858934585906D674 /* LeftPanel.swift */,
 				BF6E153E09E049BE61FE25AD /* RightPanel.swift */,
 				F26D72E773B8944F898ADEE5 /* RootView.swift */,
@@ -235,6 +238,7 @@
 				044B0F5A951063D56440F285 /* NativeTooltip.swift in Sources */,
 				8A4B0197F5928B36B6E255EF /* PanelSection.swift in Sources */,
 				E0B97F8069EB3A63FF513B1A /* CenterPanel.swift in Sources */,
+				A1F0C2D3E4B5A69788990A1B /* FontIndexStrip.swift in Sources */,
 				888E43483EFDA13FDDFAB9C7 /* LeftPanel.swift in Sources */,
 				E19C3DE20FC9A278169940DF /* RightPanel.swift in Sources */,
 				21DDA4D85818289DCEDCED22 /* RootView.swift in Sources */,

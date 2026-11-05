@@ -56,6 +56,7 @@ final class AppViewModel: ObservableObject {
     private static let columnCountKey = "columnCount"
     private static let previewSizeOffsetKey = "previewSizeOffset"
     private static let useMotionKey = "useMotion"
+    private static let showFontIndexKey = "showFontIndex"
 
     @Published var searchQuery: String = UserDefaults.standard.string(forKey: AppViewModel.searchQueryKey) ?? "" {
         didSet { UserDefaults.standard.set(searchQuery, forKey: Self.searchQueryKey) }
@@ -114,6 +115,11 @@ final class AppViewModel: ObservableObject {
     // Whether to use animations for major transitions (opening detail, sliding panels).
     @Published var useMotion: Bool = UserDefaults.standard.object(forKey: AppViewModel.useMotionKey) as? Bool ?? true {
         didSet { UserDefaults.standard.set(useMotion, forKey: Self.useMotionKey) }
+    }
+
+    // The phone-book index strip beside the grid (Settings → View Settings).
+    @Published var showFontIndex: Bool = UserDefaults.standard.object(forKey: AppViewModel.showFontIndexKey) as? Bool ?? true {
+        didSet { UserDefaults.standard.set(showFontIndex, forKey: Self.showFontIndexKey) }
     }
 
     // Selected script buckets. Empty = no script filter (show all). Multiple
@@ -663,5 +669,6 @@ final class AppViewModel: ObservableObject {
         detailGlyphsVisible = false
         detailSource = .grid
         useMotion = true
+        showFontIndex = true
     }
 }

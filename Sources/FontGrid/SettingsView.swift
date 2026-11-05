@@ -332,6 +332,17 @@ struct SettingsOverlay: View {
                         vm.useMotion = false
                     }
                 }
+                choiceRow(
+                    title: "Index",
+                    detail: "Letters, Hangul and numbers beside the list, like a phone book. Roll over one to jump there. Only as many show as fit the window."
+                ) {
+                    SettingsChoiceButton(label: "On", isOn: vm.showFontIndex) {
+                        vm.showFontIndex = true
+                    }
+                    SettingsChoiceButton(label: "Off", isOn: !vm.showFontIndex) {
+                        vm.showFontIndex = false
+                    }
+                }
             }
         }
     }
@@ -438,6 +449,7 @@ struct SettingsOverlay: View {
                 shortcutRow("K J C L S O", "Toggle script bucket")
                 shortcutRow("U", "Show / hide muted")
                 shortcutRow("I", "Only muted")
+                shortcutRow("X", "Show / hide index")
                 shortcutRow("Space", "Hold over a glyph — zoom, solid")
                 shortcutRow("⌥", "Hold over a glyph — zoom, contour")
                 shortcutRow("[ ]", "Collapse / expand left · right panel")

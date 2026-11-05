@@ -347,6 +347,9 @@ struct RootView: View {
         case "i":
             vm.mutedOnly.toggle()
             return true
+        case "x":
+            vm.showFontIndex.toggle()
+            return true
         default:
             return false
         }
