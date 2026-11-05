@@ -396,6 +396,7 @@ struct UpdateResultPopup: View {
     @State private var quitHovering = false
     @StateObject private var installer = UpdateInstaller()
     @Environment(\.colorScheme) private var colorScheme
+    @EnvironmentObject private var vm: AppViewModel
 
     var body: some View {
         // Pinned to the top center (toasts' column, 48pt below their 12pt
@@ -436,6 +437,21 @@ struct UpdateResultPopup: View {
                 .padding(.top, thumbnail == nil ? 0 : -2)
         }
         .frame(width: Self.cardWidth, alignment: .leading)
+        // The card sits above the window's wallpaper layer, so it carries its
+        // own copy. Its surface goes inside the clip for the wallpaper's blend
+        // mode to have something to blend with.
+        .background(Theme.panelBackground)
+        .overlay(alignment: .topTrailing) {
+            if !locked {
+                PopupCloseButton(overImage: thumbnail != nil) { onClose() }
+                    .padding(.top, 18)
+                    .padding(.trailing, 18)   // same corner inset as the other popups
+            }
+        }
+        .overlay {
+            WallpaperOverlay(name: vm.wallpaper)
+                .allowsHitTesting(false)
+        }
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -447,13 +463,6 @@ struct UpdateResultPopup: View {
                 .stroke(colorScheme == .light ? Color(white: 0.56) : Color.white.opacity(0.8),
                         lineWidth: 1)
         )
-        .overlay(alignment: .topTrailing) {
-            if !locked {
-                PopupCloseButton(overImage: thumbnail != nil) { onClose() }
-                    .padding(.top, 18)
-                    .padding(.trailing, 18)   // same corner inset as the other popups
-            }
-        }
     }
 
     private var content: some View {
