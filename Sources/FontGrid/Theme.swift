@@ -68,6 +68,10 @@ enum Theme {
         // #1DA1FF is 2.8:1 on white; text at lightness 0.39 for about 4:1 on
         // a selected chip (4.9:1 on a cell, 3.7:1 on a hovered chip).
         "Wallpaper01": .init(fill: rgb(0x1DA1FF), text: rgb(0x0074C7)),
+        // Slate ink with a cobalt fill, both given: #303C4C text (11.2:1 on
+        // white) and #607CEF for dots, slider tracks and chip washes
+        // (3.7:1 on white, enough for non-text marks).
+        "Wallpaper02": .init(fill: rgb(0x607CEF), text: rgb(0x303C4C)),
         // Green to sit with the green art. #4AC50D is 2.3:1 on white, so the
         // text colour is the same hue at lightness 0.275, aimed at about 4:1
         // rather than the full 4.5:1 to keep it green, not olive: 4.0:1 on a
