@@ -667,7 +667,7 @@ private struct PanelToggleButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: open ? "minus" : "plus")
-                .font(.system(size: 11, weight: .bold))
+                .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(hovering ? accent.text : Color.secondary)
                 .frame(width: 26, height: 26)
                 .background(

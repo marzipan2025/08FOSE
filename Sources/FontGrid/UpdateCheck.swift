@@ -470,7 +470,7 @@ struct UpdateResultPopup: View {
         VStack(alignment: .leading, spacing: 0) {
             // Title carries the state, so it reads at a glance.
             Text(statusTitle)
-                .font(.system(size: 15, weight: .bold))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(.primary)
 
             // The version(s) as a single emphasized line under the title.

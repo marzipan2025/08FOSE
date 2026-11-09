@@ -117,7 +117,7 @@ struct RenameTagPopup: View {
     private var card: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Rename Tag")
-                .font(.system(size: 15, weight: .bold))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(.primary)
 
             Text("#\(tag) · applied to \(count) font\(count == 1 ? "" : "s")")

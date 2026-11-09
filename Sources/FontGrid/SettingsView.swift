@@ -191,7 +191,7 @@ struct SettingsOverlay: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 32) {
                 Text("Settings")
-                    .font(.system(size: SettingsType.title, weight: .bold))
+                    .font(.system(size: SettingsType.title, weight: .semibold))
                     .foregroundStyle(accent.text)
                     // Optical alignment: large bold glyphs have more apparent
                     // left side-bearing, so nudge just the title left by 2pt
@@ -423,7 +423,7 @@ struct SettingsOverlay: View {
             VStack(alignment: .leading, spacing: 6) {
                 (
                     Text("08FOSE © pa_st")
-                        .font(.system(size: SettingsType.body, weight: .bold))
+                        .font(.system(size: SettingsType.body, weight: .semibold))
                         .foregroundColor(.primary)
                     + Text(" An Application for browsing and managing the fonts installed on your Mac.")
                         .font(.system(size: SettingsType.body))
@@ -731,7 +731,7 @@ private struct SettingsSection<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(title.uppercased())
-                .font(.system(size: SettingsType.sectionHeader, weight: .bold))
+                .font(.system(size: SettingsType.sectionHeader, weight: .semibold))
                 .tracking(0.6)
                 .foregroundStyle(.secondary)
             content()

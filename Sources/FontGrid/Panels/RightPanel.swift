@@ -201,7 +201,7 @@ struct RightPanel: View {
     private var glyphsHeader: some View {
         HStack(spacing: 8) {
             Text("GLYPHS")
-                .font(.system(size: Theme.sectionHeaderSize, weight: .bold))
+                .font(.system(size: Theme.sectionHeaderSize, weight: .semibold))
                 .tracking(0.6)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
@@ -295,7 +295,7 @@ struct RightPanel: View {
     private var tagsHeader: some View {
         HStack(spacing: 8) {
             Text("TAGS")
-                .font(.system(size: Theme.sectionHeaderSize, weight: .bold))
+                .font(.system(size: Theme.sectionHeaderSize, weight: .semibold))
                 .tracking(0.6)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
@@ -338,7 +338,7 @@ struct RightPanel: View {
     private var pinsHeader: some View {
         HStack(spacing: 8) {
             Text("PINNED")
-                .font(.system(size: Theme.sectionHeaderSize, weight: .bold))
+                .font(.system(size: Theme.sectionHeaderSize, weight: .semibold))
                 .tracking(0.6)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
@@ -737,7 +737,7 @@ struct CopiedGlyphCard: View {
             .overlay(alignment: .bottom) {
                 if let flashWord {
                     Text(flashWord.label)
-                        .font(.system(size: Self.copiedSize, weight: .bold))
+                        .font(.system(size: Self.copiedSize, weight: .semibold))
                         .foregroundStyle(flashWord.tint(accent))
                         .padding(.bottom, 3)
                         .transition(.opacity)

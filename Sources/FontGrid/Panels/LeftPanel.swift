@@ -26,6 +26,11 @@ struct LeftPanel: View {
     // declared spacing reads looser under a slider label than under a pill
     // row. Subtract it here to keep every label-to-control gap even.
     private static let sliderLabelSpacing: CGFloat = groupLabelSpacing - 4
+    // One gap between pill buttons, across and down, in every group: Weight
+    // Count, Collections, Scripts, Theme, Wallpaper. Collections used to put
+    // its two rows straight into the label stack and so got 8 down vs 6
+    // elsewhere.
+    private static let pillGap: CGFloat = 6
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -148,7 +153,7 @@ struct LeftPanel: View {
     private var weightFilterSection: some View {
         VStack(alignment: .leading, spacing: Self.groupLabelSpacing) {
             groupLabel("Weight Count")
-            Grid(horizontalSpacing: 6, verticalSpacing: 6) {
+            Grid(horizontalSpacing: Self.pillGap, verticalSpacing: Self.pillGap) {
                 GridRow {
                     ForEach(weightOptions, id: \.value) { weightPill($0) }
                 }
@@ -354,13 +359,15 @@ struct LeftPanel: View {
     private var collectionsSection: some View {
         VStack(alignment: .leading, spacing: Self.groupLabelSpacing) {
             groupLabel("Collections")
-            HStack(spacing: 6) {
-                pinnedOnlyToggle
-                memoOnlyToggle
-            }
-            HStack(spacing: 6) {
-                mutedToggle
-                mutedOnlyToggle
+            VStack(spacing: Self.pillGap) {
+                HStack(spacing: Self.pillGap) {
+                    pinnedOnlyToggle
+                    memoOnlyToggle
+                }
+                HStack(spacing: Self.pillGap) {
+                    mutedToggle
+                    mutedOnlyToggle
+                }
             }
         }
     }
@@ -399,25 +406,11 @@ struct LeftPanel: View {
             case .hidden: return ("Hide muted", true)
             }
         }()
-        return Button {
+        // The same PillButton as its neighbours, so it shares their height,
+        // width and hover instead of drawing its own near-copy.
+        return filterPill(label: label, icon: nil, isOn: active) {
             vm.cycleMutedFilter()
-        } label: {
-            Text(label)
-                .font(.system(size: Theme.smallSize, weight: active ? .medium : .regular))
-                .foregroundStyle(active ? accent.text : Color.secondary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 5)
-                .background(
-                    RoundedRectangle(cornerRadius: Theme.pillRadius)
-                        .fill(active ? accent.fill.opacity(0.15) : Theme.surfaceFill)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: Theme.pillRadius)
-                        .stroke(active ? Color.clear : Theme.border, lineWidth: 1)
-                )
         }
-        .buttonStyle(.plain)
-        .focusable(false)
         .help("Muted fonts: \(vm.mutedFilter == .shown ? "shown (dimmed)" : "hidden")")
     }
 
@@ -481,9 +474,9 @@ struct LeftPanel: View {
     // ScriptCategory.filterable).
     private var scriptFilterRows: some View {
         let cats = ScriptCategory.filterable
-        return VStack(spacing: 6) {
+        return VStack(spacing: Self.pillGap) {
             ForEach(Array(stride(from: 0, to: cats.count, by: 2)), id: \.self) { start in
-                HStack(spacing: 6) {
+                HStack(spacing: Self.pillGap) {
                     ForEach(cats[start..<min(start + 2, cats.count)], id: \.self) { category in
                         filterPill(label: category.label, icon: nil,
                                    isOn: vm.scriptFilter.contains(category)) {
@@ -569,7 +562,7 @@ struct LeftPanel: View {
     private var wallpaperPicker: some View {
         VStack(alignment: .leading, spacing: Self.groupLabelSpacing) {
             groupLabel("Wallpaper")
-            HStack(spacing: 6) {
+            HStack(spacing: Self.pillGap) {
                 filterPill(label: "0", icon: nil, isOn: vm.wallpaper.isEmpty) {
                     vm.wallpaper = ""
                 }
@@ -586,7 +579,7 @@ struct LeftPanel: View {
     private var themePicker: some View {
         VStack(alignment: .leading, spacing: Self.groupLabelSpacing) {
             groupLabel("Theme")
-            HStack(spacing: 6) {
+            HStack(spacing: Self.pillGap) {
                 filterPill(label: "Dark", icon: "moon.fill", isOn: !vm.isLightMode) {
                     vm.isLightMode = false
                 }

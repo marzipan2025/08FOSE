@@ -130,7 +130,7 @@ struct CenterPanel: View {
                 NeighbourNavButton(name: detailNeighbour(1), delta: 1) { stepDetail(1) }
             } else {
                 Text("08FOSE")
-                    .font(.system(size: Theme.sectionHeaderSize + 2, weight: .bold))
+                    .font(.system(size: Theme.sectionHeaderSize + 2, weight: .semibold))
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 8)
                 statsLabel(count)

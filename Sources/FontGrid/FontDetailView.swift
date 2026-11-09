@@ -713,7 +713,7 @@ struct FontDetailView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(alignment: .center, spacing: 8) {
                         Text(family.name)
-                            .font(.system(size: 23, weight: .bold))
+                            .font(.system(size: 23, weight: .semibold))
                             .foregroundStyle(.primary)
                             .lineLimit(1)
                             // Tail-ellipsize a too-long name instead of shrinking
@@ -911,7 +911,7 @@ struct FontDetailView: View {
             Rectangle().fill(detailDivider).frame(height: 1).padding(.horizontal, 24)
             HStack(spacing: 8) {
                 Text("Glyphs")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.primary)
                 Spacer()
                 // The face name is known before the grid is — no reason to grey
@@ -983,7 +983,7 @@ struct FontDetailView: View {
             Rectangle().fill(detailDivider).frame(height: 1).padding(.horizontal, 24)
             HStack(spacing: 8) {
                 Text("Glyphs")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.primary)
                 Spacer()
                 if family.memberFontNames.count > 1 {
@@ -1498,7 +1498,7 @@ private struct GlyphCell: View {
         .overlay(alignment: .bottom) {
             if showCopied {
                 Text("COPIED")
-                    .font(.system(size: Theme.sectionHeaderSize, weight: .bold))
+                    .font(.system(size: Theme.sectionHeaderSize, weight: .semibold))
                     .foregroundStyle(accent.text)
                     .padding(.bottom, 3)
                     .transition(.opacity)
@@ -1683,7 +1683,7 @@ private struct KoreanBadge: View {
     var body: some View {
         let h = titleSize * 0.72   // ~60% of title, then +20%
         Text("KR")
-            .font(.system(size: h * 0.6, weight: .bold))
+            .font(.system(size: h * 0.6, weight: .semibold))
             .foregroundStyle(.secondary)
             .padding(.horizontal, h * 0.26)
             .frame(height: h)

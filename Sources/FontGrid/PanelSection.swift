@@ -22,7 +22,7 @@ struct PanelSection<Content: View>: View {
                 HStack(spacing: 8) {
                     if let title {
                         Text(title.uppercased())
-                            .font(.system(size: Theme.sectionHeaderSize, weight: .bold))
+                            .font(.system(size: Theme.sectionHeaderSize, weight: .semibold))
                             .tracking(0.6)
                             .foregroundStyle(.secondary)
                     }

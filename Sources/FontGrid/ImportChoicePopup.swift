@@ -32,7 +32,7 @@ struct ImportChoicePopup: View {
     private var card: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Import Backup")
-                .font(.system(size: 15, weight: .bold))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(.primary)
 
             // Line 1 — did it work: the file has been read and decoded.
