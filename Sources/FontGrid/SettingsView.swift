@@ -78,6 +78,7 @@ struct ExportData: Codable {
 // shortcuts stay live underneath so they can be previewed. Content is
 // scrollable so future settings can be appended freely.
 struct SettingsOverlay: View {
+    @Environment(\.accentColors) private var accent
     // Width of the left / right panels (plus their 1pt dividers), so the
     // content and close button can be confined to the center panel column
     // while the blur stays full-window.
@@ -189,7 +190,7 @@ struct SettingsOverlay: View {
             VStack(alignment: .leading, spacing: 32) {
                 Text("Settings")
                     .font(.system(size: SettingsType.title, weight: .bold))
-                    .foregroundStyle(Theme.accent)
+                    .foregroundStyle(accent.text)
                     // Optical alignment: large bold glyphs have more apparent
                     // left side-bearing, so nudge just the title left by 2pt
                     // to sit flush with the section labels below.
@@ -767,6 +768,7 @@ private struct SettingsButton: View {
 // One of a set of exclusive choices. SettingsButton's metrics with the left
 // panel's chip colours, so a selected option reads the same here as there.
 private struct SettingsChoiceButton: View {
+    @Environment(\.accentColors) private var accent
     let label: String
     let isOn: Bool
     let action: () -> Void
@@ -776,17 +778,17 @@ private struct SettingsChoiceButton: View {
         Button(action: action) {
             Text(label)
                 .font(.system(size: SettingsType.small, weight: isOn ? .medium : .regular))
-                .foregroundStyle(isOn ? Theme.accent : Color.secondary)
+                .foregroundStyle(isOn ? accent.text : Color.secondary)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
                 .background(
                     RoundedRectangle(cornerRadius: Theme.pillRadius)
-                        .fill(isOn ? Theme.accent.opacity(hovering ? 0.24 : 0.15)
+                        .fill(isOn ? accent.fill.opacity(hovering ? 0.24 : 0.15)
                                    : (hovering ? Theme.surfaceFillHover : Theme.surfaceFill))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: Theme.pillRadius)
-                        .stroke(isOn ? Theme.accent.opacity(0.6) : Theme.border, lineWidth: 1)
+                        .stroke(isOn ? Color.clear : Theme.border, lineWidth: 1)
                 )
         }
         .buttonStyle(.plain)

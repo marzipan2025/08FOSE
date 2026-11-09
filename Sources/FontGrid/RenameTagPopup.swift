@@ -70,6 +70,7 @@ struct RenameTagButton: View {
 // drops the field focus (global key monitor), a second ESC closes the popup
 // via the RootView cascade.
 struct RenameTagPopup: View {
+    @Environment(\.accentColors) private var accent
     let tag: String
     let count: Int
     let onCancel: () -> Void
@@ -132,7 +133,7 @@ struct RenameTagPopup: View {
                 .background(RoundedRectangle(cornerRadius: Theme.surfaceRadius).fill(Theme.surfaceFill))
                 .overlay(
                     RoundedRectangle(cornerRadius: Theme.surfaceRadius)
-                        .stroke(focused ? Theme.accent.opacity(0.5) : Theme.border, lineWidth: 1)
+                        .stroke(focused ? accent.fill.opacity(0.5) : Theme.border, lineWidth: 1)
                 )
                 .focused($focused)
                 .onSubmit(commit)
@@ -150,7 +151,7 @@ struct RenameTagPopup: View {
                     if confirmingDelete { onDelete() } else { confirmingDelete = true }
                 }
                 Spacer()
-                popupButton("Rename", tint: Theme.accent, hovering: $renameHovering, action: commit)
+                popupButton("Rename", tint: accent.text, hovering: $renameHovering, action: commit)
             }
             .padding(.top, 10)
         }

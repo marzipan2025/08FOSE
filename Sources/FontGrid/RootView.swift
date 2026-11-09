@@ -23,6 +23,11 @@ struct RootView: View {
     private static let toggleEdgeInset: CGFloat = 12
     private static let toggleBottomInset: CGFloat = 9
 
+    private var accentColors: AccentColors {
+        Theme.accentColors(lightWallpaper: vm.lightWallpaper,
+                           darkWallpaper: vm.darkWallpaper)
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             if leftPanelOpen {
@@ -206,6 +211,14 @@ struct RootView: View {
         .environmentObject(clipboard)
         .environmentObject(inputSource)
         .environmentObject(toasts)
+        // The accent follows the wallpaper chosen for each mode; see
+        // Theme.accentColors. Applied here, outside every overlay, so popups,
+        // the glyph zoom and the panel buttons read it too.
+        .environment(\.accentColors, accentColors)
+        // System controls (sliders, the text cursor, focus rings) take the
+        // same accent instead of the macOS one, so they don't stay blue on a
+        // green or yellow wallpaper.
+        .tint(accentColors.fill)
         .preferredColorScheme(vm.isLightMode ? .light : .dark)
         // Confirm a just-completed self-update (if the installer relaunched us),
         // then run one update check per launch; the check is silent unless a
@@ -642,6 +655,7 @@ private struct GlobalShortcutHandler: NSViewRepresentable {
 // docked in a window corner it drops to a tiny radius so its corner nests
 // concentrically inside the window's rounded corner.
 private struct PanelToggleButton: View {
+    @Environment(\.accentColors) private var accent
     let open: Bool
     let action: () -> Void
     @State private var hovering = false
@@ -654,7 +668,7 @@ private struct PanelToggleButton: View {
         Button(action: action) {
             Image(systemName: open ? "minus" : "plus")
                 .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(hovering ? Theme.accent : Color.secondary)
+                .foregroundStyle(hovering ? accent.text : Color.secondary)
                 .frame(width: 26, height: 26)
                 .background(
                     RoundedRectangle(cornerRadius: radius, style: .continuous)

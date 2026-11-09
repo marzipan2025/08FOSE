@@ -134,6 +134,7 @@ struct FontIndexRow: Identifiable {
 // scrolls the grid to the entry under the pointer and reports that entry, so
 // the grid can show which one it is.
 struct FontIndexStrip: View {
+    @Environment(\.accentColors) private var accent
     static let width: CGFloat = 28
 
     // Only the middle of the height is used.
@@ -202,7 +203,7 @@ struct FontIndexStrip: View {
                 Circle().frame(width: 2, height: 2)
             }
         }
-        .foregroundStyle(active ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(.tertiary))
+        .foregroundStyle(active ? AnyShapeStyle(accent.text) : AnyShapeStyle(.tertiary))
         .frame(width: Self.width, height: row.height)
     }
 
@@ -345,6 +346,7 @@ private struct IndexPointerTracker: NSViewRepresentable {
 // glyph's strokes overlap: system fonts are variable and draw M or N as
 // overlapping shapes, and a stroke on top traces those seams through the letter.
 struct FontIndexPreview: View {
+    @Environment(\.accentColors) private var accent
     private static let fontSize: CGFloat = 240
     // Twice the visible outline, since the fill covers the inner half.
     private static let strokeWidth: CGFloat = 1.5
@@ -354,7 +356,7 @@ struct FontIndexPreview: View {
     var body: some View {
         let glyphs = GlyphOutline(text: label, fontSize: Self.fontSize)
         ZStack {
-            glyphs.stroke(Theme.accent, style: StrokeStyle(lineWidth: Self.strokeWidth, lineJoin: .round))
+            glyphs.stroke(accent.fill, style: StrokeStyle(lineWidth: Self.strokeWidth, lineJoin: .round))
             glyphs.fill(Theme.cellSurface)
         }
         .frame(width: Self.fontSize * 1.6, height: Self.fontSize * 1.6)

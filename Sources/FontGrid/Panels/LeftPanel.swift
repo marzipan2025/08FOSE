@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct LeftPanel: View {
+    @Environment(\.accentColors) private var accent
     @EnvironmentObject var vm: AppViewModel
     @FocusState private var searchFocused: Bool
     @State private var settingsHovering = false
@@ -90,7 +91,7 @@ struct LeftPanel: View {
                 Text("Settings")
                     .font(.system(size: Theme.smallSize))
             }
-            .foregroundStyle(settingsHovering ? Theme.accent : Color.secondary)
+            .foregroundStyle(settingsHovering ? accent.text : Color.secondary)
             .padding(.horizontal, Theme.panelHPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
             // 44 = old 36 + 8: lifts the divider 8px and centers the content in
@@ -110,7 +111,7 @@ struct LeftPanel: View {
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: Theme.bodySize))
-                .foregroundStyle(searchFocused ? Theme.accent : Color.secondary)
+                .foregroundStyle(searchFocused ? accent.text : Color.secondary)
             TextField("Search", text: $vm.searchQuery)
                 .textFieldStyle(.plain)
                 .font(.system(size: Theme.bodySize))
@@ -133,7 +134,7 @@ struct LeftPanel: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: Theme.surfaceRadius, style: .continuous)
-                .stroke(searchFocused ? Theme.accent.opacity(0.5) : Theme.border, lineWidth: 1)
+                .stroke(searchFocused ? accent.fill.opacity(0.5) : Theme.border, lineWidth: 1)
         )
     }
 
@@ -282,16 +283,16 @@ struct LeftPanel: View {
                 Image(systemName: weightListOpen ? "chevron.up" : "chevron.down")
                     .font(.system(size: 9, weight: .medium))
             }
-            .foregroundStyle(vm.faceWeight == nil ? Color.secondary : Theme.accent)
+            .foregroundStyle(vm.faceWeight == nil ? Color.secondary : accent.text)
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
             .background(
                 RoundedRectangle(cornerRadius: Theme.pillRadius)
-                    .fill(vm.faceWeight == nil ? Theme.surfaceFill : Theme.accent.opacity(0.15))
+                    .fill(vm.faceWeight == nil ? Theme.surfaceFill : accent.fill.opacity(0.15))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: Theme.pillRadius)
-                    .stroke(vm.faceWeight == nil ? Theme.border : Theme.accent.opacity(0.6), lineWidth: 1)
+                    .stroke(vm.faceWeight == nil ? Theme.border : Color.clear, lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -403,16 +404,16 @@ struct LeftPanel: View {
         } label: {
             Text(label)
                 .font(.system(size: Theme.smallSize, weight: active ? .medium : .regular))
-                .foregroundStyle(active ? Theme.accent : Color.secondary)
+                .foregroundStyle(active ? accent.text : Color.secondary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 5)
                 .background(
                     RoundedRectangle(cornerRadius: Theme.pillRadius)
-                        .fill(active ? Theme.accent.opacity(0.15) : Theme.surfaceFill)
+                        .fill(active ? accent.fill.opacity(0.15) : Theme.surfaceFill)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: Theme.pillRadius)
-                        .stroke(active ? Theme.accent.opacity(0.6) : Theme.border, lineWidth: 1)
+                        .stroke(active ? Color.clear : Theme.border, lineWidth: 1)
                 )
         }
         .buttonStyle(.plain)
@@ -606,6 +607,7 @@ struct LeftPanel: View {
 // One row of the weight pull-down. Plain text with a hover wash — the list is
 // already inside two nested surfaces, so a third border per row would be noise.
 private struct FaceListRow: View {
+    @Environment(\.accentColors) private var accent
     let label: String
     let isOn: Bool
     let action: () -> Void
@@ -615,7 +617,7 @@ private struct FaceListRow: View {
         Button(action: action) {
             Text(label)
                 .font(.system(size: Theme.smallSize, weight: isOn ? .medium : .regular))
-                .foregroundStyle(isOn ? Theme.accent : Color.secondary)
+                .foregroundStyle(isOn ? accent.text : Color.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
@@ -637,6 +639,7 @@ private struct FaceListRow: View {
 // of unlabelled switches. Kept as its own button so tapping it does not also
 // fold the box.
 struct ClearButton: View {
+    @Environment(\.accentColors) private var accent
     var help: String
     let action: () -> Void
     @State private var hovering = false
@@ -645,7 +648,8 @@ struct ClearButton: View {
         Button(action: action) {
             Text("Clear")
                 .font(.system(size: Theme.smallSize))
-                .foregroundStyle(Theme.accent.opacity(hovering ? 1 : 0.8))
+                .foregroundStyle(accent.text)
+                .underline(hovering)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -658,6 +662,7 @@ struct ClearButton: View {
 // Pill-style toggle button with a light hover state: the fill grows a little
 // denser on rollover. Used for all left-panel toggles.
 private struct PillButton: View {
+    @Environment(\.accentColors) private var accent
     let label: String
     var icon: String? = nil
     let isOn: Bool
@@ -674,7 +679,7 @@ private struct PillButton: View {
                 Text(label)
                     .font(.system(size: Theme.smallSize, weight: isOn ? .medium : .regular))
             }
-            .foregroundStyle(isOn ? Theme.accent : Color.secondary)
+            .foregroundStyle(isOn ? accent.text : Color.secondary)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 5)
             .background(
@@ -682,7 +687,7 @@ private struct PillButton: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: Theme.pillRadius)
-                    .stroke(isOn ? Theme.accent.opacity(0.6) : Theme.border, lineWidth: 1)
+                    .stroke(isOn ? Color.clear : Theme.border, lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -691,7 +696,7 @@ private struct PillButton: View {
     }
 
     private var fillColor: Color {
-        if isOn { return Theme.accent.opacity(hovering ? 0.24 : 0.15) }
+        if isOn { return accent.fill.opacity(hovering ? 0.24 : 0.15) }
         return hovering ? Theme.surfaceFillHover : Theme.surfaceFill
     }
 }

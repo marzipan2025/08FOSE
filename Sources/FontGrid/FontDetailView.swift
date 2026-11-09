@@ -4,6 +4,7 @@ import CoreText
 import UniformTypeIdentifiers
 
 struct FontDetailView: View {
+    @Environment(\.accentColors) private var accent
     let family: FontFamily
     let previewText: String
     let onClose: () -> Void
@@ -172,7 +173,7 @@ struct FontDetailView: View {
     }
 
     // nil → default label color; accent when a custom sample is in effect.
-    private var sampleColor: Color? { hasCustomSample ? Theme.accent : nil }
+    private var sampleColor: Color? { hasCustomSample ? accent.text : nil }
 
 
     private var sampleBinding: Binding<String> {
@@ -453,7 +454,7 @@ struct FontDetailView: View {
                 } label: {
                     Text(infoExpanded ? "Read less" : "Read more")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Theme.accent)
+                        .foregroundStyle(accent.text)
                 }
                 .buttonStyle(.plain)
             }
@@ -513,7 +514,7 @@ struct FontDetailView: View {
         return Button { sampleFeatures.toggle(tag) } label: {
             Text(tag)
                 .font(.system(size: 13).italic())
-                .foregroundStyle(on ? Theme.accent : Theme.memoAccent)
+                .foregroundStyle(on ? accent.text : Theme.memoAccent)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -635,14 +636,14 @@ struct FontDetailView: View {
                 if samples.sample(for: family.name).isEmpty {
                     Text("Add specimen text…")
                         .font(.system(size: 17))
-                        .foregroundStyle(Theme.accent.opacity(0.55))
+                        .foregroundStyle(accent.text.opacity(0.55))
                         .allowsHitTesting(false)
                 }
                 MemoEditor(
                     text: sampleBinding,
                     fontSize: 17,
                     lineSpacing: 17 * 0.4,
-                    textColor: NSColor(Theme.accent)
+                    textColor: NSColor(accent.text)
                 )
             }
             // Reserve room on the right so the specimen text never runs under
@@ -1395,6 +1396,7 @@ extension View {
 // are drawn as TEXT (CTLine) so color fonts (emoji) render in their real color;
 // unmapped glyphs (ligatures, alternates) fall back to an outline by glyph ID.
 private struct GlyphCell: View {
+    @Environment(\.accentColors) private var accent
     let font: CTFont
     // The face this grid is drawing, and the family it belongs to. Both are
     // recorded on a copy: the glyph has to come back in the face it was seen
@@ -1497,7 +1499,7 @@ private struct GlyphCell: View {
             if showCopied {
                 Text("COPIED")
                     .font(.system(size: Theme.sectionHeaderSize, weight: .bold))
-                    .foregroundStyle(Theme.accent)
+                    .foregroundStyle(accent.text)
                     .padding(.bottom, 3)
                     .transition(.opacity)
             }
@@ -1523,7 +1525,7 @@ private struct GlyphCell: View {
         .overlay {
             if focusGlow {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Theme.accent.opacity(0.22))
+                    .fill(accent.fill.opacity(0.22))
                     .transition(.opacity)
                     .allowsHitTesting(false)
             }
@@ -2210,11 +2212,12 @@ private final class SwatchPalette: NSView {
 // Disabled (and dimmed) when there are no outlines to export — empty text, or
 // a bitmap/color font.
 private struct ExportButton: View {
+    @Environment(\.accentColors) private var accent
     let enabled: Bool
     let action: () -> Void
     @State private var hovering = false
 
-    private var ink: Color { hovering ? Theme.accent : .secondary }
+    private var ink: Color { hovering ? accent.text : .secondary }
 
     var body: some View {
         let triH = Theme.bodySize * 0.588 + 3   // 3px larger than before
@@ -2298,6 +2301,7 @@ private struct PlayTriangle: Shape {
 // Title-area action button (Pin / Copy name / Show in Finder) with a
 // light hover state: the fill grows a little denser on rollover.
 private struct ActionButton: View {
+    @Environment(\.accentColors) private var accent
     let icon: String?
     let label: String
     let active: Bool
@@ -2320,7 +2324,7 @@ private struct ActionButton: View {
                     Text(label).font(.system(size: Theme.bodySize))
                 }
             }
-            .foregroundStyle(active ? Theme.accent : Color.secondary)
+            .foregroundStyle(active ? accent.text : Color.secondary)
             .padding(.horizontal, showsLabel ? 12 : 9)
             .padding(.vertical, 7)
             .background(
@@ -2328,7 +2332,7 @@ private struct ActionButton: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 7)
-                    .stroke(active ? Theme.accent.opacity(0.4) : Theme.border, lineWidth: 1)
+                    .stroke(active ? Color.clear : Theme.border, lineWidth: 1)
             )
             .unifiedGeometry()
         }
@@ -2342,7 +2346,7 @@ private struct ActionButton: View {
     }
 
     private var fillColor: Color {
-        if active { return Theme.accent.opacity(hovering ? 0.16 : 0.08) }
+        if active { return accent.fill.opacity(hovering ? 0.16 : 0.08) }
         return hovering ? Theme.surfaceFillHover : Theme.surfaceFill
     }
 }

@@ -38,6 +38,7 @@ struct GlyphZoomKey: PreferenceKey {
 }
 
 struct GlyphZoomView: View {
+    @Environment(\.accentColors) private var accent
     let payload: GlyphZoomPayload
 
     // Corner radius of the detail card, so the blow-up is clipped exactly as it
@@ -96,17 +97,17 @@ struct GlyphZoomView: View {
             // bitmap glyphs fall through to solid.
             if payload.style == .contour, let path {
                 let contourInk = payload.scheme == .light ? NSColor.white : NSColor.black
-                let accent = Theme.accentInk(payload.scheme)
+                let accentInk = accent.ink(payload.scheme)
                 cg.saveGState()
                 cg.translateBy(x: (size.width - advance.width) / 2, y: baseline)
                 cg.addPath(path)
                 cg.setFillColor(contourInk.cgColor)
                 cg.fillPath()
                 cg.addPath(path)
-                cg.setStrokeColor(accent.cgColor)
+                cg.setStrokeColor(accentInk.cgColor)
                 cg.setLineWidth(1)
                 cg.strokePath()
-                drawNodeMarkers(path, in: cg, fill: contourInk, edge: accent)
+                drawNodeMarkers(path, in: cg, fill: contourInk, edge: accentInk)
                 cg.restoreGState()
             } else if let character = payload.character {
                 // Bitmap colour fonts top out at their largest strike (Apple

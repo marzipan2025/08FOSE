@@ -5,6 +5,7 @@ import SwiftUI
 // Replaces the old NSAlert so the choice shares the popup design language.
 // Presented above the Settings overlay; ESC / ✕ / backdrop cancel.
 struct ImportChoicePopup: View {
+    @Environment(\.accentColors) private var accent
     let payload: ExportData
     let onCancel: () -> Void
     let onMerge: () -> Void
@@ -60,7 +61,7 @@ struct ImportChoicePopup: View {
                     if confirmingReplace { onReplace() } else { confirmingReplace = true }
                 }
                 Spacer()
-                popupButton("Merge", tint: Theme.accent, hovering: $mergeHovering, action: onMerge)
+                popupButton("Merge", tint: accent.text, hovering: $mergeHovering, action: onMerge)
             }
             .padding(.top, 16)
         }

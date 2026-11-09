@@ -388,6 +388,7 @@ enum UpdateCheck {
 // swallows clicks (RootView swallows ESC and shortcuts), and the only ways
 // out are installing or Quit.
 struct UpdateResultPopup: View {
+    @Environment(\.accentColors) private var accent
     let status: UpdateStatus
     var locked = false
     let onClose: () -> Void
@@ -492,7 +493,7 @@ struct UpdateResultPopup: View {
             if case .available(let latest, _, let dmgURL, _, _, _) = status {
                 HStack(spacing: 8) {
                     if let dmgURL {
-                        popupButton(installTitle, tint: Theme.accent, hovering: $primaryHovering) {
+                        popupButton(installTitle, tint: accent.text, hovering: $primaryHovering) {
                             switch installer.phase {
                             case .idle, .failed: installer.start(dmgURL, version: latest)
                             case .downloading:   break
@@ -503,7 +504,7 @@ struct UpdateResultPopup: View {
                     } else {
                         // No dmg: the page is the only way to get it, so a
                         // locked card stays put behind the browser.
-                        popupButton("View Release", tint: Theme.accent, hovering: $primaryHovering) {
+                        popupButton("View Release", tint: accent.text, hovering: $primaryHovering) {
                             UpdateCheck.openReleasesPage()
                             if !locked { onClose() }
                         }

@@ -3,6 +3,7 @@ import AppKit
 import CoreText
 
 struct FontCell: View {
+    @Environment(\.accentColors) private var accent
     let family: FontFamily
     let previewText: String
     let fontSize: Double
@@ -135,7 +136,7 @@ struct FontCell: View {
         HStack(alignment: .top) {
             Text(family.name)
                 .font(.system(size: Theme.smallSize))
-                .foregroundStyle(Theme.accent)
+                .foregroundStyle(Theme.cellName)
                 .lineLimit(1)
                 .truncationMode(.tail)
             Spacer(minLength: 6)
@@ -145,7 +146,7 @@ struct FontCell: View {
 
     private var borderColor: Color {
         if hasMemo { return Theme.memoAccent }
-        if isPinned { return Theme.accent.opacity(0.45) }
+        if isPinned { return accent.fill.opacity(0.45) }
         if hovering { return Theme.borderHover }
         return Theme.border
     }
@@ -170,7 +171,7 @@ struct FontCell: View {
                     Button { pins.toggle(family.name) } label: {
                         ZStack {
                             if isPinned {
-                                Circle().fill(Theme.accent)
+                                Circle().fill(accent.fill)
                             } else {
                                 Circle().fill(Color.white.opacity(0.12))
                                 Circle().strokeBorder(Color.secondary, lineWidth: 1)

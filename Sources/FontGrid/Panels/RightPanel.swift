@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct RightPanel: View {
+    @Environment(\.accentColors) private var accent
     @EnvironmentObject var vm: AppViewModel
     @EnvironmentObject var pins: PinsStore
     @EnvironmentObject var memos: MemoStore
@@ -363,13 +364,13 @@ struct RightPanel: View {
         } label: {
             Text(vm.pinsByRecent ? "Recent" : "A–Z")
                 .font(.system(size: Theme.smallSize, weight: .medium))
-                .foregroundStyle(Theme.accent)
+                .foregroundStyle(accent.text)
                 .lineLimit(1)
                 .frame(width: 56)
                 .padding(.vertical, 3)
                 .background(
                     RoundedRectangle(cornerRadius: 6)
-                        .fill(Theme.accent.opacity(sortHovering ? 0.24 : 0.15))
+                        .fill(accent.fill.opacity(sortHovering ? 0.24 : 0.15))
                 )
         }
         .buttonStyle(.plain)
@@ -414,6 +415,7 @@ struct RightPanel: View {
 // A pill button for one note tag in the right panel. Shows the tag (without
 // '#') and how many fonts use it; highlights in the accent color when active.
 struct TagCapsule: View {
+    @Environment(\.accentColors) private var accent
     let tag: String
     let count: Int
     let active: Bool
@@ -430,15 +432,15 @@ struct TagCapsule: View {
                     .monospacedDigit()
                     .opacity(0.6)
             }
-            .foregroundStyle(active ? Theme.accent : Color.secondary)
+            .foregroundStyle(active ? accent.text : Color.secondary)
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .background(
-                Capsule().fill(active ? Theme.accent.opacity(0.16)
+                Capsule().fill(active ? accent.fill.opacity(0.16)
                                       : (hovering ? Theme.surfaceFillHover : Theme.surfaceFill))
             )
             .overlay(
-                Capsule().stroke(active ? Theme.accent.opacity(0.5) : Theme.border, lineWidth: 1)
+                Capsule().stroke(active ? Color.clear : Theme.border, lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -450,6 +452,7 @@ struct TagCapsule: View {
 // MARK: - Pin Row
 
 struct PinRow: View {
+    @Environment(\.accentColors) private var accent
     let name: String
     // PostScript face used to render the sample (deterministic weight); falls
     // back to the family name upstream when no preferred member exists.
@@ -517,9 +520,12 @@ struct PinRow: View {
                     }
                     .frame(width: 9, height: 9)
                 }
+                // Every row here is pinned, so an accent dot on each said
+                // nothing; it stays neutral and turns accent on hover, when it
+                // becomes the unpin control.
                 Button { pins.toggle(name) } label: {
                     Circle()
-                        .fill(Theme.accent)
+                        .fill(hovering ? accent.fill : Color.secondary.opacity(0.6))
                         .frame(width: 9, height: 9)
                 }
                 .buttonStyle(.plain)
@@ -615,6 +621,7 @@ private struct XMark: Shape {
 // revealed on rollover so the resting grid stays all glyph: delete, overhanging
 // the top-right corner.
 struct CopiedGlyphCard: View {
+    @Environment(\.accentColors) private var accent
     let entry: CopiedGlyph
     let onCopy: () -> Void
     // Returns whether the font was actually opened — a card whose family is no
@@ -638,9 +645,9 @@ struct CopiedGlyphCard: View {
             case .opened: return "OPEN"
             }
         }
-        var tint: Color {
+        func tint(_ accent: AccentColors) -> Color {
             switch self {
-            case .copied: return Theme.accent
+            case .copied: return accent.text
             case .opened: return .primary
             }
         }
@@ -722,7 +729,7 @@ struct CopiedGlyphCard: View {
             // same shape so neither can spill past the border.
             .overlay {
                 if let flashWash {
-                    shape.fill(flashWash.tint.opacity(flashWash.washOpacity))
+                    shape.fill(flashWash.tint(accent).opacity(flashWash.washOpacity))
                         .transition(.opacity)
                         .allowsHitTesting(false)
                 }
@@ -731,7 +738,7 @@ struct CopiedGlyphCard: View {
                 if let flashWord {
                     Text(flashWord.label)
                         .font(.system(size: Self.copiedSize, weight: .bold))
-                        .foregroundStyle(flashWord.tint)
+                        .foregroundStyle(flashWord.tint(accent))
                         .padding(.bottom, 3)
                         .transition(.opacity)
                 }
@@ -866,6 +873,7 @@ private struct HoldToOpen: ViewModifier {
 // Rather than vanish — which would read as the app having lost track of a
 // clipboard it can plainly still see — the slot stays and goes quiet.
 struct ClipboardGlyphSlot: View {
+    @Environment(\.accentColors) private var accent
     let character: String
     let spent: Bool
     let onAdd: () -> Void
@@ -894,7 +902,7 @@ struct ClipboardGlyphSlot: View {
             } else {
                 XMark()
                     .rotation(.degrees(45))
-                    .fill(hovering ? Theme.accent : Color.secondary)
+                    .fill(hovering ? accent.fill : Color.secondary)
                     .frame(width: 11, height: 11)
             }
         }
@@ -924,7 +932,7 @@ struct ClipboardGlyphSlot: View {
 
     private var borderColor: Color {
         if spent { return Theme.border }
-        return hovering ? Theme.accent.opacity(0.5) : Theme.border
+        return hovering ? accent.fill.opacity(0.5) : Theme.border
     }
 
     private var tooltip: String {
