@@ -722,8 +722,8 @@ struct WallpaperOverlay: View {
 
     // Per-wallpaper light-mode opacity override. Falls back to lightOpacity.
     private static let lightOpacityOverrides: [String: Double] = [
-        "Wallpaper01": 0.18,
-        "Wallpaper04": 0.3
+        "Wallpaper01": 0.12,
+        "Wallpaper04": 0.15
     ]
 
     // Per-wallpaper dark-mode opacity override. Falls back to darkOpacity.
