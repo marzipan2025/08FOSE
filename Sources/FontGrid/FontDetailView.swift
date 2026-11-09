@@ -517,7 +517,7 @@ struct FontDetailView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help("\(OpenTypeFeatureNames.friendly(tag) ?? tag) — \(on ? "on" : "off")")
+        .help("\(OpenTypeFeatureNames.friendly(tag) ?? tag): \(on ? "on" : "off")")
     }
 
     // MARK: - Memo (collapsed: single-line + expand toggle)
@@ -1991,7 +1991,7 @@ enum WeightArtwork {
         let format = accessory.format == .svg ? "SVG" : "PNG"
         guard let rendered else {
             toasts.show(Toast(style: .error, title: "\(format) export failed",
-                              detail: "The sample couldn't be rendered — no file was written."))
+                              detail: "The sample couldn't be rendered, so no file was written."))
             return
         }
         do {

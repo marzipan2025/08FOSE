@@ -48,7 +48,7 @@ struct ImportChoicePopup: View {
                 .padding(.top, 12)
 
             // Line 3 — what the choice below will do.
-            Text("You already have data in this app. Merge keeps it and adds the backup on top — differing memos are combined. Replace erases everything first and loads only the backup.")
+            Text("You already have data in this app. Merge keeps it and adds the backup on top, combining memos that differ. Replace erases everything first and loads only the backup.")
                 .font(.system(size: Theme.smallSize))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

@@ -557,7 +557,7 @@ struct UpdateResultPopup: View {
     private var descLine: String {
         switch status {
         case .upToDate:
-            return "This is the latest release on GitHub — there's nothing new to download."
+            return "This is the latest release on GitHub. There's nothing new to download."
         case .available(_, _, let dmgURL, let notes, _, let required):
             if installer.phase == .failed {
                 return "The update couldn't be downloaded from GitHub. Check your connection and try again."

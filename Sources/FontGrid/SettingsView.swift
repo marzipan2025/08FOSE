@@ -124,13 +124,13 @@ struct SettingsOverlay: View {
         ("0.8.23",
          "Click any weight's sample in a font's detail to type your own text into it, up to 100 characters. Each weight keeps its own line, and the export button saves what you typed. Nothing is kept once the detail closes."),
         ("0.8.22",
-         "Updates now arrive as this card when 08FOSE opens, and install right here — download, then relaunch, without leaving the card."),
+         "Updates now arrive as this card when 08FOSE opens, and install right here: download, then relaunch, without leaving the card."),
         ("0.8.21",
          "Tags can now be combined. Select several, see only fonts that have them all. Clear lets go of all of them at once."),
         ("0.8.20",
          "Update notices now come as a card at the top of the window, with a picture of what's new and a short note from the release. If a release has no picture, the card simply shows the note."),
         ("0.8.18",
-         "A glyph you copied somewhere else can be kept too. Copy a single character in any app and an empty slot appears at the head of Glyphs — click it and the character is kept there in the default font. The slot only shows for a glyph this app didn't copy itself, it goes away once you've taken it, and if you copy that same character again later it returns closed, to say it is already held."),
+         "A glyph you copied somewhere else can be kept too. Copy a single character in any app and an empty slot appears at the head of Glyphs. Click it and the character is kept there in the default font. The slot only shows for a glyph this app didn't copy itself, it goes away once you've taken it, and if you copy that same character again later it returns closed, to say it is already held."),
     ]
 
     var body: some View {
@@ -269,7 +269,7 @@ struct SettingsOverlay: View {
                         Text("Reset everything")
                             .font(.system(size: SettingsType.body))
                             .foregroundStyle(.primary)
-                        Text("Clears pins, memos, theme, wallpaper and window size — back to a fresh install.")
+                        Text("Clears pins, memos, theme, wallpaper and window size, back to a fresh install.")
                             .font(.system(size: SettingsType.small))
                             .foregroundStyle(.tertiary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -325,7 +325,7 @@ struct SettingsOverlay: View {
             VStack(spacing: 18) {
                 choiceRow(
                     title: "Motion",
-                    detail: "Animates the major transitions — opening a card, sliding panels, fading Settings in. Smaller changes animate either way."
+                    detail: "Animates the major transitions: opening a card, sliding panels, fading Settings in. Smaller changes animate either way."
                 ) {
                     SettingsChoiceButton(label: "On", isOn: vm.useMotion) {
                         vm.useMotion = true
@@ -452,8 +452,8 @@ struct SettingsOverlay: View {
                 shortcutRow("U", "Show / hide muted")
                 shortcutRow("I", "Only muted")
                 shortcutRow("X", "Show / hide index")
-                shortcutRow("Space", "Hold over a glyph — zoom, solid")
-                shortcutRow("⌥", "Hold over a glyph — zoom, contour")
+                shortcutRow("Space", "Hold over a glyph: zoom, solid")
+                shortcutRow("⌥", "Hold over a glyph: zoom, contour")
                 shortcutRow("[ ]", "Collapse / expand left · right panel")
                 shortcutRow("⌘ ↑ ↓", "Font size")
                 shortcutRow("⌘ ← →", "Columns")
@@ -666,7 +666,7 @@ struct SettingsOverlay: View {
         incoming.formUnion(payload.muted ?? [])
         let missing = incoming.subtracting(installed).count
         if missing > 0 {
-            detail += " — \(missing) not installed"
+            detail += " (\(missing) not installed)"
         }
 
         toasts.show(Toast(
