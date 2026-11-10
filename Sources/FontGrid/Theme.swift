@@ -79,6 +79,10 @@ enum Theme {
         "Wallpaper04": .init(fill: rgb(0x4AC50D), text: rgb(0x318409))
     ]
     fileprivate static let darkAccentOverrides: [String: AccentColors.Pair] = [
+        // Hot pink. The vivid #FF3EA5 fills dots, slider tracks and chip
+        // washes; words use the lighter CSS hotpink #FF69B4, 5.7:1 on a cell
+        // and 4.5:1 on a selected chip (the fill alone is 3.9:1 there).
+        "Wallpaper01": .init(fill: rgb(0xFF3EA5), text: rgb(0xFF69B4)),
         // Leaf green: 8.3:1 on a cell, 4.8:1 on a hovered chip, one colour.
         "Wallpaper03": .init(fill: rgb(0x77D64E), text: rgb(0x77D64E)),
         // Vivid yellow. On the dark surfaces it already reads at 11.5:1 on a
