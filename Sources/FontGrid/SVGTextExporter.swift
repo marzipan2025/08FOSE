@@ -123,7 +123,7 @@ enum SVGTextExporter {
         for (i, lineStr) in lines.enumerated() {
             let baselineY = -CGFloat(i) * lineHeight   // each line sits lower (y-up → negative)
             let ctLine = CTLineCreateWithAttributedString(
-                NSAttributedString(string: lineStr, attributes: attrs))
+                GlyphTokens.attributed(lineStr, attributes: attrs))
             guard let runs = CTLineGetGlyphRuns(ctLine) as? [CTRun] else { continue }
             for run in runs {
                 let count = CTRunGetGlyphCount(run)
@@ -178,6 +178,8 @@ enum SVGTextExporter {
     // Glyph id for a single scalar in `font` (nil if the font lacks it). BMP via
     // the batch API; astral planes via a one-glyph CTLine.
     private static func glyph(for scalar: Unicode.Scalar, in font: CTFont) -> CGGlyph? {
+        // A ⌘-clicked glyph's stand-in: the glyph itself, .notdef included.
+        if let ref = GlyphTokens.ref(for: scalar) { return GlyphTokens.glyph(ref, in: font) }
         if scalar.value <= 0xFFFF {
             var ch = UniChar(scalar.value)
             var g = CGGlyph(0)

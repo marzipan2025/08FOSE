@@ -178,7 +178,8 @@ final class WrappingPreviewView: NSView {
             kCTForegroundColorFromContextAttributeName as NSAttributedString.Key: true
         ]
         attrs.merge(features.textAttributes) { $1 }
-        attributed = NSAttributedString(string: text, attributes: attrs)
+        // ⌘-clicked glyphs ride in the text as stand-ins; see GlyphTokens.
+        attributed = GlyphTokens.attributed(text, attributes: attrs)
         framesetter = attributed.length > 0
             ? CTFramesetterCreateWithAttributedString(attributed)
             : nil
@@ -267,6 +268,8 @@ struct SampleTryEditor: NSViewRepresentable {
 
     func makeNSView(context: Context) -> SampleTryTextView {
         let view = SampleTryTextView(usingTextLayoutManager: false)
+        // Keeps ⌘-clicked glyphs (stand-in characters) drawing as themselves.
+        view.layoutManager?.replaceTextStorage(GlyphTokenTextStorage())
         view.delegate = context.coordinator
         view.isRichText = false
         view.allowsUndo = true

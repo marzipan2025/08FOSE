@@ -124,9 +124,15 @@ struct ToastView: View {
                 .foregroundStyle(toast.style == .error ? Color.red : Self.titleText)
 
             VStack(alignment: .leading, spacing: 2) {
+                // Both lines wrap rather than truncate once the card reaches the
+                // centre column's width (RootView insets it 24pt inside the
+                // column, so it never outgrows the detail card, which sits 16pt
+                // in). SwiftUI breaks Hangul at spaces, word by word, and only
+                // splits a word that can't fit a line on its own.
                 Text(toast.title)
                     .font(.system(size: size(for: .title)))
                     .foregroundStyle(colour(for: .title))
+                    .fixedSize(horizontal: false, vertical: true)
                 if let detail = toast.detail {
                     Text(detail)
                         .font(.system(size: size(for: .detail)))

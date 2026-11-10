@@ -63,6 +63,9 @@ struct FontDetailView: View {
     // shape the weight-row samples (and their export) only, and reset with
     // the font, like the try-out text.
     @State private var sampleFeatures = SampleFeatures()
+    // Glyphs ⌘-clicked in the grid, added after the sample in every weight
+    // row. Never saved; cleared with the font, like the features.
+    @State private var appendedGlyphs = ""
 
     // The drawing style the held key selects, once the card actually has a glyph
     // grid to inspect. nil means neither key is down.
@@ -295,6 +298,7 @@ struct FontDetailView: View {
             infoExpanded = false
             memoExpanded = false
             sampleFeatures = SampleFeatures()
+            appendedGlyphs = ""
             memoContentHeight = 0
             // Normally a new font starts on its own preview face. But when the
             // switch WAS a focus request — long-pressing a saved glyph while
@@ -507,14 +511,18 @@ struct FontDetailView: View {
             .textCase(.uppercase)
     }
 
-    // A toggle for the weight-row samples: accent when the feature is applied
-    // (including the ones Core Text applies by default, e.g. kern and liga).
+    // A toggle for the weight-row samples, in the accent at full strength when
+    // the feature is applied (including the ones Core Text applies by default,
+    // e.g. kern and liga) and faded when it isn't. Told apart by opacity alone:
+    // an on/off pair of two colours collided on wallpapers whose accent is
+    // itself a blue.
     private func featureTag(_ tag: String) -> some View {
         let on = sampleFeatures.isOn(tag)
         return Button { sampleFeatures.toggle(tag) } label: {
             Text(tag)
                 .font(.system(size: 13).italic())
-                .foregroundStyle(on ? accent.text : Theme.memoAccent)
+                .foregroundStyle(accent.text)
+                .opacity(on ? 1 : 0.3)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -842,7 +850,8 @@ struct FontDetailView: View {
                 VariableWeightRow(
                     basePSName: family.previewFontName ?? family.memberFontNames.first ?? family.name,
                     familyName: family.name,
-                    sampleText: sampleText,
+                    sampleText: sampleText + appendedGlyphs,
+                    appended: appendedGlyphs,
                     sampleColor: sampleColor,
                     sampleSize: CGFloat(vm.weightRowFontSize),
                     axis: axis,
@@ -853,7 +862,8 @@ struct FontDetailView: View {
                 Divider().opacity(0.15).padding(.horizontal, 24)
             }
             ForEach(Array(family.memberFontNames.enumerated()), id: \.offset) { index, psName in
-                WeightRow(psName: psName, familyName: family.name, sampleText: sampleText,
+                WeightRow(psName: psName, familyName: family.name,
+                          sampleText: sampleText + appendedGlyphs, appended: appendedGlyphs,
                           sampleColor: sampleColor, sampleSize: CGFloat(vm.weightRowFontSize),
                           sampleLayoutWidth: finalSampleWidth,
                           sampleRevealed: vm.revealedSampleRows > index + variableRowOffset,
@@ -1061,7 +1071,8 @@ struct FontDetailView: View {
                     character: glyphMap[CGGlyph(index)],
                     inspecting: inspecting,
                     focused: focusedGlyph == CGGlyph(index),
-                    onRollover: { scheduleZoom($0) }
+                    onRollover: { scheduleZoom($0) },
+                    onCommandTap: { appendGlyph($0, character: $1) }
                 )
                 .frame(height: cell)
                 // Its own identity type: the weight rows sharing this scroll are
@@ -1199,6 +1210,24 @@ struct FontDetailView: View {
     }
 
     private static let focusScrollDuration: Double = 0.28
+
+    /// ⌘-click: add `glyph` to the end of the weight-row samples, as itself
+    /// (a stand-in, see GlyphTokens), even when it has a character. Typed as
+    /// a character it would be reshaped by what is around it: a combining
+    /// mark joins the letter before it, a later click turns a connecting
+    /// script's letter into another form, a ligature swallows two clicks.
+    /// As itself it stays exactly what was clicked. False only when the
+    /// samples are full.
+    private func appendGlyph(_ glyph: CGGlyph, character: String?) -> Bool {
+        guard let token = GlyphTokens.token(for: glyph, psName: selectedGlyphPS),
+              (appendedGlyphs + token).count <= SampleTryEditor.maxLength
+        else {
+            NSSound.beep()
+            return false
+        }
+        appendedGlyphs += token
+        return true
+    }
 
     private func openInFinder() {
         guard let psName = family.memberFontNames.first,
@@ -1412,11 +1441,14 @@ private struct GlyphCell: View {
     // The saved-glyph list has just scrolled the grid here. Says so, twice.
     let focused: Bool
     let onRollover: (CGGlyph?) -> Void
+    // ⌘-click: add to the weight-row samples. Returns whether it was added.
+    var onCommandTap: ((CGGlyph, String?) -> Bool)? = nil
     @EnvironmentObject var glyphs: GlyphsStore
     @EnvironmentObject var clipboard: ClipboardWatcher
     @Environment(\.colorScheme) private var colorScheme
     @State private var hovering = false
     @State private var showCopied = false
+    @State private var flashLabel = "COPIED"
     @State private var focusGlow = false
 
     // Two blinks: one can pass for a rendering hiccup, three starts nagging.
@@ -1497,7 +1529,7 @@ private struct GlyphCell: View {
         // Non-copyable glyphs simply don't react.
         .overlay(alignment: .bottom) {
             if showCopied {
-                Text("COPIED")
+                Text(flashLabel)
                     .font(.system(size: Theme.sectionHeaderSize, weight: .semibold))
                     .foregroundStyle(accent.text)
                     .padding(.bottom, 3)
@@ -1542,7 +1574,14 @@ private struct GlyphCell: View {
                 }
             }
         }
-        .onTapGesture { if !inspecting { handleTap() } }
+        .onTapGesture {
+            guard !inspecting else { return }
+            if NSEvent.modifierFlags.contains(.command), let onCommandTap {
+                if onCommandTap(glyph, character) { flash("ADDED") }
+            } else {
+                handleTap()
+            }
+        }
         // Hover tooltip: the character this glyph maps to. Empty when unmapped,
         // and suppressed entirely in inspect mode — the blown-up glyph is the
         // answer to "what is this", so a small popup on top of it is just noise.
@@ -1576,6 +1615,11 @@ private struct GlyphCell: View {
         clipboard.noteOwnCopy()
         // Also keep it, so it can be copied again without coming back here.
         glyphs.record(character: character, psName: psName, familyName: familyName)
+        flash("COPIED")
+    }
+
+    private func flash(_ label: String) {
+        flashLabel = label
         withAnimation(.easeOut(duration: Theme.copyFlashIn)) { showCopied = true }
         DispatchQueue.main.asyncAfter(deadline: .now() + Theme.copyFlashHold) {
             withAnimation(.easeIn(duration: Theme.copyFlashOut)) { showCopied = false }
@@ -1720,6 +1764,7 @@ private struct VariableWeightRow: View {
     let basePSName: String
     let familyName: String
     let sampleText: String
+    var appended: String = ""
     var sampleColor: Color? = nil
     let sampleSize: CGFloat
     let axis: WeightAxis
@@ -1735,13 +1780,15 @@ private struct VariableWeightRow: View {
 
     private var shownText: String { tryText ?? sampleText }
 
-    init(basePSName: String, familyName: String, sampleText: String, sampleColor: Color?,
+    init(basePSName: String, familyName: String, sampleText: String, appended: String = "",
+         sampleColor: Color?,
          sampleSize: CGFloat, axis: WeightAxis,
          sampleLayoutWidth: CGFloat? = nil, sampleRevealed: Bool = true,
          features: SampleFeatures = SampleFeatures()) {
         self.basePSName = basePSName
         self.familyName = familyName
         self.sampleText = sampleText
+        self.appended = appended
         self.sampleColor = sampleColor
         self.sampleSize = sampleSize
         self.axis = axis
@@ -1783,6 +1830,7 @@ private struct VariableWeightRow: View {
             }
             TryableSample(
                 sampleText: sampleText,
+                appended: appended,
                 fontName: basePSName,
                 fontSize: sampleSize,
                 color: sampleColor,
@@ -1820,6 +1868,9 @@ private struct VariableWeightRow: View {
 // saved); `tryText` nil means the row shows the shared sample.
 private struct TryableSample: View {
     let sampleText: String
+    // The ⌘-clicked glyphs, already at the end of `sampleText`. A row holding
+    // try-out text gets each new one added to that text instead.
+    var appended: String = ""
     let fontName: String
     let fontSize: CGFloat
     var color: Color? = nil
@@ -1832,8 +1883,21 @@ private struct TryableSample: View {
     @Binding var isTrying: Bool
 
     @State private var cursorPushed = false
+    @State private var seenAppended: String? = nil
 
     var body: some View {
+        content
+            .onAppear { if seenAppended == nil { seenAppended = appended } }
+            .onChange(of: appended) { now in
+                let before = seenAppended ?? ""
+                seenAppended = now
+                guard tryText != nil, now.hasPrefix(before), now.count > before.count else { return }
+                tryText! += String(now.dropFirst(before.count))
+            }
+    }
+
+    @ViewBuilder
+    private var content: some View {
         if isTrying {
             SampleTryEditor(text: Binding(get: { tryText ?? "" }, set: { tryText = $0 }),
                             fontName: fontName, fontSize: fontSize,
@@ -1881,6 +1945,7 @@ struct WeightRow: View {
     let psName: String
     let familyName: String
     let sampleText: String
+    var appended: String = ""
     var sampleColor: Color? = nil
     let sampleSize: CGFloat
     // Final wrap width and reveal state — see WrappingPreviewLabel. Defaulted so
@@ -1923,7 +1988,8 @@ struct WeightRow: View {
                 // ▶︎ pinned to the right edge of the row, centered to the line.
                 ExportButton(enabled: canExport, action: exportArtwork)
             }
-            TryableSample(sampleText: sampleText, fontName: psName, fontSize: sampleSize,
+            TryableSample(sampleText: sampleText, appended: appended,
+                          fontName: psName, fontSize: sampleSize,
                           color: sampleColor, features: features,
                           layoutWidth: sampleLayoutWidth, isRevealed: sampleRevealed,
                           tryText: $tryText, isTrying: $isTrying)
