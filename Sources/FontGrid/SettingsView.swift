@@ -118,6 +118,8 @@ struct SettingsOverlay: View {
     // About had grown into a changelog; trim it again when it does, rather than
     // collapsing this to a lone string.
     private static let releaseNotes: [(version: String, note: String)] = [
+        ("0.8.28",
+         "The export button on each weight now copies too: PNG as an image, SVG as editable vectors. Saves go straight to Downloads."),
         ("0.8.27",
          "⌘-click any glyph in a font's detail to add it to every weight's sample, even ones with no character of their own."),
         ("0.8.26",
