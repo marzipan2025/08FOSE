@@ -103,10 +103,22 @@ enum GlyphTokens {
         let whole = NSRange(location: 0, length: text.length)
         guard whole.length > 0 else { return }
         text.removeAttribute(.glyphInfo, range: whole)
+        // Put the original font back — but only where the font is still the
+        // unshaped copy set below. If the font was changed since (the editor
+        // is filled with its text first and gets its font after, which sets
+        // .font over everything), the remembered base is stale: restoring it
+        // drew the stand-in in the text view's default Helvetica 12.
         text.enumerateAttribute(baseFontKey, in: whole) { base, range, _ in
             guard let base else { return }
-            text.addAttribute(.font, value: base, range: range)
+            text.enumerateAttributes(in: range) { attrs, sub, _ in
+                if let current = attrs[.font] as? NSFont,
+                   let unshaped = attrs[unshapedFontKey] as? NSFont,
+                   current == unshaped {
+                    text.addAttribute(.font, value: base, range: sub)
+                }
+            }
             text.removeAttribute(baseFontKey, range: range)
+            text.removeAttribute(unshapedFontKey, range: range)
         }
         for (range, ref) in occurrences(in: text.string as NSString) {
             guard let font = text.attribute(.font, at: range.location, effectiveRange: nil) as? NSFont
@@ -115,11 +127,15 @@ enum GlyphTokens {
             guard let info = NSGlyphInfo(cgGlyph: glyph(ref, in: font as CTFont), for: unshaped,
                                          baseString: (text.string as NSString).substring(with: range))
             else { continue }
-            text.addAttributes([.font: unshaped, baseFontKey: font, .glyphInfo: info], range: range)
+            text.addAttributes([.font: unshaped, baseFontKey: font, unshapedFontKey: unshaped,
+                                .glyphInfo: info], range: range)
         }
     }
 
     static let baseFontKey = NSAttributedString.Key("FOSEGlyphTokenBaseFont")
+    // The unshaped copy a stand-in was given, so `resolve` can tell whether
+    // its font is still that copy or has been replaced from outside.
+    static let unshapedFontKey = NSAttributedString.Key("FOSEGlyphTokenUnshapedFont")
 
     // Every substitution feature in common use, off. A font ignores the tags
     // it doesn't have. Apple's own AAT fonts (Geeza Pro) shape through
