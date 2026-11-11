@@ -1773,6 +1773,7 @@ private struct VariableWeightRow: View {
     var features = SampleFeatures()
 
     @EnvironmentObject var toasts: ToastCenter
+    @EnvironmentObject var vm: AppViewModel
     @State private var weight: Double
     // See TryableSample. Row-local so typing re-renders this row only.
     @State private var tryText: String? = nil
@@ -1853,13 +1854,13 @@ private struct VariableWeightRow: View {
 
     // Export the sample at the slider's current weight; the file stem ends with
     // "VF(nnn)" so the exact weight is captured in the name.
-    private func exportArtwork() {
+    private func exportArtwork(from buttonFrame: CGRect) {
         func clean(_ s: String) -> String { s.replacingOccurrences(of: "/", with: "-") }
         let w = Int(weight.rounded())
         let baseName = "08FOSE) \(clean(familyName))_VF(\(w))"
-        WeightArtwork.export(text: shownText, fontName: basePSName, baseName: baseName,
-                             variation: (axisID: axis.id, value: weight), features: features,
-                             toasts: toasts)
+        vm.toggleExportMenu(ExportMenuRequest(
+            buttonFrame: buttonFrame, text: shownText, fontName: basePSName, baseName: baseName,
+            variation: (axisID: axis.id, value: weight), features: features))
     }
 }
 
@@ -1955,6 +1956,7 @@ struct WeightRow: View {
     var features = SampleFeatures()
 
     @EnvironmentObject var toasts: ToastCenter
+    @EnvironmentObject var vm: AppViewModel
     // See TryableSample. Row-local so typing re-renders this row only, and the
     // detail's `.id(family.id)` scroll drops it with the font.
     @State private var tryText: String? = nil
@@ -2003,9 +2005,10 @@ struct WeightRow: View {
     }
 
     // Flatten this weight's sample text and save as SVG or PNG.
-    private func exportArtwork() {
-        WeightArtwork.export(text: shownText, fontName: psName, baseName: artworkBaseName,
-                             features: features, toasts: toasts)
+    private func exportArtwork(from buttonFrame: CGRect) {
+        vm.toggleExportMenu(ExportMenuRequest(
+            buttonFrame: buttonFrame, text: shownText, fontName: psName, baseName: artworkBaseName,
+            variation: nil, features: features))
     }
 
     // e.g. "08FOSE) SDMapssi_Regular"  ("/" sanitized for the filesystem). No
@@ -2016,263 +2019,127 @@ struct WeightRow: View {
     }
 }
 
-// Shared weight-row artwork export: a Save panel (format + color accessory)
-// that flattens `text` in `fontName` — optionally at a specific variation
-// weight — to SVG or PNG. Used by both the static weight rows and the
-// variable-weight row (which supplies a `variation` and a "VF(nnn)" base name).
+// Shared weight-row artwork export. The ▶︎ button opens ExportMenuPopup —
+// Save as PNG / Save as SVG / Copy as PNG / Copy as SVG — and the pick lands
+// here: `text` in `fontName` (optionally at a specific variation weight) is
+// flattened to vector outlines. Saves go straight to ~/Downloads under the
+// row's base name (no Save panel; " 2", " 3"… on a name clash). Copies put the
+// artwork on the clipboard so it pastes directly into Figma & co: PNG as an
+// image, SVG as markup that design tools import as editable vectors. Used by
+// both the static weight rows and the variable-weight row (which supplies a
+// `variation` and a "VF(nnn)" base name).
 enum WeightArtwork {
+    enum Format {
+        case svg, png
+        var label: String { self == .svg ? "SVG" : "PNG" }
+        var ext: String { self == .svg ? "svg" : "png" }
+    }
+
+    enum Action { case savePNG, saveSVG, copyPNG, copySVG }
+
+    /// Run a menu pick. `white` is the fill: white artwork in the app's dark
+    /// mode, black in light mode — the color the sample itself is drawn in.
     @MainActor
-    static func export(text: String, fontName: String, baseName: String,
-                       variation: (axisID: Int, value: Double)? = nil,
-                       features: SampleFeatures = SampleFeatures(),
-                       toasts: ToastCenter) {
-        guard SVGTextExporter.canExport(text: text, fontName: fontName) else { NSSound.beep(); return }
-
-        let panel = NSSavePanel()
-        panel.canCreateDirectories = true
-        panel.showsTagField = false
-        panel.nameFieldStringValue = baseName
-        panel.allowedContentTypes = [.svg]
-
-        let accessory = ExportOptionsAccessory()
-        accessory.onFormatChange = { [weak panel] fmt in
-            guard let panel else { return }
-            panel.allowedContentTypes = [fmt == .svg ? .svg : .png]
+    static func perform(_ action: Action, _ r: ExportMenuRequest, white: Bool, toasts: ToastCenter) {
+        switch action {
+        case .savePNG: save(.png, r, white, toasts)
+        case .saveSVG: save(.svg, r, white, toasts)
+        case .copyPNG: copy(.png, r, white, toasts)
+        case .copySVG: copy(.svg, r, white, toasts)
         }
-        panel.accessoryView = accessory
+    }
 
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        // Both failure legs matter: a nil render means the save panel closed
-        // normally but NO file exists — without the error toast that's an
-        // invisible failure the user only discovers later in Finder.
-        let rendered: Data?
-        switch accessory.format {
+    private static func render(_ format: Format, _ r: ExportMenuRequest, _ white: Bool) -> Data? {
+        switch format {
         case .svg:
-            rendered = SVGTextExporter.svg(text: text, fontName: fontName,
-                                           fill: accessory.colorHex, variation: variation,
-                                           features: features)?.data(using: .utf8)
+            return SVGTextExporter.svg(text: r.text, fontName: r.fontName,
+                                       fill: white ? "#ffffff" : "#000000",
+                                       variation: r.variation, features: r.features)?
+                .data(using: .utf8)
         case .png:
-            rendered = SVGTextExporter.pngData(text: text, fontName: fontName,
-                                               color: accessory.color, variation: variation,
-                                               features: features)
+            return SVGTextExporter.pngData(text: r.text, fontName: r.fontName,
+                                           color: white ? .white : .black,
+                                           variation: r.variation, features: r.features)
         }
-        let format = accessory.format == .svg ? "SVG" : "PNG"
-        guard let rendered else {
-            toasts.show(Toast(style: .error, title: "\(format) export failed",
-                              detail: "The sample couldn't be rendered, so no file was written."))
-            return
+    }
+
+    // A nil render is reported, not swallowed: otherwise the menu closes
+    // normally and the user only finds out later that nothing happened.
+    @MainActor
+    private static func renderFailed(_ format: Format, _ toasts: ToastCenter, copying: Bool) {
+        toasts.show(Toast(style: .error, title: "\(format.label) \(copying ? "copy" : "export") failed",
+                          detail: "The sample couldn't be rendered."))
+    }
+
+    @MainActor
+    private static func save(_ format: Format, _ r: ExportMenuRequest, _ white: Bool,
+                             _ toasts: ToastCenter) {
+        guard let data = render(format, r, white) else {
+            return renderFailed(format, toasts, copying: false)
         }
+        let dir = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
+        let url = uniqueURL(in: dir, base: r.baseName, ext: format.ext)
         do {
-            try rendered.write(to: url)
+            try data.write(to: url)
             toasts.show(Toast(
                 style: .success,
-                title: "\(format) exported",
+                title: "\(format.label) saved to Downloads",
                 detail: url.lastPathComponent,
-                icon: "square.and.arrow.up",
-                emphasis: .detail
+                icon: "square.and.arrow.down",
+                emphasis: .detail,
+                actionLabel: "Show",
+                action: { NSWorkspace.shared.activateFileViewerSelecting([url]) }
             ))
         } catch {
-            toasts.show(Toast(style: .error, title: "\(format) export failed",
-                              detail: "Couldn't write to \(url.lastPathComponent). Try a different folder."))
-        }
-    }
-}
-
-// Save-panel accessory: format picker (SVG/PNG) on the left, two-swatch
-// black/white color picker pinned to the right. The color applies to both
-// formats (SVG `fill` / PNG fill). Defaults: SVG + black, reset every export.
-//
-// An explicit frame is set so NSSavePanel widens to fit — autolayout-only
-// sizing leaves the view at 0×0 and clips controls under Cancel/Save.
-private final class ExportOptionsAccessory: NSView {
-    enum Format { case svg, png }
-
-    private(set) var format: Format = .svg
-    var color: NSColor { palette.color }
-    var colorHex: String { palette.colorHex }
-    var onFormatChange: ((Format) -> Void)?
-
-    private let formatPopUp = NSPopUpButton()
-    private let palette: SwatchPalette
-
-    init() {
-        // System (not app-override) appearance decides which fill comes first
-        // and starts selected: black in system Dark mode, white in Light mode.
-        let isSystemDark = UserDefaults.standard.string(forKey: "AppleInterfaceStyle") == "Dark"
-        self.palette = SwatchPalette(blackFirst: isSystemDark)
-        super.init(frame: NSRect(x: 0, y: 0, width: 420, height: 60))
-
-        formatPopUp.addItems(withTitles: ["SVG", "PNG"])
-        formatPopUp.target = self
-        formatPopUp.action = #selector(formatChanged)
-
-        let formatLabel = NSTextField(labelWithString: "Format:")
-        formatLabel.alignment = .right
-
-        for v in [formatLabel, formatPopUp, palette] as [NSView] {
-            v.translatesAutoresizingMaskIntoConstraints = false
-            addSubview(v)
-        }
-
-        NSLayoutConstraint.activate([
-            // Left cluster: "Format:" label + popup. The label is right-aligned
-            // with a fixed trailing X so the colon lines up with the native
-            // "Save As:" / "Where:" colons above. (Tune this constant if the
-            // colons drift on a different macOS or with a wider panel.)
-            formatLabel.trailingAnchor.constraint(equalTo: leadingAnchor, constant: 92),
-            formatLabel.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 12),
-            formatPopUp.leadingAnchor.constraint(equalTo: formatLabel.trailingAnchor, constant: 8),
-            formatLabel.centerYAnchor.constraint(equalTo: formatPopUp.centerYAnchor),
-
-            // Right cluster: swatches pinned to the trailing edge. The palette
-            // reports its full bounds incl. the accent ring, so the constant
-            // lands flush with the visible ring edge.
-            palette.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -36),
-            palette.leadingAnchor.constraint(greaterThanOrEqualTo: formatPopUp.trailingAnchor, constant: 24),
-            palette.centerYAnchor.constraint(equalTo: formatPopUp.centerYAnchor),
-
-            // Vertical centering of the whole row.
-            formatPopUp.centerYAnchor.constraint(equalTo: centerYAnchor),
-            formatPopUp.topAnchor.constraint(greaterThanOrEqualTo: topAnchor, constant: 12),
-            formatPopUp.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -12),
-        ])
-    }
-
-    required init?(coder: NSCoder) { fatalError("init(coder:) not supported") }
-
-    @objc private func formatChanged() {
-        format = formatPopUp.indexOfSelectedItem == 1 ? .png : .svg
-        onFormatChange?(format)
-    }
-
-    // When the accessory lands in the save panel's window, tweak the panel's
-    // chrome: hide the separator hairlines above/below the accessory (so the
-    // Format row flows with the Save As / Where rows above), and nudge the
-    // Cancel/Save buttons leftward. Deferred to the next runloop tick so the
-    // panel has finished laying out its private subviews.
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        guard window != nil else { return }
-        DispatchQueue.main.async { [weak self] in
-            guard let root = self?.window?.contentView else { return }
-            Self.hideSeparators(in: root)
-            Self.nudgeFooterButtons(in: root, dx: -20)
+            toasts.show(Toast(style: .error, title: "\(format.label) export failed",
+                              detail: "Couldn't write \(url.lastPathComponent) to Downloads."))
         }
     }
 
-    // Hide every hairline-looking view in the panel chrome — NSBox separators,
-    // any view whose class name hints at "Separator"/"Divider", and anonymous
-    // 1pt-tall horizontal NSViews (which is how modern NSSavePanel actually
-    // paints the dividers around accessoryView).
-    private static func hideSeparators(in view: NSView) {
-        let className = String(describing: type(of: view))
-        var hide = false
-        if let box = view as? NSBox, box.boxType == .separator {
-            hide = true
-        } else if className.contains("Separator") || className.contains("Divider") {
-            hide = true
-        } else if type(of: view) == NSView.self,
-                  view.frame.height > 0, view.frame.height <= 1,
-                  view.frame.width > 100 {
-            hide = true
+    @MainActor
+    private static func copy(_ format: Format, _ r: ExportMenuRequest, _ white: Bool,
+                             _ toasts: ToastCenter) {
+        guard let data = render(format, r, white) else {
+            return renderFailed(format, toasts, copying: true)
         }
-        if hide { view.isHidden = true }
-        view.subviews.forEach { hideSeparators(in: $0) }
-    }
-
-    // Translate the panel's default (Return / Escape) buttons — Cancel & Save
-    // — horizontally. Identified by key equivalent so localization doesn't
-    // matter. Best-effort: if autolayout re-pins them, this won't stick.
-    private static func nudgeFooterButtons(in view: NSView, dx: CGFloat) {
-        if let btn = view as? NSButton,
-           ["\r", "\u{1b}"].contains(btn.keyEquivalent) {
-            var f = btn.frame
-            f.origin.x += dx
-            btn.frame = f
-        }
-        view.subviews.forEach { nudgeFooterButtons(in: $0, dx: dx) }
-    }
-}
-
-// Two inline swatches — black and white. Click to select; the active swatch
-// gets an accent ring. No popover, no NSColorPanel. Order is set at init —
-// whichever color is at index 0 sits on the left and is selected by default.
-private final class SwatchPalette: NSView {
-    let swatches: [NSColor]
-    let hexValues: [String]
-
-    private let cell: CGFloat = 14
-    private let gap: CGFloat = 6
-    private let ringInset: CGFloat = 2     // accent ring extends this far past each cell
-    private let ringWidth: CGFloat = 1.5
-
-    private(set) var selected: Int = 0
-    var color: NSColor { swatches[selected] }
-    var colorHex: String { hexValues[selected] }
-
-    init(blackFirst: Bool) {
-        if blackFirst {
-            self.swatches = [.black, .white]
-            self.hexValues = ["#000000", "#ffffff"]
-        } else {
-            self.swatches = [.white, .black]
-            self.hexValues = ["#ffffff", "#000000"]
-        }
-        super.init(frame: .zero)
-    }
-
-    required init?(coder: NSCoder) { fatalError("init(coder:) not supported") }
-
-    override var intrinsicContentSize: NSSize {
-        let count = CGFloat(swatches.count)
-        // Include the ring margin on every side so the trailing constraint
-        // lands flush with the visible ring edge instead of clipping it.
-        return NSSize(
-            width: count * cell + (count - 1) * gap + ringInset * 2,
-            height: cell + ringInset * 2
-        )
-    }
-
-    override func draw(_ dirtyRect: NSRect) {
-        for (i, c) in swatches.enumerated() {
-            let r = rect(for: i)
-            let path = NSBezierPath(roundedRect: r, xRadius: 3, yRadius: 3)
-            c.setFill()
-            path.fill()
-            // Hairline so white stays visible against the panel background.
-            NSColor.separatorColor.setStroke()
-            path.lineWidth = 0.5
-            path.stroke()
-            if i == selected {
-                let ring = NSBezierPath(roundedRect: r.insetBy(dx: -ringInset, dy: -ringInset),
-                                        xRadius: 5, yRadius: 5)
-                NSColor.controlAccentColor.setStroke()
-                ring.lineWidth = ringWidth
-                ring.stroke()
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        switch format {
+        case .png:
+            // PNG keeps the transparency; TIFF alongside for apps that only
+            // read the classic image type.
+            pb.setData(data, forType: .png)
+            if let tiff = NSImage(data: data)?.tiffRepresentation {
+                pb.setData(tiff, forType: .tiff)
+            }
+        case .svg:
+            // Figma (and most vector tools) turn pasted `<svg …>` text into
+            // editable vectors; the dedicated SVG type is there for apps that
+            // look for it instead.
+            pb.setData(data, forType: NSPasteboard.PasteboardType(UTType.svg.identifier))
+            if let markup = String(data: data, encoding: .utf8) {
+                pb.setString(markup, forType: .string)
             }
         }
+        toasts.show(Toast(style: .success, title: "\(format.label) copied",
+                          icon: "doc.on.clipboard"))
     }
 
-    private func rect(for index: Int) -> NSRect {
-        // Inset by the ring margin on the left so the leftmost ring stays
-        // inside view bounds; vertical centering handles top/bottom margin.
-        let x = ringInset + CGFloat(index) * (cell + gap)
-        let y = (bounds.height - cell) / 2
-        return NSRect(x: x, y: y, width: cell, height: cell)
-    }
-
-    override func mouseDown(with event: NSEvent) {
-        let p = convert(event.locationInWindow, from: nil)
-        for i in 0..<swatches.count where rect(for: i).contains(p) {
-            selected = i
-            needsDisplay = true
-            break
+    // "name.png", then "name 2.png", "name 3.png"… — never overwrites.
+    private static func uniqueURL(in dir: URL, base: String, ext: String) -> URL {
+        let fm = FileManager.default
+        var url = dir.appendingPathComponent(base).appendingPathExtension(ext)
+        var n = 2
+        while fm.fileExists(atPath: url.path) {
+            url = dir.appendingPathComponent("\(base) \(n)").appendingPathExtension(ext)
+            n += 1
         }
+        return url
     }
 }
 
-// Small ▶︎ button on a weight row: exports that weight's sample text (SVG or
-// PNG — picked in the save panel's accessory view). A bare rounded-corner
+// Small ▶︎ button on a weight row: opens ExportMenuPopup (save / copy as PNG
+// or SVG). A bare rounded-corner
 // triangle (no chrome). The glyph is drawn at 84% of the text height with
 // subtly rounded vertices, while the hit area stays at the full text height.
 // Disabled (and dimmed) when there are no outlines to export — empty text, or
@@ -2280,8 +2147,10 @@ private final class SwatchPalette: NSView {
 private struct ExportButton: View {
     @Environment(\.accentColors) private var accent
     let enabled: Bool
-    let action: () -> Void
+    /// Gets the button's frame in global coordinates, so the menu can sit by it.
+    let action: (CGRect) -> Void
     @State private var hovering = false
+    @State private var frame: CGRect = .zero
 
     private var ink: Color { hovering ? accent.text : .secondary }
 
@@ -2291,7 +2160,7 @@ private struct ExportButton: View {
         let hit = triH + 5                       // click target a bit past the glyph
         let rounding = triH * 0.4            // corner rounding (offset along edges)
 
-        return Button(action: action) {
+        return Button(action: { action(frame) }) {
             Group {
                 if enabled {
                     PlayTriangle(rounding: rounding)
@@ -2309,9 +2178,14 @@ private struct ExportButton: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .background(GeometryReader { g in
+            Color.clear
+                .onAppear { frame = g.frame(in: .global) }
+                .onChange(of: g.frame(in: .global)) { f in frame = f }
+        })
         .disabled(!enabled)
         .onHover { hovering = enabled && $0 }
-        .help(enabled ? "Export this weight's sample text (SVG or PNG)"
+        .help(enabled ? "Save or copy this weight's sample text (PNG or SVG)"
                       : "No vector outlines to export")
     }
 }

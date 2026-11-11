@@ -190,6 +190,18 @@ final class AppViewModel: ObservableObject {
     // Not persisted — a transient UI state, unlike activeTags above.
     @Published var renamingTag: String? = nil
 
+    // The weight-row export menu that's open (drawn by RootView under the
+    // wallpaper). nil = closed. Clicking the same ▶︎ again closes it.
+    @Published var exportMenu: ExportMenuRequest? = nil
+
+    func toggleExportMenu(_ request: ExportMenuRequest) {
+        if let open = exportMenu, open.buttonFrame == request.buttonFrame {
+            exportMenu = nil
+        } else {
+            exportMenu = request
+        }
+    }
+
     @Published var columnCount: Int = AppViewModel.loadColumnCount() {
         didSet { UserDefaults.standard.set(columnCount, forKey: Self.columnCountKey) }
     }

@@ -100,6 +100,25 @@ struct RootView: View {
             }
         }
         .animation(.easeOut(duration: 0.15), value: vm.renamingTag)
+        // Weight-row export menu (Save / Copy as PNG / SVG). Under the wallpaper
+        // like the detail card it pops out of, so it takes the same tint.
+        .overlay {
+            if let request = vm.exportMenu {
+                ExportMenuPopup(
+                    request: request,
+                    onPick: { action in
+                        vm.exportMenu = nil
+                        WeightArtwork.perform(action, request, white: !vm.isLightMode, toasts: toasts)
+                    },
+                    onDismiss: { vm.exportMenu = nil }
+                )
+                .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.12), value: vm.exportMenu)
+        .onChange(of: vm.selectedFamily == nil) { closed in
+            if closed { vm.exportMenu = nil }
+        }
         // Wallpaper overlay: same mechanism in both dark and light mode, driven
         // by vm.wallpaper. Image, blend mode and opacity are all picked inside
         // WallpaperOverlay based on the current colorScheme.
@@ -407,6 +426,11 @@ struct RootView: View {
         // cascade. Locked (required), ESC is eaten and nothing behind closes.
         if let status = vm.launchUpdate {
             if !status.isRequired { vm.launchUpdate = nil }
+            return true
+        }
+        // The export menu is the smallest, most transient layer — close it first.
+        if vm.exportMenu != nil {
+            vm.exportMenu = nil
             return true
         }
         // The rename-tag popup sits above everything, so it closes first —
