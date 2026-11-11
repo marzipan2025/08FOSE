@@ -115,10 +115,11 @@ struct SettingsOverlay: View {
     // shape is what lets a release ADD a note instead of overwriting the last
     // one. That matters — a single overwritten line is how the Motion setting
     // came to ship unannounced. History is trimmed here deliberately, because
-    // About had grown into a changelog; trim it again when it does, rather than
-    // collapsing this to a lone string.
+    // About had grown into a changelog: keep only the latest 4 entries, dropping
+    // the oldest whenever a release adds one, rather than collapsing this to a
+    // lone string.
     private static let releaseNotes: [(version: String, note: String)] = [
-        ("0.8.28",
+        ("0.8.29",
          "The export button on each weight now copies too: PNG as an image, SVG as editable vectors. Saves go straight to Downloads."),
         ("0.8.27",
          "⌘-click any glyph in a font's detail to add it to every weight's sample, even ones with no character of their own."),
@@ -126,18 +127,6 @@ struct SettingsOverlay: View {
          "Darker accent text and grey font names make small text easier to read. Some wallpapers now bring their own accent."),
         ("0.8.25",
          "A phone-book index now sits beside the list. Roll over a letter, Hangul initial or number to jump there. X turns it off."),
-        ("0.8.24",
-         "The Features tags in a font's detail now switch OpenType features on and off for its samples. Orange means applied; kern and the other defaults start on. Exports follow what you see, and everything resets when the detail closes."),
-        ("0.8.23",
-         "Click any weight's sample in a font's detail to type your own text into it, up to 100 characters. Each weight keeps its own line, and the export button saves what you typed. Nothing is kept once the detail closes."),
-        ("0.8.22",
-         "Updates now arrive as this card when 08FOSE opens, and install right here: download, then relaunch, without leaving the card."),
-        ("0.8.21",
-         "Tags can now be combined. Select several, see only fonts that have them all. Clear lets go of all of them at once."),
-        ("0.8.20",
-         "Update notices now come as a card at the top of the window, with a picture of what's new and a short note from the release. If a release has no picture, the card simply shows the note."),
-        ("0.8.18",
-         "A glyph you copied somewhere else can be kept too. Copy a single character in any app and an empty slot appears at the head of Glyphs. Click it and the character is kept there in the default font. The slot only shows for a glyph this app didn't copy itself, it goes away once you've taken it, and if you copy that same character again later it returns closed, to say it is already held."),
     ]
 
     var body: some View {
