@@ -184,7 +184,22 @@ struct RootView: View {
             }
         }
         .animation(.easeOut(duration: 0.15), value: vm.showGuide)
-        // The launch check's update card, above Settings and every panel.
+        // Silence the tooltips of everything the modals cover — the glyph grid,
+        // the font cells, the pin rows. Their tracking rects survive underneath,
+        // so without this the pointer pops them over the modal.
+        .environment(\.tooltipsSuppressed, vm.showSettings || vm.renamingTag != nil || hardModal)
+        // Email sign-up / block gate (AccessGate.swift): above everything
+        // but the update card and the toasts. While it is up, clicks stop at its backdrop and the
+        // shortcut handlers below go inert.
+        .overlay {
+            if access.isLocked {
+                AccessGateView(access: access)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.15), value: access.isLocked)
+        // The update card, above Settings, every panel and the sign-up gate:
+        // if sign-up itself is what broke, the fix must still be reachable.
         // Locked (centred, no way out but install or Quit) when the release
         // requires this update; otherwise it closes like any popup.
         .overlay {
@@ -196,12 +211,8 @@ struct RootView: View {
             }
         }
         .animation(.easeOut(duration: 0.15), value: vm.launchUpdate == nil)
-        // Silence the tooltips of everything the modals cover — the glyph grid,
-        // the font cells, the pin rows. Their tracking rects survive underneath,
-        // so without this the pointer pops them over the modal.
-        .environment(\.tooltipsSuppressed, vm.showSettings || vm.renamingTag != nil || hardModal)
-        // Toast layer: topmost (above the wallpaper tint AND the Settings
-        // overlay — import/export toasts fire while Settings is open). Aligned
+        // Toast layer: topmost (above the wallpaper tint, the Settings
+        // overlay and the sign-up gate, whose guide copies the contact email — import/export toasts fire while Settings is open). Aligned
         // to the center panel column's top edge, sliding in from above.
         // Deliberately NOT under the wallpaper: its blend modes (plusLighter /
         // multiply / …) would tint the toast's semantic colors — the red error
@@ -224,16 +235,6 @@ struct RootView: View {
             }
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: toasts.toast)
-        // Email sign-up / block gate (AccessGate.swift): above everything,
-        // toasts included. While it is up, clicks stop at its backdrop and the
-        // shortcut handlers below go inert.
-        .overlay {
-            if access.isLocked {
-                AccessGateView(access: access)
-                    .transition(.opacity)
-            }
-        }
-        .animation(.easeOut(duration: 0.15), value: access.isLocked)
         .background(Theme.panelBackground.ignoresSafeArea())
         .background(InitialFocusClearer())
         .background(GlobalShortcutHandler(
@@ -267,17 +268,23 @@ struct RootView: View {
         // then run one update check per launch; the check is silent unless a
         // newer release exists.
         .task {
-            access.start()
-            UpdateCheck.showPostUpdateToastIfNeeded(toasts: toasts)
-            UpdateCheck.checkOnLaunch { status in
-                // A required update closes what the user may have opened during
-                // the check, so the locked card is the only thing on screen.
+            // A required update closes what the user may have opened during
+            // the check, so the locked card is the only thing on screen.
+            let raise: (UpdateStatus) -> Void = { status in
                 if status.isRequired {
                     vm.showSettings = false
                     vm.renamingTag = nil
                 }
                 vm.launchUpdate = status
             }
+            // Daily: on the access check's triggers, for a copy left open.
+            access.onCheckTrigger = {
+                guard vm.launchUpdate == nil else { return }
+                UpdateCheck.checkDaily(onAvailable: raise)
+            }
+            access.start()
+            UpdateCheck.showPostUpdateToastIfNeeded(toasts: toasts)
+            UpdateCheck.checkOnLaunch(onAvailable: raise)
         }
         // Fonts were installed or removed while the app was running. The grid
         // itself needs no help — it is keyed by family name, so the replaced
@@ -447,15 +454,15 @@ struct RootView: View {
     // ESC cascade step: close the Settings modal if it's open. Returns true
     // when it actually closed something.
     private func closeSettingsIfOpen() -> Bool {
-        // The sign-up gate has no way out but verifying (or Quit).
-        if access.isLocked { return true }
-        if vm.showGuide { vm.showGuide = false; return true }
-        // The launch update card sits above everything, so it heads the ESC
+        // The update card sits above everything, so it heads the ESC
         // cascade. Locked (required), ESC is eaten and nothing behind closes.
         if let status = vm.launchUpdate {
             if !status.isRequired { vm.launchUpdate = nil }
             return true
         }
+        // The sign-up gate has no way out but verifying (or Quit).
+        if access.isLocked { return true }
+        if vm.showGuide { vm.showGuide = false; return true }
         // The export menu is the smallest, most transient layer — close it first.
         if vm.exportMenu != nil {
             vm.exportMenu = nil

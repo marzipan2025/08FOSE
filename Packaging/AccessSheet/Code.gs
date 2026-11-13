@@ -28,6 +28,8 @@
 
 var MEMBERS = 'Members';
 var PUBLIC = 'blocked';
+// Must match AccessConfig.directoryMarker in the app.
+var DIRECTORY_MARKER = '08FOSE_DIRECTORY';
 var HEAD = ['Email', 'Status', 'Devices', 'Code', 'Joined', 'Verified', 'Left', 'Memo', 'Email Hash'];
 var C = { email: 0, status: 1, devices: 2, code: 3, joined: 4, verified: 5, left: 6, memo: 7, hash: 8 };
 var STATUSES = ['Pending', 'Active', 'Rejoined', 'Inactive', 'Withdrawn'];
@@ -192,11 +194,13 @@ function withdraw(e, email, device) {
 
 // MARK: - Published list
 
-// One line per account: email hash, status, device IDs separated by spaces.
-// Plus QUOTA_FULL when today's mail quota is used up.
+// First line: the marker the app looks for, so it can tell the list from an
+// empty or broken response. Then one line per account: email hash, status,
+// device IDs separated by spaces. Plus QUOTA_FULL when today's mail quota is
+// used up.
 function publish() {
   var m = members();
-  var out = [];
+  var out = [[DIRECTORY_MARKER, '1', '']];
   var last = m.getLastRow();
   if (last >= 2) {
     m.getRange(2, 1, last - 1, HEAD.length).getValues().forEach(function (r) {
@@ -212,8 +216,11 @@ function publish() {
   else if (quota) props.deleteProperty('quotaFull');
 
   var sheet = SpreadsheetApp.getActive().getSheetByName(PUBLIC);
-  sheet.clear();
-  if (out.length) sheet.getRange(1, 1, out.length, 3).setValues(out);
+  // Write over the old rows first and only then drop what is left below, so
+  // the tab is never empty in between.
+  sheet.getRange(1, 1, out.length, 3).setValues(out);
+  var extra = sheet.getLastRow() - out.length;
+  if (extra > 0) sheet.getRange(out.length + 1, 1, extra, sheet.getMaxColumns()).clearContent();
 }
 
 function markQuotaFull() {

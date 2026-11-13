@@ -123,14 +123,14 @@ struct SettingsOverlay: View {
     // the oldest whenever a release adds one, rather than collapsing this to a
     // lone string.
     private static let releaseNotes: [(version: String, note: String)] = [
+        ("0.9.0",
+         "08FOSE now asks you to sign up with your email, once per Mac. A new user guide walks through every part of the app; find it again in Settings."),
         ("0.8.29",
          "The export button on each weight now copies too: PNG as an image, SVG as editable vectors. Saves go straight to Downloads."),
         ("0.8.27",
          "⌘-click any glyph in a font's detail to add it to every weight's sample, even ones with no character of their own."),
         ("0.8.26",
          "Darker accent text and grey font names make small text easier to read. Some wallpapers now bring their own accent."),
-        ("0.8.25",
-         "A phone-book index now sits beside the list. Roll over a letter, Hangul initial or number to jump there. X turns it off."),
     ]
 
     var body: some View {

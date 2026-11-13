@@ -92,10 +92,55 @@ enum UpdateCheck {
     // Called once from RootView when the app launches. `onAvailable` receives
     // a newer release's status so RootView can raise the card.
     static func checkOnLaunch(onAvailable: @escaping (UpdateStatus) -> Void) {
+        inFlight = true
         Task {
             let status = await fetchStatus()
+            inFlight = false
+            record(status)
             if case .available = status { onAvailable(status) }
         }
+    }
+
+    // The daily check rides on the access check's triggers (day change, wake,
+    // the app coming forward), so a copy left open for days still hears about
+    // a release. At most one successful check per local day, the launch check
+    // included; a failure leaves the day open for the next trigger. A version
+    // already offered once isn't raised again mid-session — only a required
+    // update is, so the locked card can't be missed.
+    static func checkDaily(onAvailable: @escaping (UpdateStatus) -> Void) {
+        guard !inFlight, UserDefaults.standard.string(forKey: Key.lastCheckDay) != today() else { return }
+        inFlight = true
+        Task {
+            let status = await fetchStatus()
+            inFlight = false
+            let offered = UserDefaults.standard.string(forKey: Key.lastOffered)
+            record(status)
+            guard case .available(let latest, _, _, _, _, let required) = status,
+                  required || latest != offered else { return }
+            onAvailable(status)
+        }
+    }
+
+    private enum Key {
+        static let lastCheckDay = "update.lastCheckDay"
+        static let lastOffered = "update.lastOfferedVersion"
+    }
+    private static var inFlight = false
+
+    private static func record(_ status: UpdateStatus) {
+        guard status != .failed else { return }
+        UserDefaults.standard.set(today(), forKey: Key.lastCheckDay)
+        if case .available(let latest, _, _, _, _, _) = status {
+            UserDefaults.standard.set(latest, forKey: Key.lastOffered)
+        }
+    }
+
+    private static func today() -> String {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f.string(from: Date())
     }
 
     static func fetchStatus() async -> UpdateStatus {

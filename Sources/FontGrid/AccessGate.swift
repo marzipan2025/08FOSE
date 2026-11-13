@@ -36,6 +36,15 @@ enum AccessConfig {
     // The published list lags a few minutes behind the sheet. Right after
     // verifying, a missing row means "not published yet", not "removed".
     static let publishGrace: TimeInterval = 60 * 60
+
+    // First line of the published list (written by Code.gs). A response
+    // without it — an empty sheet mid-rewrite, a Google error page served
+    // with 200 — is not the list, and must never read as "account removed".
+    static let directoryMarker = "08FOSE_DIRECTORY"
+
+    // The script accepts VERIFIED for 6 hours after a code request; the app
+    // stops accepting the code a little earlier so the two never disagree.
+    static let codeLifetime: TimeInterval = 5 * 60 * 60
 }
 
 @MainActor
@@ -78,11 +87,12 @@ final class AccessController: ObservableObject {
         static let noticePending = "access.verifiedNoticePending"
         static let pendingEmail = "access.pendingEmail"
         static let pendingCode = "access.pendingCode"
+        static let pendingAt = "access.pendingAt"
         static let blocked = "access.blocked"
         static let lastCheckDay = "access.lastCheckDay"
         static let termsAgreed = "access.termsAgreed"
         static let all = [verifiedEmail, verifiedAt, noticePending, pendingEmail,
-                          pendingCode, blocked, lastCheckDay, termsAgreed]
+                          pendingCode, pendingAt, blocked, lastCheckDay, termsAgreed]
     }
 
     let deviceID = AccessController.makeDeviceID()
@@ -108,18 +118,23 @@ final class AccessController: ObservableObject {
     /// Called once from RootView. Checks now if today hasn't been checked,
     /// then again whenever the day changes: at midnight, after sleep, or when
     /// the app comes back to the front on a new day.
+    /// Run on each of the triggers below (day change, wake, activation), so
+    /// other once-a-day work — the update check — can ride along. Not on
+    /// start(): the launch has its own update check.
+    var onCheckTrigger: (() -> Void)?
+
     func start() {
         guard observers.isEmpty else { return }
         let nc = NotificationCenter.default
         observers.append(nc.addObserver(forName: .NSCalendarDayChanged, object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.checkIfNewDay() }
+            Task { @MainActor in self?.checkIfNewDay(); self?.onCheckTrigger?() }
         })
         observers.append(NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.checkIfNewDay() }
+            Task { @MainActor in self?.checkIfNewDay(); self?.onCheckTrigger?() }
         })
         observers.append(nc.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.checkIfNewDay() }
+            Task { @MainActor in self?.checkIfNewDay(); self?.onCheckTrigger?() }
         })
         // A blocked Mac asks on every launch, so lifting the block in the
         // sheet frees it the next time it opens.
@@ -221,6 +236,7 @@ final class AccessController: ObservableObject {
             }
             defaults.set(email, forKey: Key.pendingEmail)
             defaults.set(code, forKey: Key.pendingCode)
+            defaults.set(Date(), forKey: Key.pendingAt)
             phase = .code(email: email)
             message = resending ? Message(text: "We sent a new code.", isError: false) : nil
         }
@@ -229,6 +245,10 @@ final class AccessController: ObservableObject {
     func verify(_ input: String) {
         guard case .code(let email) = phase,
               let expected = defaults.string(forKey: Key.pendingCode) else { return }
+        guard !pendingCodeExpired else {
+            message = Message(text: "That code has expired. Press Resend Code for a new one.", isError: true)
+            return
+        }
         guard Self.normalizeCode(input) == expected else {
             message = Message(text: "That code doesn't match.", isError: true)
             return
@@ -241,6 +261,7 @@ final class AccessController: ObservableObject {
         defaults.set(Self.localDay(), forKey: Key.lastCheckDay)
         defaults.removeObject(forKey: Key.pendingEmail)
         defaults.removeObject(forKey: Key.pendingCode)
+        defaults.removeObject(forKey: Key.pendingAt)
         message = nil
         phase = .verified
         let device = deviceID
@@ -251,9 +272,17 @@ final class AccessController: ObservableObject {
         }
     }
 
+    /// A code older than the script's window would pass here and then be
+    /// turned away by the sheet. No timestamp (never happens) counts as old.
+    private var pendingCodeExpired: Bool {
+        let at = defaults.object(forKey: Key.pendingAt) as? Date ?? .distantPast
+        return Date().timeIntervalSince(at) > AccessConfig.codeLifetime
+    }
+
     func changeEmail() {
         defaults.removeObject(forKey: Key.pendingEmail)
         defaults.removeObject(forKey: Key.pendingCode)
+        defaults.removeObject(forKey: Key.pendingAt)
         message = nil
         phase = .email
     }
@@ -323,11 +352,13 @@ final class AccessController: ObservableObject {
               let text = String(data: data, encoding: .utf8) else { return nil }
         var accounts: [String: Account] = [:]
         var quotaFull = false
+        var marked = false
         let today = seoulDay()
         for line in text.split(whereSeparator: \.isNewline) {
             let fields = line.split(separator: ",", omittingEmptySubsequences: false)
                 .map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "\" ")) }
             guard fields.count >= 2, !fields[0].isEmpty else { continue }
+            if fields[0] == AccessConfig.directoryMarker { marked = true; continue }
             if fields[0] == "QUOTA_FULL" {
                 if fields[1] == today { quotaFull = true }
                 continue
@@ -336,6 +367,7 @@ final class AccessController: ObservableObject {
                 ? Set(fields[2].split(separator: " ").map(String.init)) : []
             accounts[fields[0]] = Account(status: fields[1], devices: devices)
         }
+        guard marked else { return nil }
         return Directory(accounts: accounts, quotaFullToday: quotaFull)
     }
 
@@ -766,7 +798,7 @@ struct GuideBackdrop: View {
             .resizable()
             .scaledToFit()
             .frame(width: GuideView.width, height: GuideView.height, alignment: .top)
-            .opacity(0.5)   // half the PNG's own strength, so the guide reads first
+            .opacity(0.3)   // 30% of the PNG's own strength, so the guide reads first
             .accessibilityHidden(true)
     }
 }
@@ -778,6 +810,7 @@ struct GuideBackdrop: View {
 /// video) slot into `page(_:)`.
 struct GuideView: View {
     @Environment(\.accentColors) private var accent
+    @EnvironmentObject private var toasts: ToastCenter
     @State private var index = 0
     @State private var buttonHovering = false
     @State private var prevHovering = false
@@ -844,7 +877,7 @@ struct GuideView: View {
                 .resizable()
                 .interpolation(.high)
                 .frame(width: d(371), height: d(371))
-                .offset(x: 0, y: d(5) - 4)   // 4pt above the Figma position
+                .offset(x: 16, y: d(5) - 4)  // 16pt right of, 4pt above the Figma position
                 .accessibilityHidden(true)
 
             Image("GuideTitle")
@@ -897,7 +930,12 @@ extension GuideView {
         let title: String
         let image: String
         let parts: [(name: String, text: String)]
+        /// A closing page's plain text instead of numbered parts. An
+        /// `email` inside it becomes a link that copies the address.
+        var closing: (text: String, email: String)? = nil
     }
+
+    static let contactEmail = "artbrainbyeongsu@gmail.com"
 
     // Text stays within 10 lines of the 290-unit column.
     static let sections: [Section] = [
@@ -916,7 +954,38 @@ extension GuideView {
             ("2 Weights", "How many weights the family has; VF marks a variable font. Hover over a cell to see its weights right away."),
             ("3 Note", "This dot means the font has a note, and its cell gets an outline. Words written with # in a note work as tags too."),
             ("4 Pin", "Shows the font is pinned. Click it to pin or unpin; your pinned fonts are listed at the top right of the app.")
-        ])
+        ]),
+        Section(number: "04", title: "Font Details", image: "GuideSection4", parts: [
+            ("1 Header", "The font's name and weights, with buttons to pin it, copy its name, show it in Finder or mute it."),
+            ("2 Samples", "Your text in each weight. Type over it to try your own, or export the sample."),
+            ("3 Glyphs", "Every glyph in the font. Click one to copy it to the clipboard."),
+            ("4 Info", "Technical details: format, file size, scripts, features, copyright and more."),
+            ("5 Note", "Fix a sample text for this font, or write #words to tag it.")
+        ]),
+        Section(number: "04-1", title: "Font Header", image: "GuideSection5", parts: [
+            ("1 Pin", "Adds the font to your pinned list at the top right of the app. Click again to unpin."),
+            ("2 Copy name", "Copies the family name to the clipboard, ready to paste into a design app."),
+            ("3 Show in Finder", "Opens the folder that holds the font file, with the file selected."),
+            ("4 Mute", "Puts a font you rarely use to sleep. With Hide muted on it leaves the grid; the Muted filter lists only muted fonts.")
+        ]),
+        Section(number: "04-2", title: "Font Samples", image: "GuideSection6", parts: [
+            ("1 Try it out", "Click a sample to type your own text in that weight. Each row keeps its own words; they aren't saved, and they clear when you open another font."),
+            ("2 Export", "Opens a menu to save the row as PNG or SVG straight to Downloads, or to copy it and paste into Figma and other design apps as editable vectors. The artwork is white in dark mode and black in light mode.")
+        ]),
+        Section(number: "04-3", title: "Glyphs", image: "GuideSection7", parts: [
+            ("1 Weight", "Choose which weight's glyphs to show."),
+            ("2 Copy", "Click a glyph to copy it. It's also kept in the Glyphs list at the bottom right, ready to copy again."),
+            ("3 No character", "An outlined cell is a glyph with no character of its own, so it can't be copied."),
+            ("4 Add", "⌘\u{2011}click a glyph to add it to the end of every sample above. This works for outlined glyphs too, so you can export them as PNG or SVG."),
+            ("5 Inspect", "Roll over a glyph and hold Space to blow it up across the card, or ⌥ Option to see it as outlines.")
+        ]),
+        Section(number: "04-4", title: "Note & Specimen", image: "GuideSection8", parts: [
+            ("1 Note", "Write anything about the font. A font with a note gets a round dot and an outline in the grid."),
+            ("2 Tags", "Words written with # become tags. They gather in the Tags list at the right, where picking one shows only the fonts that carry it."),
+            ("3 Specimen", "Text set here replaces the sample for this font only, in the grid and in every weight above. Its dot in the grid turns square.")
+        ]),
+        Section(number: "05", title: "Go Explore!", image: "GuideSection9", parts: [],
+                closing: ("That's the tour, but not the whole story! 08FOSE is full of little touches we haven't mentioned, and a few easter eggs are hiding in there too. Click around, try things and see what turns up. Got an idea, a wish or a question? Drop a line to \(contactEmail). I'd love to hear from you!", contactEmail))
     ]
 
     // Figma node 5721:486.
@@ -937,18 +1006,14 @@ extension GuideView {
             .foregroundStyle(.primary)
             .offset(x: d(390), y: d(51))
 
-            section.parts.reduce(Text("")) { text, part in
-                // No-break space keeps a number on the same line as its name.
-                text + Text(part.name.replacingOccurrences(of: " ", with: "\u{00A0}") + " ")
-                    .fontWeight(.bold)
-                     + Text(part.text + " ").fontWeight(.light)
-            }
+            bodyText(section)
             .font(.system(size: Self.textSize))
             .foregroundStyle(.primary)
             .lineSpacing(1.5)
             .frame(width: d(290), alignment: .leading)
             .fixedSize(horizontal: false, vertical: true)
             .offset(x: d(392), y: d(123))
+            .environment(\.openURL, OpenURLAction(handler: copyEmail))
 
             navButton("GuidePrev", label: "Previous", hovering: $prevHovering, action: previous)
                 .offset(x: d(392), y: d(314))
@@ -959,6 +1024,37 @@ extension GuideView {
     }
 
     static let sectionSize: CGFloat = 15
+
+    func bodyText(_ section: Section) -> Text {
+        if let closing = section.closing {
+            var text = AttributedString(closing.text)
+            if let range = text.range(of: closing.email) {
+                text[range].link = URL(string: "mailto:\(closing.email)")
+                text[range].foregroundColor = Self.partNameColor
+                text[range].underlineStyle = .single
+            }
+            return Text(text).fontWeight(.light)
+        }
+        return section.parts.reduce(Text("")) { text, part in
+            // No-break space keeps a number on the same line as its name.
+            text + Text(part.name.replacingOccurrences(of: " ", with: "\u{00A0}") + " ")
+                .fontWeight(.bold)
+                .foregroundColor(Self.partNameColor)
+                 + Text(part.text + " ").fontWeight(.light)
+        }
+    }
+
+    /// The closing page's email link: copy the address instead of opening Mail.
+    func copyEmail(_ url: URL) -> OpenURLAction.Result {
+        guard url.scheme == "mailto" else { return .systemAction }
+        let address = String(url.absoluteString.dropFirst("mailto:".count))
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(address, forType: .string)
+        toasts.show(Toast(style: .success, title: "Email copied", detail: address))
+        return .handled
+    }
+    /// #EA5009, the orange of the diagrams' numbered badges.
+    static let partNameColor = Color(red: 0xEA / 255, green: 0x50 / 255, blue: 0x09 / 255)
 
     // The SVG's 64×13 glyphs centred in the Figma text node's 65×23 box,
     // on the same line as Take a Tour.
