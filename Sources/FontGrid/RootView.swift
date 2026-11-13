@@ -382,7 +382,7 @@ struct RootView: View {
         case "p":
             vm.pinnedOnly.toggle()
             return true
-        case "m":
+        case "n":   // Notes filter (was M before memos were renamed notes)
             vm.memoOnly.toggle()
             return true
         case "k", "j", "l", "o":
@@ -658,6 +658,11 @@ private struct GlobalShortcutHandler: NSViewRepresentable {
                     // while editing text so ⌘-arrow keeps its navigation meaning.
                     if event.window?.firstResponder is NSText { return event }
                     if self.onCommandArrow(Int(event.keyCode)) { return nil }
+                    return event
+                }
+
+                // The user guide owns plain ←/→ while it is up.
+                if (event.keyCode == 123 || event.keyCode == 124), GuideArrowKeys.isActive {
                     return event
                 }
 

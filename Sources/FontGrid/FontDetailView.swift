@@ -535,7 +535,7 @@ struct FontDetailView: View {
         VStack(alignment: .leading, spacing: 0) {
             memoHeader(
                 icon: "chevron.up",
-                help: "Expand memo"
+                help: "Expand note"
             ) {
                 memoExpanded = true   // instant, no expand/collapse animation
             }
@@ -595,7 +595,7 @@ struct FontDetailView: View {
             VStack(alignment: .leading, spacing: Self.memoHeaderToEditor) {
                 memoHeader(
                     icon: "chevron.down",
-                    help: "Collapse memo"
+                    help: "Collapse note"
                 ) {
                     memoExpanded = false   // instant, no expand/collapse animation
                 }
@@ -690,7 +690,7 @@ struct FontDetailView: View {
 
     private func memoHeader(icon: String, help: String, action: @escaping () -> Void) -> some View {
         HStack(spacing: 8) {
-            Text("Memo")
+            Text("Note")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.secondary)
             Spacer()

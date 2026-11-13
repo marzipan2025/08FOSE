@@ -462,7 +462,7 @@ struct LeftPanel: View {
 
     private var memoOnlyToggle: some View {
         filterPill(
-            label: "Memo",
+            label: "Note",
             icon: nil,
             isOn: vm.memoOnly
         ) {

@@ -235,7 +235,7 @@ struct SettingsOverlay: View {
                 HStack(spacing: 0) {
                     dataMetric(title: "Pins", count: pins.ordered.count)
                     metricSlit
-                    dataMetric(title: "Memos", count: memos.notes.count)
+                    dataMetric(title: "Notes", count: memos.notes.count)
                     metricSlit
                     dataMetric(title: "Specimens", count: samples.samples.count)
                     metricSlit
@@ -286,7 +286,7 @@ struct SettingsOverlay: View {
                         Text("Reset everything")
                             .font(.system(size: SettingsType.body))
                             .foregroundStyle(.primary)
-                        Text("Clears pins, memos, theme, wallpaper and window size, back to a fresh install.")
+                        Text("Clears pins, notes, theme, wallpaper and window size, back to a fresh install.")
                             .font(.system(size: SettingsType.small))
                             .foregroundStyle(.tertiary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -463,9 +463,9 @@ struct SettingsOverlay: View {
                 shortcutRow("⌘ F", "Focus search")
                 shortcutRow("T", "Toggle dark / light theme")
                 shortcutRow("P", "Pinned filter")
-                shortcutRow("M", "Memos filter")
+                shortcutRow("N", "Notes filter")
                 shortcutRow("0–4", "Wallpaper (0 = none)")
-                shortcutRow("K J C L S O", "Toggle script bucket")
+                shortcutRow("K J L O", "Toggle script bucket")
                 shortcutRow("U", "Show / hide muted")
                 shortcutRow("I", "Only muted")
                 shortcutRow("X", "Show / hide index")
@@ -587,7 +587,7 @@ struct SettingsOverlay: View {
                         Button("Delete Account", role: .destructive) { deleteAccount() }
                         Button("Cancel", role: .cancel) {}
                     } message: {
-                        Text("Your email is removed from the list. Pins, memos and other app data stay on this Mac.")
+                        Text("Your email is removed from the list. Pins, notes and other app data stay on this Mac.")
                     }
                 }
                 if let accountError {
@@ -723,7 +723,7 @@ struct SettingsOverlay: View {
             parts.append("\(count) \(count == 1 ? singular : plural)")
         }
         add(payload.pins.count, "pin", "pins")
-        add(payload.memos.count, "memo", "memos")
+        add(payload.memos.count, "note", "notes")
         add((payload.samples ?? [:]).count, "specimen", "specimens")
         add((payload.muted ?? []).count, "muted", "muted")
         add((payload.glyphs ?? []).count, "glyph", "glyphs")

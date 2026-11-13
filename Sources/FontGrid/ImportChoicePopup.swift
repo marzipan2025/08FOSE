@@ -49,7 +49,7 @@ struct ImportChoicePopup: View {
                 .padding(.top, 12)
 
             // Line 3 — what the choice below will do.
-            Text("You already have data in this app. Merge keeps it and adds the backup on top, combining memos that differ. Replace erases everything first and loads only the backup.")
+            Text("You already have data in this app. Merge keeps it and adds the backup on top, combining notes that differ. Replace erases everything first and loads only the backup.")
                 .font(.system(size: Theme.smallSize))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -84,7 +84,7 @@ struct ImportChoicePopup: View {
         }
     }
 
-    // e.g. "12 pins · 34 memos · 3 specimens · 2 muted"
+    // e.g. "12 pins · 34 notes · 3 specimens · 2 muted"
     private var payloadSummary: String {
         var parts: [String] = []
         func add(_ count: Int, _ noun: String) {
@@ -92,7 +92,7 @@ struct ImportChoicePopup: View {
             parts.append("\(count) \(noun)")
         }
         add(payload.pins.count, payload.pins.count == 1 ? "pin" : "pins")
-        add(payload.memos.count, payload.memos.count == 1 ? "memo" : "memos")
+        add(payload.memos.count, payload.memos.count == 1 ? "note" : "notes")
         add((payload.samples ?? [:]).count, (payload.samples ?? [:]).count == 1 ? "specimen" : "specimens")
         add((payload.muted ?? []).count, "muted")
         return parts.isEmpty ? "This backup is empty." : "Backup holds " + parts.joined(separator: " · ")

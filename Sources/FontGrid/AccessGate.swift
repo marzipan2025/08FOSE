@@ -766,6 +766,7 @@ struct GuideBackdrop: View {
             .resizable()
             .scaledToFit()
             .frame(width: GuideView.width, height: GuideView.height, alignment: .top)
+            .opacity(0.5)   // half the PNG's own strength, so the guide reads first
             .accessibilityHidden(true)
     }
 }
@@ -782,11 +783,17 @@ struct GuideView: View {
     @State private var prevHovering = false
     @State private var nextHovering = false
 
+    /// Settings › User guide: ←/→ page from the start. In the sign-up popup
+    /// they only take over once Take a Tour is pressed, so until then the
+    /// arrows stay with the email field.
+    var alwaysArmed = false
+    @State private var armed = false
+
     static let designSize = CGSize(width: 729, height: 380)
     static let width: CGFloat = 640
     static var scale: CGFloat { width / designSize.width }
     static var height: CGFloat { (designSize.height * scale).rounded() }
-    static let pageCount = 2   // welcome, then 01 The Window
+    static var pageCount: Int { 1 + sections.count }   // welcome, then each section
     // The design's 11px text, scaled with the frame like everything else
     // (10pt: the app's section-header size).
     static let textSize: CGFloat = Theme.sectionHeaderSize
@@ -795,6 +802,18 @@ struct GuideView: View {
         page(index)
             .frame(width: Self.width, height: Self.height, alignment: .topLeading)
             .clipped()
+            .background(
+                GuideArrowKeys(enabled: alwaysArmed || armed) { step in
+                    if step > 0 { next() } else { previous() }
+                }
+            )
+    }
+
+    private func takeTour() {
+        armed = true
+        // Leave the email field so ←/→ reach the guide instead of its cursor.
+        NSApp.keyWindow?.makeFirstResponder(nil)
+        next()
     }
 
     private var hasNext: Bool { index < Self.pageCount - 1 }
@@ -814,8 +833,8 @@ struct GuideView: View {
 
     @ViewBuilder private func page(_ i: Int) -> some View {
         switch i {
-        case 1:  layoutPage
-        default: welcome
+        case 0:  welcome
+        default: sectionPage(Self.sections[i - 1])
         }
     }
 
@@ -849,7 +868,7 @@ struct GuideView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .offset(x: d(392), y: d(166))
 
-            Button(action: next) {
+            Button(action: takeTour) {
                 Image("GuideTakeATour")
                     .renderingMode(.template)
                     .resizable()
@@ -871,32 +890,65 @@ struct GuideView: View {
 }
 
 extension GuideView {
-    // Figma node 5721:486. Numbered diagram on the left, section title,
-    // a short text that names each numbered part, Prev / Next.
-    var layoutPage: some View {
+    /// One guide section: a numbered diagram on the left, number and title,
+    /// a text that names each numbered part (bold) and explains it (light).
+    struct Section {
+        let number: String
+        let title: String
+        let image: String
+        let parts: [(name: String, text: String)]
+    }
+
+    // Text stays within 10 lines of the 290-unit column.
+    static let sections: [Section] = [
+        Section(number: "01", title: "The Window", image: "GuideLayout", parts: [
+            ("1 Filters", "Narrow the list by weight count, script, pins, notes or muted fonts. Below them, set columns, font size, theme and wallpaper."),
+            ("2 Grid", "Every installed font, set in your own sample text. Click a cell to see its weights, details and glyphs; the index at its side jumps to a letter."),
+            ("3 Library", "The fonts you've pinned, the tags from your notes and the glyphs you've copied, side by side."),
+            ("4 Sample bar", "Type here to change what every cell shows.")
+        ]),
+        Section(number: "02", title: "Sample Text", image: "GuideSection2", parts: [
+            ("1 Input source", "The key shows which keyboard you are typing in. Click it to switch, say from English to Korean, without leaving the app."),
+            ("2 Sample bar", "Type a word or a whole sentence here and every font in the grid sets it at once, so you can compare them as you write.")
+        ]),
+        Section(number: "03", title: "Font Cells", image: "GuideSection3", parts: [
+            ("1 Name", "The font's family name."),
+            ("2 Weights", "How many weights the family has; VF marks a variable font. Hover over a cell to see its weights right away."),
+            ("3 Note", "This dot means the font has a note, and its cell gets an outline. Words written with # in a note work as tags too."),
+            ("4 Pin", "Shows the font is pinned. Click it to pin or unpin; your pinned fonts are listed at the top right of the app.")
+        ])
+    ]
+
+    // Figma node 5721:486.
+    func sectionPage(_ section: Section) -> some View {
         ZStack(alignment: .topLeading) {
-            Image("GuideLayout")
+            Image(section.image)
                 .resizable()
                 .interpolation(.high)
                 .frame(width: d(362), height: d(380))
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 0) {
-                Text("01")
+                Text(section.number)
                     .font(.system(size: Self.sectionSize, weight: .ultraLight, design: .monospaced))
-                Text("The Window")
+                Text(section.title)
                     .font(.system(size: Self.sectionSize, weight: .bold, design: .monospaced))
             }
             .foregroundStyle(.primary)
             .offset(x: d(390), y: d(51))
 
-            Self.layoutText
-                .font(.system(size: Self.textSize))
-                .foregroundStyle(.primary)
-                .lineSpacing(1.5)
-                .frame(width: d(290), alignment: .leading)
-                .fixedSize(horizontal: false, vertical: true)
-                .offset(x: d(392), y: d(123))
+            section.parts.reduce(Text("")) { text, part in
+                // No-break space keeps a number on the same line as its name.
+                text + Text(part.name.replacingOccurrences(of: " ", with: "\u{00A0}") + " ")
+                    .fontWeight(.bold)
+                     + Text(part.text + " ").fontWeight(.light)
+            }
+            .font(.system(size: Self.textSize))
+            .foregroundStyle(.primary)
+            .lineSpacing(1.5)
+            .frame(width: d(290), alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .offset(x: d(392), y: d(123))
 
             navButton("GuidePrev", label: "Previous", hovering: $prevHovering, action: previous)
                 .offset(x: d(392), y: d(314))
@@ -907,20 +959,6 @@ extension GuideView {
     }
 
     static let sectionSize: CGFloat = 15
-
-    // One running text; each numbered part in bold, matching the markers.
-    static var layoutText: Text {
-        let parts: [(String, String)] = [
-            ("1 Filters", "Narrow the list by weight count, script, pins, memos or muted fonts. Below them, set columns, font size, theme and wallpaper."),
-            ("2 Grid", "Every installed font, set in your own sample text. Click a cell to see its weights, details and glyphs; the index at its side jumps to a letter."),
-            ("3 Library", "The fonts you've pinned, the tags from your memos and the glyphs you've copied, side by side."),
-            ("4 Sample bar", "Type here to change what every cell shows.")
-        ]
-        return parts.reduce(Text("")) { text, part in
-            text + Text(part.0 + " ").fontWeight(.bold)
-                 + Text(part.1 + " ").fontWeight(.light)
-        }
-    }
 
     // The SVG's 64×13 glyphs centred in the Figma text node's 65×23 box,
     // on the same line as Take a Tour.
@@ -945,6 +983,69 @@ extension GuideView {
     }
 }
 
+/// ←/→ turn the guide's pages while it holds the keyboard. Arrows still go
+/// to a focused text field (the email or code field), and ⌘/⌥/⌃/⇧ combos
+/// are left alone. While this is armed, the app's other arrow handlers (the
+/// detail view's font stepping, the shortcut monitor) let the keys through.
+struct GuideArrowKeys: NSViewRepresentable {
+    var enabled: Bool
+    var onStep: (Int) -> Void
+
+    @MainActor static var isActive: Bool { Coordinator.current?.enabled == true }
+
+    func makeNSView(context: Context) -> NSView {
+        context.coordinator.install()
+        return NSView(frame: .zero)
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.enabled = enabled
+        context.coordinator.onStep = onStep
+    }
+
+    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
+        coordinator.uninstall()
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(enabled: enabled, onStep: onStep)
+    }
+
+    @MainActor final class Coordinator {
+        static weak var current: Coordinator?
+        var enabled: Bool
+        var onStep: (Int) -> Void
+        private var monitor: Any?
+
+        init(enabled: Bool, onStep: @escaping (Int) -> Void) {
+            self.enabled = enabled
+            self.onStep = onStep
+        }
+
+        func install() {
+            guard monitor == nil else { return }
+            Coordinator.current = self
+            monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                guard let self, self.enabled,
+                      event.keyCode == 123 || event.keyCode == 124 else { return event }
+                if NSApp.modalWindow != nil { return event }
+                if event.window?.firstResponder is NSText { return event }
+                if !event.modifierFlags.intersection([.command, .option, .control, .shift]).isEmpty {
+                    return event
+                }
+                self.onStep(event.keyCode == 124 ? 1 : -1)
+                return nil
+            }
+        }
+
+        func uninstall() {
+            if let monitor { NSEvent.removeMonitor(monitor) }
+            monitor = nil
+            if Coordinator.current === self { Coordinator.current = nil }
+        }
+    }
+}
+
 /// Settings › User guide: the guide on its own, without the sign-up band.
 struct GuidePopup: View {
     let onClose: () -> Void
@@ -964,7 +1065,7 @@ struct GuidePopup: View {
     private var card: some View {
         ZStack(alignment: .topLeading) {
             GuideBackdrop()
-            GuideView()
+            GuideView(alwaysArmed: true)
         }
         .frame(width: GuideView.width, height: GuideView.height)
         .overlay(alignment: .topTrailing) {

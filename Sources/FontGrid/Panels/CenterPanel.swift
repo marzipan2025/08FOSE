@@ -168,14 +168,14 @@ struct CenterPanel: View {
 
         // Collection + script filters joined by middle dots. With a single
         // segment the full word is used; with 2+ segments (≥1 middle dot)
-        // everything abbreviates: PIN / MEM / MUT and KR / JP / LTN / ETC.
+        // everything abbreviates: PIN / NOTE / MUT and KR / JP / LTN / ETC.
         let scripts = ScriptCategory.allCases.filter { vm.scriptFilter.contains($0) }
         if otherFilterCount == 0 { return "\(count) fonts" }
         let abbr = useAbbreviations
 
         var segments: [String] = []
         if vm.pinnedOnly { segments.append(abbr ? "PIN" : "Pinned") }
-        if vm.memoOnly { segments.append(abbr ? "MEM" : "Memoed") }
+        if vm.memoOnly { segments.append(abbr ? "NOTE" : "With notes") }
         if vm.variablesOnly { segments.append(abbr ? "VF" : "Variable") }
         if vm.mutedOnly { segments.append(abbr ? "MUT" : "Muted") }
         segments.append(contentsOf: scripts.map { abbr ? $0.abbreviation : $0.label })
@@ -796,6 +796,8 @@ private struct DetailArrowKeyHandler: NSViewRepresentable {
                 guard let self else { return event }
                 // ←(123) / →(124)
                 guard event.keyCode == 123 || event.keyCode == 124 else { return event }
+                // The user guide (over Settings or the sign-up popup) owns ←/→.
+                if GuideArrowKeys.isActive { return event }
                 // A modal panel (Save/Open) owns the keyboard while it's up — its
                 // filename field lives in a separate (often out-of-process) window
                 // the firstResponder check below can't see, so bail outright.
