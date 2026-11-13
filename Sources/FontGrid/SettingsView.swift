@@ -264,6 +264,22 @@ struct SettingsOverlay: View {
                     action: importData
                 )
 
+                // The onboarding guide, on its own (no sign-up band).
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("User guide")
+                            .font(.system(size: SettingsType.body))
+                            .foregroundStyle(.primary)
+                        Text("See what 08FOSE can do and how to use it.")
+                            .font(.system(size: SettingsType.small))
+                            .foregroundStyle(.tertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: Self.rowControlGap)
+                    SettingsButton(label: "Open") { vm.showGuide = true }
+                        .offset(y: 6)
+                }
+
                 // Reset lives inside Data now (its own section is gone).
                 HStack(alignment: .firstTextBaseline) {
                     VStack(alignment: .leading, spacing: 2) {

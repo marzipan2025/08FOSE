@@ -233,6 +233,8 @@ final class AppViewModel: ObservableObject {
 
     // Drives the full-window Settings overlay (see SettingsView).
     @Published var showSettings: Bool = false
+    // Settings › User guide: the onboarding guide on its own.
+    @Published var showGuide: Bool = false
     // Settings → Data "Reset everything" confirmation dialog. Kept here (not in
     // the view) so the ESC key cascade can tell when it's open and let ESC
     // dismiss only the dialog instead of closing the whole Settings modal.

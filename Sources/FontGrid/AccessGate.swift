@@ -59,6 +59,15 @@ final class AccessController: ObservableObject {
 
     var isLocked: Bool { phase != .verified }
 
+    /// The Terms checkbox on the popup. Required before a code is sent.
+    @Published var termsAgreed: Bool = UserDefaults.standard.bool(forKey: Key.termsAgreed) {
+        didSet {
+            defaults.set(termsAgreed, forKey: Key.termsAgreed)
+            if termsAgreed, message?.text == Self.agreeFirst { message = nil }
+        }
+    }
+    static let agreeFirst = "Agree to the Terms of Service to continue."
+
     /// The address this Mac was verified with, for the Account row in Settings.
     var verifiedEmail: String? { defaults.string(forKey: Key.verifiedEmail) }
 
@@ -71,8 +80,9 @@ final class AccessController: ObservableObject {
         static let pendingCode = "access.pendingCode"
         static let blocked = "access.blocked"
         static let lastCheckDay = "access.lastCheckDay"
+        static let termsAgreed = "access.termsAgreed"
         static let all = [verifiedEmail, verifiedAt, noticePending, pendingEmail,
-                          pendingCode, blocked, lastCheckDay]
+                          pendingCode, blocked, lastCheckDay, termsAgreed]
     }
 
     let deviceID = AccessController.makeDeviceID()
@@ -160,6 +170,7 @@ final class AccessController: ObservableObject {
 
     private func signOut() {
         for key in Key.all { defaults.removeObject(forKey: key) }
+        termsAgreed = false
         phase = .email
     }
 
@@ -173,6 +184,10 @@ final class AccessController: ObservableObject {
         let email = rawEmail.trimmingCharacters(in: .whitespacesAndNewlines)
         guard Self.isValidEmail(email) else {
             message = Message(text: "Enter a valid email address.", isError: true)
+            return
+        }
+        guard termsAgreed else {
+            message = Message(text: Self.agreeFirst, isError: true)
             return
         }
         guard !busy else { return }
@@ -419,6 +434,9 @@ struct AccessGateView: View {
     @State private var secondaryHovering = false
     @State private var resendHovering = false
     @State private var changeHovering = false
+    @State private var showingTerms = false
+    @State private var termsLinkHovering = false
+    @State private var closeHovering = false
 
     var body: some View {
         ZStack {
@@ -437,9 +455,7 @@ struct AccessGateView: View {
 
     private var card: some View {
         VStack(spacing: 0) {
-            // Reserved for onboarding art.
-            Color.clear
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            topArea
             band
                 .frame(height: Self.bandHeight)
         }
@@ -464,6 +480,109 @@ struct AccessGateView: View {
                 .stroke(colorScheme == .light ? Color(white: 0.56) : Color.white.opacity(0.8),
                         lineWidth: 1)
         )
+    }
+
+    // Everything above the control band. The upper part is reserved for
+    // onboarding art and feature notes; the Terms panel covers it when open.
+    // The agreement row sits at its foot, under the panel too.
+    // The guide area (the artwork's frame, scaled to the popup's width) and,
+    // right under it, the agreement row. The guide or the Terms panel sits
+    // on the artwork (the guide steps aside while Terms is open).
+    private var topArea: some View {
+        VStack(spacing: 0) {
+            ZStack(alignment: .topLeading) {
+                GuideBackdrop()
+                if showingTerms {
+                    termsPanel
+                        .transition(.opacity)
+                } else if access.phase != .blocked {
+                    GuideView()
+                        .transition(.opacity)
+                }
+            }
+            .frame(width: GuideView.width, height: GuideView.height)
+            Group {
+                if access.phase != .blocked {
+                    agreeRow
+                        .padding(.horizontal, 24)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .animation(.easeOut(duration: 0.15), value: showingTerms)
+    }
+
+    // Title at the top; the text starts 120pt below the popup's top edge and
+    // scrolls inside the rest of the area.
+    private var termsPanel: some View {
+        ZStack(alignment: .topLeading) {
+            HStack(alignment: .top) {
+                Text("Terms of Service")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.primary)
+                Spacer()
+                Button { showingTerms = false } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Color.secondary)
+                        .frame(width: 26, height: 26)
+                        .background(Circle().fill(closeHovering
+                                                  ? Color.primary.opacity(0.12) : Self.neutralFill))
+                }
+                .buttonStyle(.plain)
+                .focusable(false)
+                .onHover { closeHovering = $0 }
+                .help("Close")
+            }
+            .padding(.top, 24)
+            .padding(.horizontal, 24)
+            // Columns run edge to edge so they scroll out under the sides;
+            // the first one starts at the usual 24pt inset.
+            TermsColumns(text: AccessTerms.attributed(), inset: 24)
+                .frame(height: AccessTerms.blockHeight)
+                .padding(.top, AccessTerms.bodyTop)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        // Transparent: the backdrop artwork shows through behind the text.
+        .contentShape(Rectangle())
+    }
+
+    // Checkbox, then "I agree to the Terms of Service" with the last part a
+    // link that opens the panel above.
+    private var agreeRow: some View {
+        HStack(spacing: 10) {
+            Button { access.termsAgreed.toggle() } label: {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(access.termsAgreed ? accent.fill : Self.neutralFill)
+                    if access.termsAgreed {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
+                }
+                .frame(width: 18, height: 18)
+            }
+            .buttonStyle(.plain)
+            .focusable(false)
+            .accessibilityLabel("Agree to the Terms of Service")
+            .accessibilityValue(access.termsAgreed ? "On" : "Off")
+            HStack(spacing: 0) {
+                Text("I agree to the ")
+                    .foregroundStyle(.secondary)
+                    .onTapGesture { access.termsAgreed.toggle() }
+                Button { showingTerms = true } label: {
+                    Text("Terms of Service")
+                        .foregroundStyle(accent.text)
+                        .underline(true, color: termsLinkHovering ? accent.text : accent.text.opacity(0.4))
+                }
+                .buttonStyle(.plain)
+                .focusable(false)
+                .onHover { termsLinkHovering = $0 }
+            }
+            .font(.system(size: Theme.bodySize))
+        }
     }
 
     // Prompt, then field + action, then message (+ links). 16 + 8 + 30 + 8 + 14
@@ -634,5 +753,375 @@ struct AccessGateView: View {
         .buttonStyle(.plain)
         .focusable(false)
         .onHover { hovering.wrappedValue = $0 }
+    }
+}
+
+// MARK: - Guide
+
+/// The artwork behind the guide: the 729×380 design frame scaled to the
+/// popup's width, top-centre, never cropped.
+struct GuideBackdrop: View {
+    var body: some View {
+        Image("OnboardingBackground")
+            .resizable()
+            .scaledToFit()
+            .frame(width: GuideView.width, height: GuideView.height, alignment: .top)
+            .accessibilityHidden(true)
+    }
+}
+
+/// The onboarding / user guide. Pages are laid out in the 729×380 design
+/// frame (Figma "image", node 5721:399) and scaled to the popup's width;
+/// text uses the app's own sizes. Shown in the sign-up popup's top area and
+/// on its own from Settings › User guide. More pages (images, Lottie,
+/// video) slot into `page(_:)`.
+struct GuideView: View {
+    @Environment(\.accentColors) private var accent
+    @State private var index = 0
+    @State private var buttonHovering = false
+    @State private var prevHovering = false
+    @State private var nextHovering = false
+
+    static let designSize = CGSize(width: 729, height: 380)
+    static let width: CGFloat = 640
+    static var scale: CGFloat { width / designSize.width }
+    static var height: CGFloat { (designSize.height * scale).rounded() }
+    static let pageCount = 2   // welcome, then 01 The Window
+    // The design's 11px text, scaled with the frame like everything else
+    // (10pt: the app's section-header size).
+    static let textSize: CGFloat = Theme.sectionHeaderSize
+
+    var body: some View {
+        page(index)
+            .frame(width: Self.width, height: Self.height, alignment: .topLeading)
+            .clipped()
+    }
+
+    private var hasNext: Bool { index < Self.pageCount - 1 }
+
+    // On the last page Next is disabled; the guide then stays until the
+    // popup closes (Settings) or the user signs in below (first run).
+    private func next() {
+        if hasNext { index += 1 }
+    }
+
+    private func previous() {
+        if index > 0 { index -= 1 }
+    }
+
+    /// Design-frame units to points.
+    private func d(_ v: CGFloat) -> CGFloat { v * Self.scale }
+
+    @ViewBuilder private func page(_ i: Int) -> some View {
+        switch i {
+        case 1:  layoutPage
+        default: welcome
+        }
+    }
+
+    private var welcome: some View {
+        ZStack(alignment: .topLeading) {
+            Image("GuideLogo")
+                .resizable()
+                .interpolation(.high)
+                .frame(width: d(371), height: d(371))
+                .offset(x: 0, y: d(5) - 4)   // 4pt above the Figma position
+                .accessibilityHidden(true)
+
+            Image("GuideTitle")
+                .renderingMode(.template)
+                .resizable()
+                .foregroundStyle(.primary)
+                .frame(width: d(142), height: d(44))
+                .offset(x: d(390), y: d(51))
+                .accessibilityLabel("08FOSE User Guide")
+
+            Text("Version \(Theme.appVersion)")
+                .font(.system(size: Self.textSize))
+                .foregroundStyle(accent.text)
+                .offset(x: d(392), y: d(124))
+
+            Text("Fonts shown in 08FOSE are installed on your Mac and remain the property of their respective owners. Each font's own license governs how it may be used. 08FOSE includes no fonts; it previews the ones you have and can save the text you type as an image. Built with Apple system frameworks (SwiftUI, AppKit). No third-party code is bundled.")
+                .font(.system(size: Self.textSize))
+                .foregroundStyle(.primary)
+                .lineSpacing(1.5)
+                .frame(width: d(290), alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .offset(x: d(392), y: d(166))
+
+            Button(action: next) {
+                Image("GuideTakeATour")
+                    .renderingMode(.template)
+                    .resizable()
+                    .foregroundStyle(.primary)
+                    // The SVG's 137×13 glyphs, centred in the Figma text
+                    // node's 140×23 box.
+                    .frame(width: d(137), height: d(13))
+                    .frame(width: d(140), height: d(23))
+                    .opacity(buttonHovering ? 0.6 : 1)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .focusable(false)
+            .onHover { buttonHovering = $0 }
+            .accessibilityLabel("Take a Tour")
+            .offset(x: d(390), y: d(314))
+        }
+    }
+}
+
+extension GuideView {
+    // Figma node 5721:486. Numbered diagram on the left, section title,
+    // a short text that names each numbered part, Prev / Next.
+    var layoutPage: some View {
+        ZStack(alignment: .topLeading) {
+            Image("GuideLayout")
+                .resizable()
+                .interpolation(.high)
+                .frame(width: d(362), height: d(380))
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 0) {
+                Text("01")
+                    .font(.system(size: Self.sectionSize, weight: .ultraLight, design: .monospaced))
+                Text("The Window")
+                    .font(.system(size: Self.sectionSize, weight: .bold, design: .monospaced))
+            }
+            .foregroundStyle(.primary)
+            .offset(x: d(390), y: d(51))
+
+            Self.layoutText
+                .font(.system(size: Self.textSize))
+                .foregroundStyle(.primary)
+                .lineSpacing(1.5)
+                .frame(width: d(290), alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .offset(x: d(392), y: d(123))
+
+            navButton("GuidePrev", label: "Previous", hovering: $prevHovering, action: previous)
+                .offset(x: d(392), y: d(314))
+            navButton("GuideNext", label: "Next", enabled: hasNext,
+                      hovering: $nextHovering, action: next)
+                .offset(x: d(624), y: d(314))
+        }
+    }
+
+    static let sectionSize: CGFloat = 15
+
+    // One running text; each numbered part in bold, matching the markers.
+    static var layoutText: Text {
+        let parts: [(String, String)] = [
+            ("1 Filters", "Narrow the list by weight count, script, pins, memos or muted fonts. Below them, set columns, font size, theme and wallpaper."),
+            ("2 Grid", "Every installed font, set in your own sample text. Click a cell to see its weights, details and glyphs; the index at its side jumps to a letter."),
+            ("3 Library", "The fonts you've pinned, the tags from your memos and the glyphs you've copied, side by side."),
+            ("4 Sample bar", "Type here to change what every cell shows.")
+        ]
+        return parts.reduce(Text("")) { text, part in
+            text + Text(part.0 + " ").fontWeight(.bold)
+                 + Text(part.1 + " ").fontWeight(.light)
+        }
+    }
+
+    // The SVG's 64×13 glyphs centred in the Figma text node's 65×23 box,
+    // on the same line as Take a Tour.
+    func navButton(_ asset: String, label: String, enabled: Bool = true,
+                   hovering: Binding<Bool>,
+                   action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(asset)
+                .renderingMode(.template)
+                .resizable()
+                .foregroundStyle(.primary)
+                .frame(width: d(64), height: d(13))
+                .frame(width: d(65), height: d(23))
+                .opacity(enabled ? (hovering.wrappedValue ? 0.6 : 1) : 0.4)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .disabled(!enabled)
+        .onHover { hovering.wrappedValue = enabled && $0 }
+        .accessibilityLabel(label)
+    }
+}
+
+/// Settings › User guide: the guide on its own, without the sign-up band.
+struct GuidePopup: View {
+    let onClose: () -> Void
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var closeHovering = false
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(colorScheme == .light ? 0.25 : 0.45)
+                .contentShape(Rectangle())
+                .onTapGesture { onClose() }
+            card
+        }
+        .ignoresSafeArea()
+    }
+
+    private var card: some View {
+        ZStack(alignment: .topLeading) {
+            GuideBackdrop()
+            GuideView()
+        }
+        .frame(width: GuideView.width, height: GuideView.height)
+        .overlay(alignment: .topTrailing) {
+            Button(action: onClose) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.secondary)
+                    .frame(width: 26, height: 26)
+                    .background(Circle().fill(Color.primary.opacity(closeHovering ? 0.12 : 0.06)))
+            }
+            .buttonStyle(.plain)
+            .focusable(false)
+            .onHover { closeHovering = $0 }
+            .help("Close")
+            .padding(.top, 18)
+            .padding(.trailing, 18)
+        }
+        .background(Theme.panelBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Theme.panelBackground)
+                .shadow(color: .black.opacity(0.4), radius: 24, x: 0, y: 12)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(colorScheme == .light ? Color(white: 0.56) : Color.white.opacity(0.8),
+                        lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - Terms text
+
+/// Shown in the popup's Terms panel: one running text, each section's title
+/// in bold, the rest light, set in 400pt columns of 12 lines that continue
+/// to the right. DRAFT wording, to be reviewed by the owner.
+enum AccessTerms {
+    static let bodyTop: CGFloat = 100   // from the popup's top edge
+    static let fontSize: CGFloat = 12
+    static let lineHeight: CGFloat = 18
+    static let linesPerColumn = 12
+    static let columnWidth: CGFloat = 400
+    static let columnGap: CGFloat = 30
+    static var blockHeight: CGFloat { lineHeight * CGFloat(linesPerColumn) }
+
+    static let intro = "08FOSE is a free app for browsing the fonts installed on your Mac. By checking the box, you agree to the terms below."
+
+    static let sections: [(title: String, text: String)] = [
+        ("What we collect.", "Your email address, and an ID for your Mac. The Mac ID is made from your Mac's hardware number by a one-way conversion; the hardware number itself is never sent."),
+        ("Why.", "Only to verify that you can use 08FOSE and to manage access, for example to stop an account from using the app. We do not send newsletters or ads, and we do not share or sell your email."),
+        ("Where it is kept.", "In a Google Sheet owned by the 08FOSE developer. Google stores it on its servers, which may be outside your country. Verification codes are sent through Google's mail service."),
+        ("How long.", "Until you delete your account. One account can be used on up to 5 Macs."),
+        ("Deleting your account.", "Settings › Account › Delete account. Your email and Mac IDs are masked right away. A one-way hash of your email is kept so that signing up again with the same address is recognized as rejoining."),
+        ("Blocking.", "The developer may block an account that misuses the app. A blocked account can no longer use 08FOSE."),
+        ("The app itself.", "08FOSE is provided as is, without warranty. Fonts shown in it belong to their owners and are governed by their own licenses."),
+        ("Contact.", "For questions or deletion requests, write to")
+    ]
+    // Ends the text, underlined and linked to a new mail.
+    static let contactEmail = "artbrainbyeongsu@gmail.com"
+
+
+    static func attributed() -> NSAttributedString {
+        let para = NSMutableParagraphStyle()
+        para.minimumLineHeight = lineHeight
+        para.maximumLineHeight = lineHeight
+        func run(_ s: String, _ weight: NSFont.Weight) -> NSAttributedString {
+            NSAttributedString(string: s, attributes: [
+                .font: NSFont.systemFont(ofSize: fontSize, weight: weight),
+                .foregroundColor: NSColor.labelColor,
+                .paragraphStyle: para
+            ])
+        }
+        let out = NSMutableAttributedString(attributedString: run(intro + " ", .light))
+        for section in sections {
+            out.append(run(section.title + " ", .bold))
+            out.append(run(section.text + " ", .light))
+        }
+        let mail = NSMutableAttributedString(attributedString: run(contactEmail, .light))
+        if let url = URL(string: "mailto:" + contactEmail) {
+            mail.addAttributes([.link: url,
+                                .underlineStyle: NSUnderlineStyle.single.rawValue],
+                               range: NSRange(location: 0, length: mail.length))
+        }
+        out.append(mail)
+        return out
+    }
+}
+
+/// One text flowing through fixed-size columns, left to right, inside a
+/// sideways scroll view with no scroller. A vertical wheel or swipe scrolls
+/// sideways too. TextKit does the flow: one layout manager, one text
+/// container per column.
+struct TermsColumns: NSViewRepresentable {
+    let text: NSAttributedString
+    var inset: CGFloat = 24
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scroll = SidewaysScrollView()
+        scroll.drawsBackground = false
+        scroll.hasHorizontalScroller = false
+        scroll.hasVerticalScroller = false
+        scroll.verticalScrollElasticity = .none
+        scroll.horizontalScrollElasticity = .allowed
+
+        let width = AccessTerms.columnWidth
+        let height = AccessTerms.blockHeight
+        let storage = NSTextStorage(attributedString: text)
+        let layout = NSLayoutManager()
+        storage.addLayoutManager(layout)
+
+        let doc = FlippedView()
+        var x = inset
+        for _ in 0..<50 {
+            let container = NSTextContainer(size: NSSize(width: width, height: height))
+            container.lineFragmentPadding = 0
+            layout.addTextContainer(container)
+            let view = NSTextView(frame: NSRect(x: x, y: 0, width: width, height: height),
+                                  textContainer: container)
+            view.isEditable = false
+            view.isSelectable = true
+            view.drawsBackground = false
+            view.textContainerInset = .zero
+            view.isVerticallyResizable = false
+            view.isHorizontallyResizable = false
+            // Links keep the text colour, underlined, rather than system blue.
+            view.linkTextAttributes = [.foregroundColor: NSColor.labelColor,
+                                       .underlineStyle: NSUnderlineStyle.single.rawValue,
+                                       .cursor: NSCursor.pointingHand]
+            doc.addSubview(view)
+            x += width + AccessTerms.columnGap
+            if NSMaxRange(layout.glyphRange(for: container)) >= layout.numberOfGlyphs { break }
+        }
+        doc.frame = NSRect(x: 0, y: 0, width: x - AccessTerms.columnGap + inset, height: height)
+        scroll.documentView = doc
+        return scroll
+    }
+
+    func updateNSView(_ nsView: NSScrollView, context: Context) {}
+
+    private final class FlippedView: NSView {
+        override var isFlipped: Bool { true }
+    }
+
+    private final class SidewaysScrollView: NSScrollView {
+        override func scrollWheel(with event: NSEvent) {
+            guard event.scrollingDeltaX == 0, event.scrollingDeltaY != 0 else {
+                super.scrollWheel(with: event)
+                return
+            }
+            let clip = contentView
+            let step = event.hasPreciseScrollingDeltas ? 1 : 10
+            let maxX = max(0, (documentView?.frame.width ?? 0) - clip.bounds.width)
+            var origin = clip.bounds.origin
+            origin.x = min(max(0, origin.x - event.scrollingDeltaY * CGFloat(step)), maxX)
+            clip.scroll(to: origin)
+            reflectScrolledClipView(clip)
+        }
     }
 }

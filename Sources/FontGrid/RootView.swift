@@ -26,7 +26,7 @@ struct RootView: View {
 
     // Cards that own the whole window: the launch update card and the
     // sign-up / block gate. Shortcuts and tooltips go inert under them.
-    private var hardModal: Bool { vm.launchUpdate != nil || access.isLocked }
+    private var hardModal: Bool { vm.launchUpdate != nil || access.isLocked || vm.showGuide }
 
     private var accentColors: AccentColors {
         Theme.accentColors(lightWallpaper: vm.lightWallpaper,
@@ -176,6 +176,14 @@ struct RootView: View {
             }
         }
         .animation(vm.useMotion ? .easeOut(duration: 0.18) : nil, value: vm.showSettings)
+        // Settings › User guide, above the Settings modal it was opened from.
+        .overlay {
+            if vm.showGuide {
+                GuidePopup { vm.showGuide = false }
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.15), value: vm.showGuide)
         // The launch check's update card, above Settings and every panel.
         // Locked (centred, no way out but install or Quit) when the release
         // requires this update; otherwise it closes like any popup.
@@ -441,6 +449,7 @@ struct RootView: View {
     private func closeSettingsIfOpen() -> Bool {
         // The sign-up gate has no way out but verifying (or Quit).
         if access.isLocked { return true }
+        if vm.showGuide { vm.showGuide = false; return true }
         // The launch update card sits above everything, so it heads the ESC
         // cascade. Locked (required), ESC is eaten and nothing behind closes.
         if let status = vm.launchUpdate {
