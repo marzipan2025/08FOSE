@@ -11,6 +11,7 @@ struct RootView: View {
     @StateObject private var clipboard = ClipboardWatcher()
     @StateObject private var inputSource = InputSourceManager()
     @StateObject private var toasts = ToastCenter()
+    @StateObject private var access = AccessController()
 
     @State private var leftDragStart: Double? = nil
     @State private var rightDragStart: Double? = nil
@@ -22,6 +23,10 @@ struct RootView: View {
     private static let toggleSize: CGFloat = 26
     private static let toggleEdgeInset: CGFloat = 12
     private static let toggleBottomInset: CGFloat = 9
+
+    // Cards that own the whole window: the launch update card and the
+    // sign-up / block gate. Shortcuts and tooltips go inert under them.
+    private var hardModal: Bool { vm.launchUpdate != nil || access.isLocked }
 
     private var accentColors: AccentColors {
         Theme.accentColors(lightWallpaper: vm.lightWallpaper,
@@ -186,7 +191,7 @@ struct RootView: View {
         // Silence the tooltips of everything the modals cover — the glyph grid,
         // the font cells, the pin rows. Their tracking rects survive underneath,
         // so without this the pointer pops them over the modal.
-        .environment(\.tooltipsSuppressed, vm.showSettings || vm.renamingTag != nil || vm.launchUpdate != nil)
+        .environment(\.tooltipsSuppressed, vm.showSettings || vm.renamingTag != nil || hardModal)
         // Toast layer: topmost (above the wallpaper tint AND the Settings
         // overlay — import/export toasts fire while Settings is open). Aligned
         // to the center panel column's top edge, sliding in from above.
@@ -211,6 +216,16 @@ struct RootView: View {
             }
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: toasts.toast)
+        // Email sign-up / block gate (AccessGate.swift): above everything,
+        // toasts included. While it is up, clicks stop at its backdrop and the
+        // shortcut handlers below go inert.
+        .overlay {
+            if access.isLocked {
+                AccessGateView(access: access)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.15), value: access.isLocked)
         .background(Theme.panelBackground.ignoresSafeArea())
         .background(InitialFocusClearer())
         .background(GlobalShortcutHandler(
@@ -230,6 +245,7 @@ struct RootView: View {
         .environmentObject(clipboard)
         .environmentObject(inputSource)
         .environmentObject(toasts)
+        .environmentObject(access)
         // The accent follows the wallpaper chosen for each mode; see
         // Theme.accentColors. Applied here, outside every overlay, so popups,
         // the glyph zoom and the panel buttons read it too.
@@ -243,6 +259,7 @@ struct RootView: View {
         // then run one update check per launch; the check is silent unless a
         // newer release exists.
         .task {
+            access.start()
             UpdateCheck.showPostUpdateToastIfNeeded(toasts: toasts)
             UpdateCheck.checkOnLaunch { status in
                 // A required update closes what the user may have opened during
@@ -337,7 +354,7 @@ struct RootView: View {
         // While the rename-tag popup is open, swallow every single-key
         // shortcut (they'd mutate filters/theme behind the modal — e.g. after
         // ESC dropped the text-field focus but before the popup closed).
-        if vm.renamingTag != nil || vm.launchUpdate != nil { return true }
+        if vm.renamingTag != nil || hardModal { return true }
         // Same for the import Merge/Replace and update-result popups — they're
         // modal cards, so even the theme/wallpaper preview keys go inert.
         if vm.pendingImport != nil || vm.updateStatus != nil { return true }
@@ -390,7 +407,7 @@ struct RootView: View {
     // ⌘ + arrows: ↑/↓ adjust Font Size, →/← adjust Columns (→ increases).
     // Returns true when handled.
     private func handleCommandArrow(_ keyCode: Int) -> Bool {
-        if vm.launchUpdate != nil { return true }
+        if hardModal { return true }
         if vm.showSettings { return false }
         switch keyCode {
         case 126: adjustFontSize(+1); return true   // up
@@ -422,6 +439,8 @@ struct RootView: View {
     // ESC cascade step: close the Settings modal if it's open. Returns true
     // when it actually closed something.
     private func closeSettingsIfOpen() -> Bool {
+        // The sign-up gate has no way out but verifying (or Quit).
+        if access.isLocked { return true }
         // The launch update card sits above everything, so it heads the ESC
         // cascade. Locked (required), ESC is eaten and nothing behind closes.
         if let status = vm.launchUpdate {
@@ -461,7 +480,7 @@ struct RootView: View {
     // Inert while the rename-tag popup is open — Settings would stack above
     // the modal and tangle the ESC cascade.
     private func toggleSettings() -> Bool {
-        if vm.renamingTag != nil || vm.launchUpdate != nil { return true }
+        if vm.renamingTag != nil || hardModal { return true }
         withAnimation(vm.useMotion ? .easeOut(duration: 0.18) : nil) { vm.showSettings.toggle() }
         return true
     }
@@ -478,7 +497,7 @@ struct RootView: View {
     // FocusState binding syncs from the responder change, so the accent
     // highlight still follows.
     private func focusSearch() -> Bool {
-        if vm.showSettings || vm.renamingTag != nil || vm.launchUpdate != nil { return true }
+        if vm.showSettings || vm.renamingTag != nil || hardModal { return true }
         if leftPanelOpen {
             Self.makeSearchFieldFirstResponder()
         } else {

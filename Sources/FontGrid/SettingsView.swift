@@ -92,6 +92,10 @@ struct SettingsOverlay: View {
     @EnvironmentObject var muted: MutedStore
     @EnvironmentObject var glyphs: GlyphsStore
     @EnvironmentObject var toasts: ToastCenter
+    @EnvironmentObject var access: AccessController
+    @State private var confirmDeleteAccount = false
+    @State private var deletingAccount = false
+    @State private var accountError: String? = nil
     @Environment(\.colorScheme) private var colorScheme
 
     @AppStorage("previewText") private var previewText: String =
@@ -200,6 +204,7 @@ struct SettingsOverlay: View {
                     .padding(.bottom, 6)
                 shortcutsSection
                 licensesSection
+                accountSection
                 panoptMark
             }
             // Fixed 480pt content column (shrinks if the center panel is
@@ -536,6 +541,61 @@ struct SettingsOverlay: View {
         }
     }
 
+    // Bottom of Settings: leave 08FOSE's sign-up list. The sheet keeps a
+    // masked row marked 비활성; the raw email and device ID are deleted.
+    private var accountSection: some View {
+        SettingsSection("Account") {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Delete account")
+                            .font(.system(size: SettingsType.body))
+                            .foregroundStyle(.primary)
+                        Text("Removes \(access.verifiedEmail ?? "your email") from the 08FOSE list. To use the app again, you'll need to verify an email.")
+                            .font(.system(size: SettingsType.small))
+                            .foregroundStyle(.tertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: Self.rowControlGap)
+                    SettingsButton(label: deletingAccount ? "Deleting…" : "Delete") {
+                        accountError = nil
+                        confirmDeleteAccount = true
+                    }
+                    .disabled(deletingAccount)
+                    .offset(y: 6)
+                    .confirmationDialog(
+                        "Delete your 08FOSE account?",
+                        isPresented: $confirmDeleteAccount,
+                        titleVisibility: .visible
+                    ) {
+                        Button("Delete Account", role: .destructive) { deleteAccount() }
+                        Button("Cancel", role: .cancel) {}
+                    } message: {
+                        Text("Your email is removed from the list. Pins, memos and other app data stay on this Mac.")
+                    }
+                }
+                if let accountError {
+                    Text(accountError)
+                        .font(.system(size: SettingsType.small))
+                        .foregroundStyle(.red)
+                }
+            }
+        }
+    }
+
+    private func deleteAccount() {
+        deletingAccount = true
+        Task {
+            let ok = await access.withdraw()
+            deletingAccount = false
+            if ok {
+                vm.showSettings = false
+            } else {
+                accountError = "Couldn't reach the server. Check your connection and try again."
+            }
+        }
+    }
+
     // MARK: - Actions
 
     private func close() {
@@ -682,7 +742,9 @@ struct SettingsOverlay: View {
         muted.clearAll()
         glyphs.clearAll()
         previewText = Self.defaultPreviewText
+        let signUp = AccessController.savedState()   // not app data: survives the reset
         vm.resetToDefaults()                  // removePersistentDomain + live defaults
+        AccessController.restore(signUp)
         UserDefaults.standard.synchronize()   // flush before the new instance reads
         relaunch()                            // restart into a clean first-launch state
     }

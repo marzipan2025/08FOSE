@@ -25,6 +25,7 @@
 		77A1B2C3D4E5F60718293A01 /* Toast.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77A1B2C3D4E5F60718293A02 /* Toast.swift */; };
 		77A1B2C3D4E5F60718293A03 /* ImportChoicePopup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77A1B2C3D4E5F60718293A04 /* ImportChoicePopup.swift */; };
 		77A1B2C3D4E5F60718293A05 /* UpdateCheck.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77A1B2C3D4E5F60718293A06 /* UpdateCheck.swift */; };
+		77A1B2C3D4E5F60718293B01 /* AccessGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77A1B2C3D4E5F60718293B02 /* AccessGate.swift */; };
 		B9775AC1C07B642A3E64F064 /* MutedStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A322FCB8E2C4B48EFD1A234F /* MutedStore.swift */; };
 		C1A7E30D4B82F5916D30A118 /* GlyphsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E90B21F7C3A6085E41B2C7 /* GlyphsStore.swift */; };
 		E2B4C6710A93D5827F41C339 /* ClipboardWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5C01D32A8B4E7196C52D4E8 /* ClipboardWatcher.swift */; };
@@ -64,6 +65,7 @@
 		77A1B2C3D4E5F60718293A02 /* Toast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Toast.swift; path = Sources/FontGrid/Toast.swift; sourceTree = SOURCE_ROOT; };
 		77A1B2C3D4E5F60718293A04 /* ImportChoicePopup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ImportChoicePopup.swift; path = Sources/FontGrid/ImportChoicePopup.swift; sourceTree = SOURCE_ROOT; };
 		77A1B2C3D4E5F60718293A06 /* UpdateCheck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = UpdateCheck.swift; path = Sources/FontGrid/UpdateCheck.swift; sourceTree = SOURCE_ROOT; };
+		77A1B2C3D4E5F60718293B02 /* AccessGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AccessGate.swift; path = Sources/FontGrid/AccessGate.swift; sourceTree = SOURCE_ROOT; };
 		A322FCB8E2C4B48EFD1A234F /* MutedStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MutedStore.swift; path = Sources/FontGrid/MutedStore.swift; sourceTree = SOURCE_ROOT; };
 		D4E90B21F7C3A6085E41B2C7 /* GlyphsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GlyphsStore.swift; path = Sources/FontGrid/GlyphsStore.swift; sourceTree = SOURCE_ROOT; };
 		F5C01D32A8B4E7196C52D4E8 /* ClipboardWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ClipboardWatcher.swift; path = Sources/FontGrid/ClipboardWatcher.swift; sourceTree = SOURCE_ROOT; };
@@ -133,6 +135,7 @@
 				77A1B2C3D4E5F60718293A02 /* Toast.swift */,
 				77A1B2C3D4E5F60718293A04 /* ImportChoicePopup.swift */,
 				77A1B2C3D4E5F60718293A06 /* UpdateCheck.swift */,
+				77A1B2C3D4E5F60718293B02 /* AccessGate.swift */,
 				A322FCB8E2C4B48EFD1A234F /* MutedStore.swift */,
 				D4E90B21F7C3A6085E41B2C7 /* GlyphsStore.swift */,
 				F5C01D32A8B4E7196C52D4E8 /* ClipboardWatcher.swift */,
@@ -240,6 +243,7 @@
 				77A1B2C3D4E5F60718293A01 /* Toast.swift in Sources */,
 				77A1B2C3D4E5F60718293A03 /* ImportChoicePopup.swift in Sources */,
 				77A1B2C3D4E5F60718293A05 /* UpdateCheck.swift in Sources */,
+				77A1B2C3D4E5F60718293B01 /* AccessGate.swift in Sources */,
 				B9775AC1C07B642A3E64F064 /* MutedStore.swift in Sources */,
 				C1A7E30D4B82F5916D30A118 /* GlyphsStore.swift in Sources */,
 				E2B4C6710A93D5827F41C339 /* ClipboardWatcher.swift in Sources */,
