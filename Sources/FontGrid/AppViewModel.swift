@@ -267,10 +267,19 @@ final class AppViewModel: ObservableObject {
     // Legacy key kept only for first-launch migration on existing installs.
     private static let legacyWallpaperKey = "selectedWallpaper"
 
-    @Published var darkWallpaper: String = AppViewModel.loadInitialWallpaper(for: darkWallpaperKey) {
+    @Published var darkWallpaper: String = AppViewModel.loadInitialWallpaper(for: darkWallpaperKey, fallback: "") {
         didSet { UserDefaults.standard.set(darkWallpaper, forKey: Self.darkWallpaperKey) }
     }
-    @Published var lightWallpaper: String = AppViewModel.loadInitialWallpaper(for: lightWallpaperKey) {
+    // A fresh install opens in light mode on wallpaper 3. Only a fresh one:
+    // an existing install that never touched these settings keeps the old
+    // defaults (dark, no wallpaper) rather than changing under the user.
+    static let defaultLightWallpaper = "Wallpaper03"
+    static let isFreshInstall: Bool = {
+        guard let id = Bundle.main.bundleIdentifier else { return false }
+        return UserDefaults.standard.persistentDomain(forName: id)?.isEmpty ?? true
+    }()
+    @Published var lightWallpaper: String = AppViewModel.loadInitialWallpaper(
+        for: lightWallpaperKey, fallback: isFreshInstall ? defaultLightWallpaper : "") {
         didSet { UserDefaults.standard.set(lightWallpaper, forKey: Self.lightWallpaperKey) }
     }
 
@@ -288,10 +297,10 @@ final class AppViewModel: ObservableObject {
     /// Resolve the initial value for a per-mode wallpaper key. Falls back to
     /// the legacy single-key value the first time this build runs on an
     /// existing install, so neither mode loses its previously-set choice.
-    private static func loadInitialWallpaper(for key: String) -> String {
+    private static func loadInitialWallpaper(for key: String, fallback: String) -> String {
         let defaults = UserDefaults.standard
         if let v = defaults.string(forKey: key) { return v }
-        return defaults.string(forKey: legacyWallpaperKey) ?? ""
+        return defaults.string(forKey: legacyWallpaperKey) ?? fallback
     }
 
     // WeightFilter is an enum with associated values, so it has no Codable
@@ -365,7 +374,8 @@ final class AppViewModel: ObservableObject {
     }
 
     // Appearance: false = dark (default), true = light. Persisted.
-    @Published var isLightMode: Bool = UserDefaults.standard.bool(forKey: "isLightMode") {
+    @Published var isLightMode: Bool = UserDefaults.standard.object(forKey: "isLightMode") as? Bool
+        ?? AppViewModel.isFreshInstall {
         didSet { UserDefaults.standard.set(isLightMode, forKey: "isLightMode") }
     }
 
@@ -658,8 +668,8 @@ final class AppViewModel: ObservableObject {
         // Restore live published state to defaults so the UI updates without a
         // relaunch. The didSet observers re-write these default values.
         darkWallpaper = ""
-        lightWallpaper = ""
-        isLightMode = false
+        lightWallpaper = Self.defaultLightWallpaper
+        isLightMode = true
         pinsByRecent = true
         columnCount = 4
         maxColumns = 6

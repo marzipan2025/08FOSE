@@ -185,7 +185,11 @@ enum LegacyKeyMigration {
 struct FontGridApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
-    init() { LegacyKeyMigration.run() }
+    init() {
+        // Read before anything writes a default, or every launch looks fresh.
+        _ = AppViewModel.isFreshInstall
+        LegacyKeyMigration.run()
+    }
 
     var body: some Scene {
         WindowGroup {
