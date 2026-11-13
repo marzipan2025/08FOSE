@@ -1,25 +1,98 @@
 // 08FOSE sign-up sheet script.
 //
 // Lives in the Apps Script project bound to the "Verification Code Form(응답)"
-// spreadsheet, with one installable trigger: sendCode / From spreadsheet /
-// On form submit. This copy is kept in the repo for reference; the live one
-// is whatever is pasted in that project.
+// spreadsheet, with two installable triggers: sendCode / From spreadsheet /
+// On form submit, and onMembersChange / From spreadsheet /
+// On change. onEdit below is a simple trigger and needs no setup.
+// This copy is kept in the repo for reference; the live one is whatever is
+// pasted in that project.
 //
-// Every form submission carries Email, Device ID and Code.
-//   - A 6-character Code: mail it to Email (the app's sign-up).
-//   - Code "WITHDRAW":    Delete Account from the app's Settings. Mask this
-//                         device's rows, mark them 비활성, delete the raw
-//                         form responses and this submission's own row.
+// Tabs
+//   설문지 응답 시트1  Raw form log. Every submission lands here. Not edited.
+//   Members           One row per email: the list to manage. Created by this
+//                     script. Change Status (dropdown) or Memo by hand.
+//   blocked           Published as CSV for the app. Rewritten by this script
+//                     from Members: email hash, status, device IDs. No email.
+//
+// Status
+//   Pending    Code sent, not verified yet.
+//   Active     Verified and in use.
+//   Rejoined   Same as Active, but the email had withdrawn before.
+//   Inactive   Blocked by you. No new codes; the app stops on its next check.
+//   Withdrawn  Left from the app's Settings. Email and devices are masked.
+//
+// Each submission carries Email, Device ID and Code:
+//   6 characters  Send that code to Email.
+//   VERIFIED      The code was entered correctly on Device ID.
+//   WITHDRAW      Delete Account from the app's Settings.
+
+var MEMBERS = 'Members';
+var PUBLIC = 'blocked';
+var HEAD = ['Email', 'Status', 'Devices', 'Code', 'Joined', 'Verified', 'Left', 'Memo', 'Email Hash'];
+var C = { email: 0, status: 1, devices: 2, code: 3, joined: 4, verified: 5, left: 6, memo: 7, hash: 8 };
+var STATUSES = ['Pending', 'Active', 'Rejoined', 'Inactive', 'Withdrawn'];
+var MAX_DEVICES = 5;
+
 function sendCode(e) {
   var v = e.namedValues;
   var email = String((v['Email'] || [''])[0]).trim();
   var device = String((v['Device ID'] || [''])[0]).trim();
   var code = String((v['Code'] || [''])[0]).trim().toUpperCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || !device) return;
 
-  if (code === 'WITHDRAW') { withdraw(e, email, device); return; }
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    if (code === 'VERIFIED') verified(email, device);
+    else if (code === 'WITHDRAW') withdraw(e, email, device);
+    else if (/^[A-Z0-9]{6}$/.test(code)) requestCode(email, device, code);
+    publish();
+  } finally {
+    lock.releaseLock();
+  }
+}
 
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return;
-  if (!/^[A-Z0-9]{6}$/.test(code)) return;
+// Simple trigger: a Status or Devices edit by hand reaches the app.
+function onEdit(e) {
+  if (e && e.range && e.range.getSheet().getName() === MEMBERS) publish();
+}
+
+// Installable trigger (From spreadsheet / On change): deleting or inserting
+// rows doesn't fire onEdit, so a deleted member would linger in the
+// published list until the next form submission.
+function onMembersChange(e) {
+  if (e && (e.changeType === 'REMOVE_ROW' || e.changeType === 'INSERT_ROW' ||
+            e.changeType === 'OTHER')) publish();
+}
+
+// MARK: - Events
+
+function requestCode(email, device, code) {
+  var m = members();
+  var row = findRow(m, email);
+  if (row) {
+    var status = m.getRange(row, C.status + 1).getValue();
+    if (status === 'Inactive') return;
+    if (status === 'Withdrawn') {
+      // Coming back: unmask the row, drop the old (masked) devices and start
+      // again from Pending. Left stays filled, so verifying marks it Rejoined.
+      m.getRange(row, C.email + 1).setValue(email);
+      m.getRange(row, C.devices + 1).setValue('');
+      m.getRange(row, C.status + 1).setValue('Pending');
+    }
+    var devices = splitDevices(m.getRange(row, C.devices + 1).getValue());
+    if (devices.indexOf(device) < 0 && devices.length >= MAX_DEVICES) return;
+    m.getRange(row, C.code + 1).setValue(code);
+    rememberRequest(email, device);
+  } else {
+    var values = ['', '', '', '', '', '', '', '', ''];
+    values[C.email] = email;
+    values[C.status] = 'Pending';
+    values[C.code] = code;
+    values[C.hash] = hashEmail(email);
+    m.appendRow(values);
+    rememberRequest(email, device);
+  }
 
   // Same address: at most 5 mails an hour.
   var cache = CacheService.getScriptCache();
@@ -29,7 +102,6 @@ function sendCode(e) {
   cache.put(key, String(count + 1), 3600);
 
   if (MailApp.getRemainingDailyQuota() < 1) { markQuotaFull(); return; }
-
   MailApp.sendEmail({
     to: email,
     name: '08FOSE',
@@ -37,60 +109,167 @@ function sendCode(e) {
     body: 'Your 08FOSE verification code is ' + code + '\n\n' +
           'Enter it in the app to continue.'
   });
-
   if (MailApp.getRemainingDailyQuota() < 1) markQuotaFull();
 }
 
-// Today's mail quota is used up: tell the app through the published tab.
-function markQuotaFull() {
-  var today = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd');
-  SpreadsheetApp.getActive().getSheetByName('blocked')
-    .getRange('B1').setValue('QUOTA_FULL ' + today);
-}
+function verified(email, device) {
+  // Only a Mac that asked for a code in the last 6 hours can be added, so a
+  // forged VERIFIED can't fill someone else's five slots.
+  if (!requestedBy(email, device)) return;
+  var m = members();
+  var row = findRow(m, email);
+  if (!row) return;
+  var status = m.getRange(row, C.status + 1).getValue();
+  if (status === 'Inactive') return;
 
-function withdraw(e, email, device) {
-  if (!email || !device) return;
-  var sheet = e.range.getSheet();
-  var ownRow = e.range.getRow();
-  var head = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  var cDevice = head.indexOf('Device ID');
-  var cEmail = head.indexOf('Email');
-  var cStatus = head.indexOf('Status');
-  if (cDevice < 0 || cEmail < 0 || cStatus < 0) return;
-
-  // Rows of this Mac with this address: keep them, masked and 비활성.
-  var last = sheet.getLastRow();
+  var devices = splitDevices(m.getRange(row, C.devices + 1).getValue());
+  if (devices.indexOf(device) < 0) {
+    if (devices.length >= MAX_DEVICES) return;
+    devices.push(device);
+  }
+  // A Mac belongs to one account: take it off any other row.
+  var last = m.getLastRow();
   if (last >= 2) {
-    var rows = sheet.getRange(2, 1, last - 1, head.length).getValues();
-    for (var i = 0; i < rows.length; i++) {
+    var cells = m.getRange(2, C.devices + 1, last - 1, 1).getValues();
+    for (var i = 0; i < cells.length; i++) {
       var r = i + 2;
-      if (r === ownRow) continue;
-      if (String(rows[i][cDevice]).trim() !== device) continue;
-      if (String(rows[i][cEmail]).trim().toLowerCase() !== email.toLowerCase()) continue;
-      sheet.getRange(r, cDevice + 1).setValue(maskDevice(device));
-      sheet.getRange(r, cEmail + 1).setValue(maskEmail(email));
-      sheet.getRange(r, cStatus + 1).setValue('비활성');
+      if (r === row) continue;
+      var list = splitDevices(cells[i][0]);
+      var at = list.indexOf(device);
+      if (at >= 0) { list.splice(at, 1); m.getRange(r, C.devices + 1).setValue(list.join(', ')); }
     }
   }
 
-  // The form keeps its own copy of every response; remove this Mac's.
+  var now = new Date();
+  var hadLeft = m.getRange(row, C.left + 1).getValue() !== '';
+  m.getRange(row, C.devices + 1).setValue(devices.join(', '));
+  m.getRange(row, C.status + 1).setValue(hadLeft ? 'Rejoined' : 'Active');
+  m.getRange(row, C.code + 1).setValue('');
+  m.getRange(row, C.verified + 1).setValue(now);
+  if (m.getRange(row, C.joined + 1).getValue() === '') m.getRange(row, C.joined + 1).setValue(now);
+}
+
+function withdraw(e, email, device) {
+  var m = members();
+  var row = findRow(m, email);
+  // Only one of the account's own Macs can withdraw it.
+  if (!row || splitDevices(m.getRange(row, C.devices + 1).getValue()).indexOf(device) < 0) {
+    e.range.getSheet().deleteRow(e.range.getRow());
+    return;
+  }
+  if (row) {
+    var devices = splitDevices(m.getRange(row, C.devices + 1).getValue());
+    m.getRange(row, C.email + 1).setValue(maskEmail(email));
+    m.getRange(row, C.devices + 1).setValue(devices.map(maskDevice).join(', '));
+    m.getRange(row, C.status + 1).setValue('Withdrawn');
+    m.getRange(row, C.code + 1).setValue('');
+    m.getRange(row, C.left + 1).setValue(new Date());
+  }
+
+  // Raw copies of this address: the form's own responses and the log rows.
   var formUrl = SpreadsheetApp.getActive().getFormUrl();
   if (formUrl) {
     var form = FormApp.openByUrl(formUrl);
     form.getResponses().forEach(function (resp) {
-      var answers = {};
-      resp.getItemResponses().forEach(function (ir) {
-        answers[ir.getItem().getTitle()] = String(ir.getResponse()).trim();
+      var hit = resp.getItemResponses().some(function (ir) {
+        return ir.getItem().getTitle() === 'Email' &&
+               String(ir.getResponse()).trim().toLowerCase() === email.toLowerCase();
       });
-      if (answers['Device ID'] === device &&
-          String(answers['Email'] || '').toLowerCase() === email.toLowerCase()) {
-        form.deleteResponse(resp.getId());
-      }
+      if (hit) form.deleteResponse(resp.getId());
     });
   }
+  var log = e.range.getSheet();
+  var head = log.getRange(1, 1, 1, log.getLastColumn()).getValues()[0];
+  var cEmail = head.indexOf('Email');
+  if (cEmail >= 0) {
+    for (var r = log.getLastRow(); r >= 2; r--) {
+      if (String(log.getRange(r, cEmail + 1).getValue()).trim().toLowerCase() === email.toLowerCase()) {
+        log.deleteRow(r);
+      }
+    }
+  }
+}
 
-  // Finally the WITHDRAW submission's own row, which holds the raw values.
-  sheet.deleteRow(ownRow);
+// MARK: - Published list
+
+// One line per account: email hash, status, device IDs separated by spaces.
+// Plus QUOTA_FULL when today's mail quota is used up.
+function publish() {
+  var m = members();
+  var out = [];
+  var last = m.getLastRow();
+  if (last >= 2) {
+    m.getRange(2, 1, last - 1, HEAD.length).getValues().forEach(function (r) {
+      var hash = String(r[C.hash]).trim();
+      if (!hash) return;
+      out.push([hash, String(r[C.status]).trim(), splitDevices(r[C.devices]).join(' ')]);
+    });
+  }
+  var props = PropertiesService.getScriptProperties();
+  var quota = props.getProperty('quotaFull');
+  var today = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd');
+  if (quota === today) out.push(['QUOTA_FULL', quota, '']);
+  else if (quota) props.deleteProperty('quotaFull');
+
+  var sheet = SpreadsheetApp.getActive().getSheetByName(PUBLIC);
+  sheet.clear();
+  if (out.length) sheet.getRange(1, 1, out.length, 3).setValues(out);
+}
+
+function markQuotaFull() {
+  var today = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd');
+  PropertiesService.getScriptProperties().setProperty('quotaFull', today);
+}
+
+// MARK: - Helpers
+
+function rememberRequest(email, device) {
+  CacheService.getScriptCache().put('req:' + hashEmail(email) + ':' + device, '1', 21600);
+}
+
+function requestedBy(email, device) {
+  return CacheService.getScriptCache().get('req:' + hashEmail(email) + ':' + device) === '1';
+}
+
+function members() {
+  var ss = SpreadsheetApp.getActive();
+  var m = ss.getSheetByName(MEMBERS);
+  if (m) return m;
+  m = ss.insertSheet(MEMBERS, 0);
+  m.getRange(1, 1, 1, HEAD.length).setValues([HEAD]).setFontWeight('bold');
+  m.setFrozenRows(1);
+  var rule = SpreadsheetApp.newDataValidation().requireValueInList(STATUSES, true).build();
+  m.getRange(2, C.status + 1, m.getMaxRows() - 1, 1).setDataValidation(rule);
+  m.hideColumns(C.hash + 1);
+  return m;
+}
+
+function findRow(m, email) {
+  var last = m.getLastRow();
+  if (last < 2) return 0;
+  var hash = hashEmail(email);
+  var hashes = m.getRange(2, C.hash + 1, last - 1, 1).getValues();
+  for (var i = 0; i < hashes.length; i++) {
+    if (String(hashes[i][0]) === hash) return i + 2;
+  }
+  return 0;
+}
+
+function splitDevices(cell) {
+  return String(cell || '').split(/[\s,]+/).filter(function (s) { return s; });
+}
+
+// Must match AccessController.hashEmail in the app.
+function hashEmail(email) {
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,
+                                      '08FOSE:' + email.trim().toLowerCase(),
+                                      Utilities.Charset.UTF_8);
+  var hex = '';
+  for (var i = 0; i < 8; i++) {
+    var b = (bytes[i] + 256) % 256;
+    hex += (b < 16 ? '0' : '') + b.toString(16);
+  }
+  return hex.toUpperCase();
 }
 
 // 323CAB60E7ABBF3E -> *************F3E
@@ -101,7 +280,6 @@ function maskDevice(id) {
 }
 
 // byeongsu.kim@influential.co.kr -> by**********@in***************
-// me@panopt.net                  -> me@pa********
 function maskEmail(email) {
   var at = email.indexOf('@');
   if (at < 0) return keep2(email);
