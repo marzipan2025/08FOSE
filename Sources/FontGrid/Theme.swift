@@ -3,7 +3,7 @@ import AppKit
 
 enum Theme {
     // App
-    static let appVersion = "0.9.0"
+    static let appVersion = "0.9.1"
 
     // Panels
     static let panelDefaultWidth: CGFloat = 240
@@ -210,5 +210,33 @@ extension EnvironmentValues {
     var accentColors: AccentColors {
         get { self[AccentColorsKey.self] }
         set { self[AccentColorsKey.self] = newValue }
+    }
+}
+
+// MARK: - Liquid Glass
+// Kept in Theme.swift (not its own file) because the Xcode project lists source
+// files one by one; a new file builds under SwiftPM but breaks xcodebuild/release.
+
+// Liquid Glass trial (macOS 26+): applied only to the search field, the
+// circle close (x) buttons of the detail view and Settings, the panel −/+ toggles and the note chevron.
+// On older systems each call site keeps its original flat styling.
+
+extension View {
+    /// Glass in `shape` on macOS 26+, otherwise the caller's original styling.
+    @ViewBuilder
+    func liquidGlass<S: Shape, F: View>(
+        in shape: S,
+        interactive: Bool = false,
+        @ViewBuilder fallback: (Self) -> F
+    ) -> some View {
+        if #available(macOS 26.0, *) {
+            // `.interactive()` is deliberately not used: inside a Button label it takes the
+            // click for its own press animation, so the panel −/+ toggles stopped working.
+            // Glass is not a hit area the way the old filled background was: a plain
+            // Button then only answered on its glyph (the − itself). Make the whole shape clickable.
+            self.contentShape(shape).glassEffect(.regular, in: shape)
+        } else {
+            fallback(self)
+        }
     }
 }

@@ -123,6 +123,8 @@ struct SettingsOverlay: View {
     // the oldest whenever a release adds one, rather than collapsing this to a
     // lone string.
     private static let releaseNotes: [(version: String, note: String)] = [
+        ("0.9.1",
+         "Light and Dark can now follow your Mac: turn on Match system appearance in Settings. Light wallpaper 3 is softer, and buttons and search take on Liquid Glass on macOS 26."),
         ("0.9.0",
          "08FOSE now asks you to sign up with your email, once per Mac. A new user guide walks through every part of the app; find it again in Settings."),
         ("0.8.29",
@@ -349,6 +351,17 @@ struct SettingsOverlay: View {
                     }
                     SettingsChoiceButton(label: "Off", isOn: !vm.useMotion) {
                         vm.useMotion = false
+                    }
+                }
+                choiceRow(
+                    title: "Match system appearance",
+                    detail: "Switches between Light and Dark when macOS does. Each mode keeps the wallpaper you chose for it."
+                ) {
+                    SettingsChoiceButton(label: "On", isOn: vm.followSystemAppearance) {
+                        vm.followSystemAppearance = true
+                    }
+                    SettingsChoiceButton(label: "Off", isOn: !vm.followSystemAppearance) {
+                        vm.followSystemAppearance = false
                     }
                 }
                 choiceRow(
@@ -883,7 +896,9 @@ private struct CloseButton: View {
                 .foregroundStyle(.secondary)
                 .offset(y: -0.5)
                 .frame(width: 32, height: 32)
-                .background(Circle().fill(hovering ? Theme.surfaceFillHover : Theme.surfaceFill))
+                .liquidGlass(in: Circle(), interactive: true) { v in
+                    v.background(Circle().fill(hovering ? Theme.surfaceFillHover : Theme.surfaceFill))
+                }
         }
         .buttonStyle(.plain)
         .focusable(false)

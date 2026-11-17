@@ -699,10 +699,12 @@ struct FontDetailView: View {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
                     .frame(width: 22, height: 22)
-                    .background(
-                        RoundedRectangle(cornerRadius: 5)
-                            .fill(memoHeaderHovering ? Theme.surfaceFillHover : Theme.surfaceFill)
-                    )
+                    .liquidGlass(in: RoundedRectangle(cornerRadius: 6, style: .continuous), interactive: true) { v in
+                        v.background(
+                            RoundedRectangle(cornerRadius: 5)
+                                .fill(memoHeaderHovering ? Theme.surfaceFillHover : Theme.surfaceFill)
+                        )
+                    }
             }
             .buttonStyle(.plain)
             .onHover { memoHeaderHovering = $0 }
@@ -754,7 +756,9 @@ struct FontDetailView: View {
                         .foregroundStyle(.secondary)
                         .offset(y: -0.5)
                         .frame(width: 32, height: 32)
-                        .background(Circle().fill(closeHovering ? Theme.surfaceFillHover : Theme.surfaceFill))
+                        .liquidGlass(in: Circle(), interactive: true) { v in
+                            v.background(Circle().fill(closeHovering ? Theme.surfaceFillHover : Theme.surfaceFill))
+                        }
                 }
                 .buttonStyle(.plain)
                 .onHover { closeHovering = $0 }

@@ -133,10 +133,12 @@ struct LeftPanel: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
-        .background(
-            RoundedRectangle(cornerRadius: Theme.surfaceRadius, style: .continuous)
-                .fill(Theme.surfaceFill)
-        )
+        .liquidGlass(in: RoundedRectangle(cornerRadius: Theme.surfaceRadius, style: .continuous)) { v in
+            v.background(
+                RoundedRectangle(cornerRadius: Theme.surfaceRadius, style: .continuous)
+                    .fill(Theme.surfaceFill)
+            )
+        }
         .overlay(
             RoundedRectangle(cornerRadius: Theme.surfaceRadius, style: .continuous)
                 .stroke(searchFocused ? accent.fill.opacity(0.5) : Theme.border, lineWidth: 1)
@@ -581,10 +583,10 @@ struct LeftPanel: View {
             groupLabel("Theme")
             HStack(spacing: Self.pillGap) {
                 filterPill(label: "Dark", icon: "moon.fill", isOn: !vm.isLightMode) {
-                    vm.isLightMode = false
+                    vm.chooseLightMode(false)
                 }
                 filterPill(label: "Light", icon: "sun.max.fill", isOn: vm.isLightMode) {
-                    vm.isLightMode = true
+                    vm.chooseLightMode(true)
                 }
             }
         }

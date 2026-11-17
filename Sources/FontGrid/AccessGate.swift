@@ -794,7 +794,7 @@ struct AccessGateView: View {
 /// popup's width, top-centre, never cropped.
 struct GuideBackdrop: View {
     var body: some View {
-        Image("OnboardingBackground")
+        Image("OnboardingBackground", bundle: AppResources.bundle)
             .resizable()
             .scaledToFit()
             .frame(width: GuideView.width, height: GuideView.height, alignment: .top)
@@ -873,14 +873,14 @@ struct GuideView: View {
 
     private var welcome: some View {
         ZStack(alignment: .topLeading) {
-            Image("GuideLogo")
+            Image("GuideLogo", bundle: AppResources.bundle)
                 .resizable()
                 .interpolation(.high)
                 .frame(width: d(371), height: d(371))
                 .offset(x: 16, y: d(5) - 4)  // 16pt right of, 4pt above the Figma position
                 .accessibilityHidden(true)
 
-            Image("GuideTitle")
+            Image("GuideTitle", bundle: AppResources.bundle)
                 .renderingMode(.template)
                 .resizable()
                 .foregroundStyle(.primary)
@@ -902,7 +902,7 @@ struct GuideView: View {
                 .offset(x: d(392), y: d(166))
 
             Button(action: takeTour) {
-                Image("GuideTakeATour")
+                Image("GuideTakeATour", bundle: AppResources.bundle)
                     .renderingMode(.template)
                     .resizable()
                     .foregroundStyle(.primary)
@@ -991,7 +991,7 @@ extension GuideView {
     // Figma node 5721:486.
     func sectionPage(_ section: Section) -> some View {
         ZStack(alignment: .topLeading) {
-            Image(section.image)
+            Image(section.image, bundle: AppResources.bundle)
                 .resizable()
                 .interpolation(.high)
                 .frame(width: d(362), height: d(380))
@@ -1062,7 +1062,7 @@ extension GuideView {
                    hovering: Binding<Bool>,
                    action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(asset)
+            Image(asset, bundle: AppResources.bundle)
                 .renderingMode(.template)
                 .resizable()
                 .foregroundStyle(.primary)

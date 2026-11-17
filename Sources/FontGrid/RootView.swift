@@ -384,7 +384,7 @@ struct RootView: View {
             }
             return true
         case "t":
-            vm.isLightMode.toggle()
+            vm.chooseLightMode(!vm.isLightMode)
             return true
         case "p":
             vm.pinnedOnly.toggle()
@@ -734,15 +734,17 @@ private struct PanelToggleButton: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(hovering ? accent.text : Color.secondary)
                 .frame(width: 26, height: 26)
-                .background(
-                    RoundedRectangle(cornerRadius: radius, style: .continuous)
-                        .fill(hovering ? Theme.surfaceFillHover : Theme.surfaceFill)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: radius, style: .continuous)
-                        .stroke(Theme.border, lineWidth: 1)
-                )
-                .shadow(color: .black.opacity(0.18), radius: 4, y: 2)
+                .liquidGlass(in: RoundedRectangle(cornerRadius: radius, style: .continuous), interactive: true) { v in
+                    v.background(
+                        RoundedRectangle(cornerRadius: radius, style: .continuous)
+                            .fill(hovering ? Theme.surfaceFillHover : Theme.surfaceFill)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: radius, style: .continuous)
+                            .stroke(Theme.border, lineWidth: 1)
+                    )
+                    .shadow(color: .black.opacity(0.18), radius: 4, y: 2)
+                }
         }
         .buttonStyle(.plain)
         .focusable(false)
@@ -801,6 +803,7 @@ struct WallpaperOverlay: View {
     // Per-wallpaper light-mode opacity override. Falls back to lightOpacity.
     private static let lightOpacityOverrides: [String: Double] = [
         "Wallpaper01": 0.12,
+        "Wallpaper03": 0.4,
         "Wallpaper04": 0.15
     ]
 

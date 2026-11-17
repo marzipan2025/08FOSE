@@ -1,3 +1,4 @@
+import AppKit
 import Combine
 import SwiftUI
 
@@ -381,6 +382,55 @@ final class AppViewModel: ObservableObject {
         didSet { UserDefaults.standard.set(isLightMode, forKey: "isLightMode") }
     }
 
+    // Settings › Match system appearance. Off by default: the app keeps its own
+    // Light/Dark. On: Light/Dark follows macOS (now and whenever it changes).
+    // Only the mode changes; each mode keeps its own wallpaper (lightWallpaper /
+    // darkWallpaper), so the user sees the wallpaper they last chose for it.
+    // Picking Light/Dark by hand (left panel, T key) turns this off, so the
+    // hand-picked mode sticks — see chooseLightMode.
+    private static let followSystemAppearanceKey = "followSystemAppearance"
+    @Published var followSystemAppearance: Bool =
+        UserDefaults.standard.object(forKey: AppViewModel.followSystemAppearanceKey) as? Bool ?? false {
+        didSet {
+            UserDefaults.standard.set(followSystemAppearance, forKey: Self.followSystemAppearanceKey)
+            syncAppearanceToSystem()
+        }
+    }
+    private var systemAppearanceObserver: NSObjectProtocol?
+
+    // macOS's own setting, read from the global defaults rather than
+    // NSApp.effectiveAppearance (which this app overrides with its own mode).
+    // In Auto, macOS keeps AppleInterfaceStyle in step with the time of day.
+    private static var systemIsDark: Bool {
+        CFPreferencesAppSynchronize(kCFPreferencesAnyApplication)
+        let style = CFPreferencesCopyAppValue("AppleInterfaceStyle" as CFString,
+                                              kCFPreferencesAnyApplication) as? String
+        return style == "Dark"
+    }
+
+    /// A hand-picked Light/Dark. Stops following macOS so the choice sticks.
+    func chooseLightMode(_ light: Bool) {
+        followSystemAppearance = false
+        isLightMode = light
+    }
+
+    func syncAppearanceToSystem() {
+        guard followSystemAppearance else { return }
+        let light = !Self.systemIsDark
+        if isLightMode != light { isLightMode = light }
+    }
+
+    private func observeSystemAppearance() {
+        systemAppearanceObserver = DistributedNotificationCenter.default().addObserver(
+            forName: Notification.Name("AppleInterfaceThemeChangedNotification"),
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            // The global default can land a beat after the notification.
+            self?.syncAppearanceToSystem()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { self?.syncAppearanceToSystem() }
+        }
+    }
+
     static let gridBaseFontSize: Double = 28
     static let weightRowBaseFontSize: Double = 40
     static let previewOffsetRange: ClosedRange<Double> = -10...30
@@ -473,6 +523,19 @@ final class AppViewModel: ObservableObject {
         libraryRelay = library.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }
+        observeSystemAppearance()
+        syncAppearanceToSystem()
+        #if DEBUG
+        // Preview the update card without publishing a release:
+        // FOSE_PREVIEW_UPDATE=<version> [FOSE_PREVIEW_NOTES=<text>] [FOSE_PREVIEW_IMAGE=<560×236 png>]
+        let env = ProcessInfo.processInfo.environment
+        if let v = env["FOSE_PREVIEW_UPDATE"] {
+            launchUpdate = .available(latest: v, current: Theme.appVersion, dmgURL: nil,
+                                      notes: env["FOSE_PREVIEW_NOTES"],
+                                      thumbnail: env["FOSE_PREVIEW_IMAGE"].flatMap { NSImage(contentsOfFile: $0) },
+                                      required: false)
+        }
+        #endif
     }
 
     // Quicker than the 0.42 / 0.38 this card used to open and close with, which
@@ -671,6 +734,7 @@ final class AppViewModel: ObservableObject {
         // relaunch. The didSet observers re-write these default values.
         darkWallpaper = ""
         lightWallpaper = Self.defaultLightWallpaper
+        followSystemAppearance = false
         isLightMode = true
         pinsByRecent = true
         columnCount = 4
